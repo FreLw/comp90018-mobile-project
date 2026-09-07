@@ -19,7 +19,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'email', 'username', 'displayName', 'bio', 'createdAt', 'updatedAt'
+          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
@@ -27,6 +27,7 @@ service cloud.firestore {
         && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 80
+        && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
         && request.resource.data.bio is string
         && request.resource.data.bio.size() <= 500
         && request.resource.data.createdAt == request.time
@@ -35,11 +36,12 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['username', 'displayName', 'bio', 'updatedAt'])
+          .hasOnly(['username', 'displayName', 'gender', 'bio', 'updatedAt'])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 80
+        && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
         && request.resource.data.bio is string
         && request.resource.data.bio.size() <= 500
         && request.resource.data.updatedAt == request.time;
@@ -50,10 +52,12 @@ service cloud.firestore {
       allow read: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'fromUsername', 'status', 'createdAt'])
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.fromUsername is string
+        && request.resource.data.fromUsername.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt == request.time;
       allow update: if signedIn()

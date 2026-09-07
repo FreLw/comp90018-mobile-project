@@ -46,13 +46,16 @@ object FirebaseAuthService {
 				return@addOnCompleteListener
 			}
 			if (readTask.result.exists()) {
+				val updates = mutableMapOf<String, Any>()
 				if (readTask.result.getString("username").isNullOrBlank()) {
-					reference.update(
-						mapOf(
-							"username" to defaultUsername(user),
-							"updatedAt" to FieldValue.serverTimestamp(),
-						),
-					).addOnCompleteListener { updateTask ->
+					updates["username"] = defaultUsername(user)
+				}
+				if (readTask.result.getString("gender").isNullOrBlank()) {
+					updates["gender"] = "unspecified"
+				}
+				if (updates.isNotEmpty()) {
+					updates["updatedAt"] = FieldValue.serverTimestamp()
+					reference.update(updates).addOnCompleteListener { updateTask ->
 						onComplete(if (updateTask.isSuccessful) null else updateTask.exception.toUserMessage())
 					}
 				} else {
@@ -66,6 +69,7 @@ object FirebaseAuthService {
 				"email" to user.email.orEmpty(),
 				"username" to defaultUsername(user),
 				"displayName" to "",
+				"gender" to "unspecified",
 				"bio" to "",
 				"createdAt" to FieldValue.serverTimestamp(),
 				"updatedAt" to FieldValue.serverTimestamp(),
@@ -73,6 +77,41 @@ object FirebaseAuthService {
 			reference.set(profile).addOnCompleteListener { writeTask ->
 				onComplete(if (writeTask.isSuccessful) null else writeTask.exception.toUserMessage())
 			}
+		}
+	}
+
+	fun updateProfile(
+		firestore: FirebaseFirestore,
+		uid: String,
+		username: String,
+		gender: String,
+		bio: String,
+		onComplete: (String?) -> Unit,
+	) {
+		val cleanUsername = username.trim().lowercase()
+		val cleanBio = bio.trim()
+		if (!Regex("^[a-z0-9_]{3,30}$").matches(cleanUsername)) {
+			onComplete("Username must be 3–30 lowercase letters, numbers, or underscores")
+			return
+		}
+		if (gender !in setOf("unspecified", "male", "female", "prefer_not_to_say")) {
+			onComplete("Select a valid gender option")
+			return
+		}
+		if (cleanBio.length > 500) {
+			onComplete("Bio cannot exceed 500 characters")
+			return
+		}
+
+		firestore.collection("users").document(uid).update(
+			mapOf(
+				"username" to cleanUsername,
+				"gender" to gender,
+				"bio" to cleanBio,
+				"updatedAt" to FieldValue.serverTimestamp(),
+			),
+		).addOnCompleteListener { task ->
+			onComplete(if (task.isSuccessful) null else task.exception.toUserMessage())
 		}
 	}
 
@@ -88,12 +127,12 @@ object FirebaseAuthService {
 	}
 
 	private fun Exception?.toUserMessage(): String = when (this) {
-		is FirebaseAuthWeakPasswordException -> "密码强度不足，请使用至少 6 位密码"
-		is FirebaseAuthUserCollisionException -> "这个邮箱已经注册"
+		is FirebaseAuthWeakPasswordException -> "Use a password with at least 6 characters"
+		is FirebaseAuthUserCollisionException -> "This email address is already registered"
 		is FirebaseAuthInvalidUserException,
-		is FirebaseAuthInvalidCredentialsException -> "邮箱或密码不正确"
-		is FirebaseTooManyRequestsException -> "尝试次数过多，请稍后再试"
-		is FirebaseNetworkException -> "网络连接失败，请检查网络后重试"
-		else -> this?.localizedMessage ?: "Firebase 请求失败，请稍后重试"
+		is FirebaseAuthInvalidCredentialsException -> "Incorrect email or password"
+		is FirebaseTooManyRequestsException -> "Too many attempts. Please try again later"
+		is FirebaseNetworkException -> "Network connection failed. Please try again"
+		else -> this?.localizedMessage ?: "Firebase request failed. Please try again"
 	}
 }

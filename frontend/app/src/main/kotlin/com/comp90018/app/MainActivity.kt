@@ -5,6 +5,7 @@ import android.util.Patterns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -68,6 +70,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.comp90018.app.features.profile.ProfileScreen
+import com.comp90018.app.features.profile.UserProfile
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -79,11 +83,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val Brand = Color(0xFF4B5FE7)
-private val BrandSoft = Color(0xFFE9ECFF)
-private val Background = Color(0xFFF7F8FC)
-private val Ink = Color(0xFF18203A)
-private val Muted = Color(0xFF7B8198)
+internal val Brand = Color(0xFF4B5FE7)
+internal val BrandSoft = Color(0xFFE9ECFF)
+internal val Background = Color(0xFFF7F8FC)
+internal val Ink = Color(0xFF18203A)
+internal val Muted = Color(0xFF7B8198)
 
 @Composable
 private fun Comp90018App() {
@@ -122,18 +126,18 @@ private fun AuthScreen(auth: FirebaseAuth) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("COMP90018", style = MaterialTheme.typography.labelLarge, color = Brand)
                 Text(
-                    if (loginMode) "欢迎回来" else "创建账号",
+                    if (loginMode) "Welcome back" else "Create account",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Ink,
                 )
                 Text(
-                    if (loginMode) "使用 Firebase 登录" else "注册后将自动创建 Firestore 用户资料",
+                    if (loginMode) "Sign in with Firebase" else "A Firestore profile will be created automatically.",
                     color = Muted,
                 )
-                AppTextField("邮箱", email, { email = it }, keyboardType = KeyboardType.Email)
+                AppTextField("Email", email, { email = it }, keyboardType = KeyboardType.Email)
                 AppTextField(
-                    "密码（至少 6 位）",
+                    "Password (at least 6 characters)",
                     password,
                     { password = it },
                     password = true,
@@ -157,13 +161,13 @@ private fun AuthScreen(auth: FirebaseAuth) {
                     enabled = !submitting,
                     colors = ButtonDefaults.buttonColors(containerColor = Brand),
                 ) {
-                    Text(if (submitting) "正在处理…" else if (loginMode) "登录" else "创建账号")
+                    Text(if (submitting) "Please wait…" else if (loginMode) "Sign in" else "Create account")
                 }
                 TextButton(
                     onClick = { loginMode = !loginMode; error = null },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (loginMode) "没有账号？去注册" else "已有账号？去登录", color = Brand)
+                    Text(if (loginMode) "No account? Create one" else "Already have an account? Sign in", color = Brand)
                 }
             }
         }
@@ -171,27 +175,30 @@ private fun AuthScreen(auth: FirebaseAuth) {
 }
 
 private fun validateCredentials(email: String, password: String): String? = when {
-    email.isBlank() || password.isBlank() -> "请输入邮箱和密码"
-    !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> "请输入有效的邮箱地址"
-    password.length < 6 -> "密码至少需要 6 位"
+    email.isBlank() || password.isBlank() -> "Enter your email and password"
+    !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> "Enter a valid email address"
+    password.length < 6 -> "Password must be at least 6 characters"
     else -> null
 }
 
 @Composable
-private fun AppTextField(
+internal fun AppTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
     password: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     leadingIcon: ImageVector? = null,
+    singleLine: Boolean = true,
+    maxLines: Int = if (singleLine) 1 else 5,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         leadingIcon = leadingIcon?.let { icon -> ({ Icon(icon, contentDescription = null) }) },
-        singleLine = true,
+        singleLine = singleLine,
+        maxLines = maxLines,
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(16.dp),
@@ -204,19 +211,11 @@ private fun AppTextField(
     )
 }
 
-private data class UserProfile(
-    val uid: String,
-    val email: String,
-    val username: String,
-    val displayName: String,
-    val bio: String,
-)
-
 private enum class AppDestination(val label: String, val icon: ImageVector) {
-    Home("首页", Icons.Rounded.Home),
-    Search("搜索", Icons.Rounded.Search),
-    Friends("好友", Icons.Rounded.Group),
-    Profile("我的", Icons.Rounded.Person),
+    Home("Home", Icons.Rounded.Home),
+    Search("Search", Icons.Rounded.Search),
+    Friends("Friends", Icons.Rounded.Group),
+    Profile("Profile", Icons.Rounded.Person),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -232,7 +231,7 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
         val reference = firestore.collection("users").document(user.uid)
         val registration = reference.addSnapshotListener { snapshot, exception ->
             if (exception != null) {
-                profileError = exception.localizedMessage ?: "无法读取 Firestore 用户资料"
+                profileError = exception.localizedMessage ?: "Unable to load your Firestore profile"
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
@@ -243,6 +242,7 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
                     email = snapshot.getString("email") ?: user.email.orEmpty(),
                     username = username,
                     displayName = snapshot.getString("displayName").orEmpty(),
+                    gender = snapshot.getString("gender") ?: "unspecified",
                     bio = snapshot.getString("bio").orEmpty(),
                 )
                 if (username.isBlank() && !creatingProfile) {
@@ -276,7 +276,7 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
                 actions = {
                     if (destination == AppDestination.Profile) {
                         IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "退出登录", tint = Muted)
+                            Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "Sign out", tint = Muted)
                         }
                     }
                 },
@@ -287,11 +287,11 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 20.dp)) {
             when (destination) {
-                AppDestination.Home -> HomeScreen(profile, user)
+                AppDestination.Home -> HomeScreen()
                 AppDestination.Search -> SearchScreen()
                 AppDestination.Friends -> FriendsScreen(user, firestore, profile)
                 AppDestination.Profile -> ProfileScreen(
-                    user, profile, profileError,
+                    user, firestore, profile, profileError,
                     onRetry = { reloadKey += 1 },
                     onLogout = onLogout,
                 )
@@ -335,163 +335,260 @@ private fun AppBottomNavigation(selected: AppDestination, onSelected: (AppDestin
 }
 
 @Composable
-private fun HomeScreen(profile: UserProfile?, user: FirebaseUser) {
-    val name = profile?.displayName?.takeIf { it.isNotBlank() }
-        ?: profile?.username?.takeIf { it.isNotBlank() }
-        ?: user.email?.substringBefore('@').orEmpty()
-    Column(Modifier.fillMaxSize().padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text("你好，$name", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
-        Text("今天想认识谁？从搜索开始发现新朋友。", color = Muted)
-        FeatureCard(Icons.Rounded.Search, "发现新朋友", "使用邮箱或用户名查找用户")
-        FeatureCard(Icons.Rounded.Group, "好友动态", "好友功能将在这里显示")
-    }
-}
+private fun HomeScreen() = Box(Modifier.fillMaxSize())
 
 @Composable
-private fun SearchScreen() {
-    var query by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text("寻找朋友", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
-        Text("输入邮箱或用户名进行搜索", color = Muted)
-        AppTextField("搜索用户", query, { query = it }, leadingIcon = Icons.Rounded.Search)
-        EmptyState(
-            Icons.Rounded.Search,
-            if (query.isBlank()) "开始搜索" else "正在查找“$query”",
-            if (query.isBlank()) "找到用户后，可以向对方发送好友请求" else "用户搜索功能将在下一步连接 Firestore",
-        )
-    }
-}
+private fun SearchScreen() = Box(Modifier.fillMaxSize())
 
 @Composable
-private fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
-    var addFriendMode by remember { mutableStateOf(false) }
+private fun FriendFinder(
+    user: FirebaseUser,
+    firestore: FirebaseFirestore,
+    currentUsername: String,
+    onClose: () -> Unit,
+) {
     var query by remember { mutableStateOf("") }
-    var searching by remember { mutableStateOf(false) }
-    var results by remember { mutableStateOf<List<SearchUser>>(emptyList()) }
+    var target by remember { mutableStateOf<SearchUser?>(null) }
+    var friendship by remember { mutableStateOf<FriendshipStatus?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    var requestedUids by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var searching by remember { mutableStateOf(false) }
+    var actionInProgress by remember { mutableStateOf(false) }
     var roomId by remember { mutableStateOf<String?>(null) }
-    var creatingRoom by remember { mutableStateOf(false) }
 
     if (roomId != null) {
         ChatRoomScreen(
             firestore = firestore,
             roomId = requireNotNull(roomId),
             currentUid = user.uid,
-            title = "${profile?.username?.ifBlank { "我的" } ?: "我的"}房间",
+            title = target?.username ?: "Chat",
             onBack = { roomId = null },
         )
         return
     }
 
-    Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = { addFriendMode = !addFriendMode; message = null },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Brand),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text("加好友")
-            }
-            Button(
-                onClick = {
-                    creatingRoom = true
-                    message = null
-                    FirebaseSocialService.createRoom(
-                        firestore,
-                        user.uid,
-                        profile?.username.orEmpty(),
-                    ) { createdRoomId, error ->
-                        creatingRoom = false
-                        message = error
-                        roomId = createdRoomId
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                enabled = !creatingRoom,
-                colors = ButtonDefaults.buttonColors(containerColor = Ink),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(if (creatingRoom) "创建中…" else "创建房间")
-            }
-        }
-
-        if (addFriendMode) {
+    if (target != null) {
+        val foundUser = requireNotNull(target)
+        Column(Modifier.fillMaxSize().padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            TextButton(onClick = { target = null; friendship = null; message = null }) { Text("Search again") }
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("按用户名查找", fontWeight = FontWeight.Bold, color = Ink)
-                    AppTextField("输入用户名", query, { query = it }, leadingIcon = Icons.Rounded.Search)
-                    Button(
-                        onClick = {
-                            searching = true
-                            message = null
-                            FirebaseSocialService.searchUsers(firestore, user.uid, query) { users, error ->
-                                searching = false
-                                results = users
-                                message = error ?: if (users.isEmpty()) "没有找到用户" else null
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !searching,
-                    ) { Text(if (searching) "搜索中…" else "搜索") }
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        Modifier.size(88.dp).clip(CircleShape).background(BrandSoft),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(foundUser.username.take(1).uppercase(), color = Brand, style = MaterialTheme.typography.displaySmall) }
+                    Text(foundUser.username, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
+                    Text(genderLabel(foundUser.gender), color = Muted)
+                    foundUser.bio.takeIf { it.isNotBlank() }?.let { Text(it, color = Ink, textAlign = TextAlign.Center) }
                 }
             }
+            Spacer(Modifier.weight(1f))
+            message?.let {
+                Text(
+                    it,
+                    color = if (it == "Friend request sent" || it == "Friend request accepted") Brand
+                    else MaterialTheme.colorScheme.error,
+                )
+            }
+            when (friendship) {
+                FriendshipStatus.Friends -> Button(
+                    onClick = {
+                        actionInProgress = true
+                        FirebaseSocialService.openDirectRoom(firestore, user.uid, foundUser.uid, foundUser.username) { id, error ->
+                            actionInProgress = false
+                            roomId = id
+                            message = error
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !actionInProgress,
+                    colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                ) { Text(if (actionInProgress) "Opening chat…" else "Chat") }
+                FriendshipStatus.IncomingPending -> Button(
+                    onClick = {
+                        actionInProgress = true
+                        FirebaseSocialService.acceptFriendRequest(firestore, foundUser.uid, user.uid) { error ->
+                            actionInProgress = false
+                            friendship = if (error == null) FriendshipStatus.Friends else friendship
+                            message = error ?: "Friend request accepted"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !actionInProgress,
+                    colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                ) { Text(if (actionInProgress) "Processing…" else "Accept request") }
+                FriendshipStatus.OutgoingPending -> Button(
+                    onClick = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = false,
+                ) { Text("Friend request sent") }
+                FriendshipStatus.None -> Button(
+                    onClick = {
+                        actionInProgress = true
+                        FirebaseSocialService.sendFriendRequest(firestore, user.uid, foundUser.uid, currentUsername) { error ->
+                            actionInProgress = false
+                            friendship = if (error == null) FriendshipStatus.OutgoingPending else friendship
+                            message = error ?: "Friend request sent"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !actionInProgress,
+                    colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                ) { Text(if (actionInProgress) "Sending…" else "Add friend") }
+                null -> CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), color = Brand)
+            }
         }
+    } else {
+        Column(Modifier.fillMaxSize().padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            TextButton(onClick = onClose) { Text("Cancel") }
+            Text("Find friends", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
+            Text("Search by username", color = Muted)
+            AppTextField("Username", query, { query = it }, leadingIcon = Icons.Rounded.Search)
+            Button(
+                onClick = {
+                    searching = true
+                    message = null
+                    FirebaseSocialService.findUserByUsername(firestore, query) { foundUser, error ->
+                        searching = false
+                        if (error != null) {
+                            message = error
+                            return@findUserByUsername
+                        }
+                        // Searching for the signed-in account intentionally leaves this page empty.
+                        if (foundUser == null || foundUser.uid == user.uid) return@findUserByUsername
+                        target = foundUser
+                        FirebaseSocialService.getFriendshipStatus(firestore, user.uid, foundUser.uid) { status, statusError ->
+                            friendship = status
+                            message = statusError
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !searching,
+                colors = ButtonDefaults.buttonColors(containerColor = Brand),
+            ) { Text(if (searching) "Searching…" else "Search") }
+            message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
 
-        message?.let { Text(it, color = if (it.contains("成功")) Brand else MaterialTheme.colorScheme.error) }
+private fun genderLabel(gender: String): String = when (gender) {
+    "male" -> "Male"
+    "female" -> "Female"
+    "prefer_not_to_say" -> "Prefer not to say"
+    else -> "Not specified"
+}
 
-        if (results.isNotEmpty()) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(results, key = { it.uid }) { foundUser ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                Modifier.size(44.dp).clip(CircleShape).background(BrandSoft),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(foundUser.username.take(1).uppercase(), color = Brand, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(foundUser.username, fontWeight = FontWeight.Bold, color = Ink)
-                                foundUser.displayName.takeIf { it.isNotBlank() }?.let { Text(it, color = Muted) }
-                            }
-                            Button(
-                                onClick = {
-                                    FirebaseSocialService.sendFriendRequest(
-                                        firestore, user.uid, foundUser.uid,
-                                    ) { error ->
-                                        if (error == null) {
-                                            requestedUids = requestedUids + foundUser.uid
-                                            message = "好友请求发送成功"
-                                        } else message = error
-                                    }
-                                },
-                                enabled = foundUser.uid !in requestedUids,
-                            ) { Text(if (foundUser.uid in requestedUids) "已发送" else "添加") }
+@Composable
+private fun FriendsScreen(
+    user: FirebaseUser,
+    firestore: FirebaseFirestore,
+    profile: UserProfile?,
+) {
+    var addFriendMode by remember { mutableStateOf(false) }
+    var showFriendRequests by remember { mutableStateOf(false) }
+    var incomingRequests by remember { mutableStateOf<List<IncomingFriendRequest>>(emptyList()) }
+    var friends by remember { mutableStateOf<List<FriendSummary>>(emptyList()) }
+    var requestMessage by remember { mutableStateOf<String?>(null) }
+
+    if (addFriendMode) {
+        FriendFinder(
+            user = user,
+            firestore = firestore,
+            currentUsername = profile?.username.orEmpty(),
+            onClose = { addFriendMode = false },
+        )
+        return
+    }
+
+    DisposableEffect(user.uid, firestore) {
+        val requestRegistration = FirebaseSocialService.observeIncomingFriendRequests(firestore, user.uid) { requests, error ->
+            incomingRequests = requests
+            requestMessage = error
+        }
+        val friendRegistration = FirebaseSocialService.observeFriends(firestore, user.uid) { updatedFriends, error ->
+            friends = updatedFriends
+            if (error != null) requestMessage = error
+        }
+        onDispose {
+            requestRegistration.remove()
+            friendRegistration.remove()
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Button(
+            onClick = { addFriendMode = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Brand),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("Add friend")
+        }
+        requestMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Friends",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Ink,
+            )
+            TextButton(onClick = { showFriendRequests = !showFriendRequests }) {
+                Text(
+                    if (incomingRequests.isEmpty()) "Friend requests"
+                    else "Friend requests (${incomingRequests.size})",
+                )
+            }
+        }
+        if (showFriendRequests) {
+            if (incomingRequests.isEmpty()) {
+                EmptyState(Icons.Rounded.Group, "No friend requests", "New requests will appear here.")
+            } else {
+            Text("Friend requests", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Ink)
+            incomingRequests.forEach { request ->
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(request.fromUsername, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
+                        TextButton(onClick = {
+                            FirebaseSocialService.declineFriendRequest(firestore, request.fromUid, user.uid) { requestMessage = it }
+                        }) { Text("Decline") }
+                        Button(onClick = {
+                            FirebaseSocialService.acceptFriendRequest(firestore, request.fromUid, user.uid) { requestMessage = it }
+                        }) { Text("Accept") }
+                    }
+                }
+            }
+            }
+        } else {
+            if (friends.isEmpty()) {
+                EmptyState(Icons.Rounded.Group, "No friends yet", "Tap Add friend to search by username.")
+            } else {
+                friends.forEach { friend ->
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(friend.username, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
+                            TextButton(onClick = {
+                                FirebaseSocialService.removeFriend(firestore, user.uid, friend.uid) { error ->
+                                    requestMessage = error ?: "Friend removed"
+                                }
+                            }) { Text("Remove") }
                         }
                     }
                 }
             }
-        } else if (!addFriendMode) {
-            Text("我的好友", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
-            EmptyState(Icons.Rounded.Group, "还没有好友", "点击上方“加好友”，通过用户名寻找朋友")
         }
     }
 }
@@ -519,11 +616,11 @@ private fun ChatRoomScreen(
     Column(Modifier.fillMaxSize().padding(top = 10.dp, bottom = 10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
             }
             Column {
                 Text(title, fontWeight = FontWeight.Bold, color = Ink)
-                Text("房间号 ${roomId.take(8)}", color = Muted, style = MaterialTheme.typography.bodySmall)
+                Text("Room ${roomId.take(8)}", color = Muted, style = MaterialTheme.typography.bodySmall)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -534,7 +631,7 @@ private fun ChatRoomScreen(
         ) {
             if (messages.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(error ?: "房间已创建，发送第一条消息吧", color = Muted)
+                    Text(error ?: "Start the conversation.", color = Muted)
                 }
             } else {
                 LazyColumn(
@@ -564,7 +661,7 @@ private fun ChatRoomScreen(
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            AppTextField("输入消息", input, { input = it }, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
+            AppTextField("Message", input, { input = it }, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
         }
         Button(
             onClick = {
@@ -578,7 +675,7 @@ private fun ChatRoomScreen(
         ) {
             Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("发送消息")
+            Text("Send")
         }
     }
 }
@@ -624,73 +721,6 @@ private fun EmptyState(icon: ImageVector, title: String, subtitle: String) {
             Text(title, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(subtitle, color = Muted, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun ProfileScreen(
-    user: FirebaseUser,
-    profile: UserProfile?,
-    profileError: String?,
-    onRetry: () -> Unit,
-    onLogout: () -> Unit,
-) {
-    val email = profile?.email ?: user.email.orEmpty()
-    Column(
-        Modifier.fillMaxSize().padding(top = 30.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier.size(96.dp).clip(CircleShape).background(Brand),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(email.take(1).uppercase(), color = Color.White, style = MaterialTheme.typography.displaySmall)
-        }
-        Spacer(Modifier.height(18.dp))
-        Text(
-            profile?.displayName?.ifBlank { email } ?: email,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = Ink,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(email, color = Muted)
-        profile?.username?.takeIf { it.isNotBlank() }?.let {
-            Spacer(Modifier.height(4.dp))
-            Text("@$it", color = Brand, fontWeight = FontWeight.SemiBold)
-        }
-        Spacer(Modifier.height(24.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-        ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when {
-                    profileError != null -> {
-                        Text(profileError, color = MaterialTheme.colorScheme.error)
-                        Button(onClick = onRetry) { Text("重试") }
-                    }
-                    profile == null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), color = Brand, strokeWidth = 2.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text("正在读取用户资料…", color = Muted)
-                    }
-                    else -> {
-                        Text("Cloud Firestore 已连接", color = Brand, fontWeight = FontWeight.SemiBold)
-                        Text("用户 UID", color = Muted, style = MaterialTheme.typography.labelMedium)
-                        Text(profile.uid, color = Ink)
-                        profile.bio.takeIf { it.isNotBlank() }?.let { Text(it, color = Muted) }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        TextButton(onClick = onLogout) {
-            Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("退出登录")
         }
     }
 }
