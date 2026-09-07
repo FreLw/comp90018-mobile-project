@@ -1,5 +1,6 @@
 plugins {
 	id("com.android.application")
+	id("com.google.gms.google-services")
 	id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -15,12 +16,9 @@ android {
 		versionName = "1.0"
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-		// For the emulator, adb reverse maps its localhost:8080 to this computer.
-		buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8080/\"")
 	}
 
 	buildFeatures {
-		buildConfig = true
 		compose = true
 	}
 
@@ -42,13 +40,17 @@ android {
 
 dependencies {
 	val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
+	val firebaseBom = platform("com.google.firebase:firebase-bom:34.18.0")
 	implementation(composeBom)
 	androidTestImplementation(composeBom)
+	implementation(firebaseBom)
 
 	implementation("androidx.activity:activity-compose:1.13.0")
 	implementation("androidx.compose.material3:material3")
+	implementation("androidx.compose.material:material-icons-extended")
 	implementation("androidx.compose.ui:ui")
 	implementation("androidx.compose.ui:ui-tooling-preview")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+	implementation("com.google.firebase:firebase-auth")
+	implementation("com.google.firebase:firebase-firestore")
 	debugImplementation("androidx.compose.ui:ui-tooling")
 }

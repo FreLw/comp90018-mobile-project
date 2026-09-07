@@ -4,13 +4,12 @@
     <application
         android:allowBackup="true"
         android:label="COMP90018"
-        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Comp90018"
-        android:usesCleartextTraffic="true">
+        android:theme="@style/Theme.Comp90018">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

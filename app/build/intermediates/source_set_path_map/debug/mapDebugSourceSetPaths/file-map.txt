@@ -1,0 +1,49 @@
+com.unimelb.losttreasures.app-customview-poolingcontainer-1.0.0-0 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\05898a0a05fa5be22ea7b2c44ecda821\workspace\transformed\customview-poolingcontainer-1.0.0\res
+com.unimelb.losttreasures.app-lifecycle-livedata-core-2.8.7-1 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\087964fca3b57a6df335505f88366497\workspace\transformed\lifecycle-livedata-core-2.8.7\res
+com.unimelb.losttreasures.app-animation-core-release-2 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\17498b961df18fcf6208113acc1844e2\workspace\transformed\animation-core-release\res
+com.unimelb.losttreasures.app-emoji2-1.3.0-3 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\1a5c0c6bf50dd91b41ce1c73824b6c29\workspace\transformed\emoji2-1.3.0\res
+com.unimelb.losttreasures.app-core-ktx-1.13.1-4 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\2e3b035e7912977043fbdaf7157ed41f\workspace\transformed\core-ktx-1.13.1\res
+com.unimelb.losttreasures.app-lifecycle-viewmodel-release-5 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\30f1e202e24b20c1a8e5de5dd1a5f401\workspace\transformed\lifecycle-viewmodel-release\res
+com.unimelb.losttreasures.app-ui-tooling-release-6 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\3120876d448ac884722230221615ba04\workspace\transformed\ui-tooling-release\res
+com.unimelb.losttreasures.app-activity-ktx-1.9.3-7 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\4433a5799a3d539dda2e1d2109200973\workspace\transformed\activity-ktx-1.9.3\res
+com.unimelb.losttreasures.app-runtime-saveable-release-8 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\46a15b861819f6b3c2574d06863fdfee\workspace\transformed\runtime-saveable-release\res
+com.unimelb.losttreasures.app-lifecycle-viewmodel-ktx-2.8.7-9 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\46b6b0f87ce0e5904ab0948b245023e0\workspace\transformed\lifecycle-viewmodel-ktx-2.8.7\res
+com.unimelb.losttreasures.app-core-1.13.1-10 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\4a6dd57b158bb5880c65f1f8dfa97f53\workspace\transformed\core-1.13.1\res
+com.unimelb.losttreasures.app-material-release-11 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\5c8655b2cd182e999bc013af794c412d\workspace\transformed\material-release\res
+com.unimelb.losttreasures.app-annotation-experimental-1.4.1-12 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\5e7a4442f1fa10953bfa6de98410dad4\workspace\transformed\annotation-experimental-1.4.1\res
+com.unimelb.losttreasures.app-material-icons-core-release-13 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\6254d0297aecefdb5f64734ef50a3b7e\workspace\transformed\material-icons-core-release\res
+com.unimelb.losttreasures.app-activity-compose-1.9.3-14 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\665100d9c0b6275c5caff570e97aa785\workspace\transformed\activity-compose-1.9.3\res
+com.unimelb.losttreasures.app-profileinstaller-1.3.1-15 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\70b443ad862fbe47e3b8fdb292301118\workspace\transformed\profileinstaller-1.3.1\res
+com.unimelb.losttreasures.app-activity-1.9.3-16 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\7895041fb9eb9d79e3b3f9ddb0de5255\workspace\transformed\activity-1.9.3\res
+com.unimelb.losttreasures.app-lifecycle-runtime-ktx-release-17 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\7ac1f935e0c82540353cb6494e4be464\workspace\transformed\lifecycle-runtime-ktx-release\res
+com.unimelb.losttreasures.app-material3-release-18 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\87f04b3bfed9076d00c4a905b0bcf63a\workspace\transformed\material3-release\res
+com.unimelb.losttreasures.app-savedstate-ktx-1.2.1-19 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\887f2ce2fa581b80ac580188b08e24ce\workspace\transformed\savedstate-ktx-1.2.1\res
+com.unimelb.losttreasures.app-foundation-release-20 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\8b6a033e5fe450a8c9ddee426887389d\workspace\transformed\foundation-release\res
+com.unimelb.losttreasures.app-material-icons-extended-release-21 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\8b9a99a436121f504e68bb2a2d01bc0d\workspace\transformed\material-icons-extended-release\res
+com.unimelb.losttreasures.app-runtime-release-22 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\910c0f2c6d3fd865e6a1dd2e89ee1f8f\workspace\transformed\runtime-release\res
+com.unimelb.losttreasures.app-graphics-path-1.0.1-23 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\92f3029677eaa26b59acbaf322b50f9a\workspace\transformed\graphics-path-1.0.1\res
+com.unimelb.losttreasures.app-lifecycle-runtime-compose-release-24 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\93b5577cd259cfd6d23210bf4559ee52\workspace\transformed\lifecycle-runtime-compose-release\res
+com.unimelb.losttreasures.app-startup-runtime-1.1.1-25 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\96a8d193b539112cef07af7916354590\workspace\transformed\startup-runtime-1.1.1\res
+com.unimelb.losttreasures.app-lifecycle-viewmodel-savedstate-2.8.7-26 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\9891ffe9d370fc81b95fc305396772c3\workspace\transformed\lifecycle-viewmodel-savedstate-2.8.7\res
+com.unimelb.losttreasures.app-lifecycle-process-2.8.7-27 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\9a271fcdc3158773ee57421193748ca4\workspace\transformed\lifecycle-process-2.8.7\res
+com.unimelb.losttreasures.app-ui-tooling-preview-release-28 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\9d1fdbd99bb82c9d849e56696f291a93\workspace\transformed\ui-tooling-preview-release\res
+com.unimelb.losttreasures.app-ui-tooling-data-release-29 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\a32d2984ab1c53b949f81e5cc2ea3e12\workspace\transformed\ui-tooling-data-release\res
+com.unimelb.losttreasures.app-foundation-layout-release-30 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\b91f4915f8d94f0b36360541144b4439\workspace\transformed\foundation-layout-release\res
+com.unimelb.losttreasures.app-material-ripple-release-31 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\be45180267ebda3aa0e31b628b25fd86\workspace\transformed\material-ripple-release\res
+com.unimelb.losttreasures.app-ui-graphics-release-32 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\c02962a7b81e55714b46c28671d2c8e6\workspace\transformed\ui-graphics-release\res
+com.unimelb.losttreasures.app-ui-util-release-33 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\c1d26304e986836e22105ecc900ffe58\workspace\transformed\ui-util-release\res
+com.unimelb.losttreasures.app-ui-release-34 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\cb34a6eb5fd284272b7180886322a5f9\workspace\transformed\ui-release\res
+com.unimelb.losttreasures.app-ui-text-release-35 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\d6a49f459215cc843d0612c8b699ce3e\workspace\transformed\ui-text-release\res
+com.unimelb.losttreasures.app-animation-release-36 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\dba164ff9da0e0a7c2b6f9944ed2f695\workspace\transformed\animation-release\res
+com.unimelb.losttreasures.app-core-runtime-2.2.0-37 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\dd8c736c42b71a1fa3fefa6346c5f08a\workspace\transformed\core-runtime-2.2.0\res
+com.unimelb.losttreasures.app-ui-unit-release-38 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\e67a9f18bdca9df52fce53d5bcb0964e\workspace\transformed\ui-unit-release\res
+com.unimelb.losttreasures.app-lifecycle-runtime-release-39 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\ebf13937ba6c037cedd1ce174597209e\workspace\transformed\lifecycle-runtime-release\res
+com.unimelb.losttreasures.app-ui-geometry-release-40 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\f0fa6eb4a0fb6af6f7013cc0e2195434\workspace\transformed\ui-geometry-release\res
+com.unimelb.losttreasures.app-savedstate-1.2.1-41 C:\Users\luyunxiao\.gradle\caches\9.3.0\transforms\ff53cffeee44d3f7864350f1cc323594\workspace\transformed\savedstate-1.2.1\res
+com.unimelb.losttreasures.app-pngs-42 D:\A work\mobile\comp90018-mobile-project\app\build\generated\res\pngs\debug
+com.unimelb.losttreasures.app-resValues-43 D:\A work\mobile\comp90018-mobile-project\app\build\generated\res\resValues\debug
+com.unimelb.losttreasures.app-packageDebugResources-44 D:\A work\mobile\comp90018-mobile-project\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.unimelb.losttreasures.app-packageDebugResources-45 D:\A work\mobile\comp90018-mobile-project\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.unimelb.losttreasures.app-debug-46 D:\A work\mobile\comp90018-mobile-project\app\build\intermediates\merged_res\debug\mergeDebugResources
+com.unimelb.losttreasures.app-debug-47 D:\A work\mobile\comp90018-mobile-project\app\src\debug\res
+com.unimelb.losttreasures.app-main-48 D:\A work\mobile\comp90018-mobile-project\app\src\main\res
