@@ -52,7 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.comp90018.app.AppTextField
+import com.comp90018.app.ui.components.AppTextField
 import com.comp90018.app.Brand
 import com.comp90018.app.BrandSoft
 import com.comp90018.app.FirebaseAuthService

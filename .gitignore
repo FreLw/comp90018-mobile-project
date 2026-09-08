@@ -1,4 +1,11 @@
+# Firebase
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
+
+# Local config
 local.properties
+
+# Gradle cache
+.gradle/
+.gradle-user/

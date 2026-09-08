@@ -1,22 +1,34 @@
-# Android frontend
+# Android client
 
-This Kotlin + Jetpack Compose app connects directly to Firebase Authentication
-and Cloud Firestore. It does not require a local or hosted Spring Boot server.
+This directory is the Kotlin + Jetpack Compose Android client for Lost
+Treasures. It connects directly to Firebase Authentication, Cloud Firestore,
+and Firebase Storage; there is no local or hosted Spring Boot server.
 
-## Firebase setup
+## Open and run
 
-1. Add an Android app with package name `com.comp90018.app` in Firebase.
-2. Put `google-services.json` at `frontend/app/google-services.json`.
-3. Enable **Authentication > Sign-in method > Email/Password**.
-4. Create Cloud Firestore and deploy the repository's rules:
+1. Complete the Firebase setup in the repository [README](../README.md),
+   including placing `google-services.json` in `app/google-services.json` and
+   deploying Firestore and Storage rules.
+2. Open this `frontend` directory in Android Studio.
+3. Wait for Gradle sync to complete.
+4. Choose an Android emulator or physical device with internet access.
+5. Select **Run**.
 
-   ```powershell
-   firebase deploy --only firestore
-   ```
+If Android Studio reports a Gradle cache issue, use **File → Sync Project with
+Gradle Files**. For emulator install failures, inspect the `INSTALL_FAILED...`
+line in the Run output; a test-only emulator can be reset from Device Manager
+with **Wipe Data**.
 
-## Run it
+## App navigation
 
-Open this `frontend` directory in Android Studio, sync Gradle, and run the app
-on an emulator or physical device with internet access. Registration and login
-use Firebase Authentication; the signed-in profile is created at and observed
-from `users/{uid}` in Cloud Firestore.
+| Bottom tab | Current behaviour |
+| --- | --- |
+| `treasure` | Placeholder for future treasure gameplay |
+| `Rooms` | Create/join a two-person room and room chat |
+| `Map` | Placeholder for future map support |
+| `friend` | Friend search, requests, friend list, and private chat |
+| `profile` | Profile view/edit and sign out |
+
+For end-user instructions, data model, requirements, and acceptance criteria,
+see the repository [README](../README.md) and
+[REQUIREMENTS.md](../REQUIREMENTS.md).
