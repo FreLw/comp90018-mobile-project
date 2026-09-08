@@ -76,6 +76,8 @@ import androidx.compose.ui.unit.dp
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
+import com.comp90018.app.features.rooms.RoomsScreen
+import com.comp90018.app.features.map.MapScreen
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -299,7 +301,7 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
         Box(Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 20.dp)) {
             when (destination) {
                 AppDestination.Home -> HomeScreen()
-                AppDestination.Search -> SearchScreen(user, firestore, profile)
+                AppDestination.Search -> RoomsScreen(user, firestore, profile)
                 AppDestination.Chats -> MapScreen()
                 AppDestination.Friends -> FriendsScreen(user, firestore, profile)
                 AppDestination.Profile -> ProfileScreen(
@@ -350,7 +352,7 @@ private fun AppBottomNavigation(selected: AppDestination, onSelected: (AppDestin
 private fun HomeScreen() = Box(Modifier.fillMaxSize())
 
 @Composable
-private fun SearchScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
+private fun LegacySearchScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
     var joining by remember { mutableStateOf(false) }
     var roomId by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
@@ -797,7 +799,7 @@ private fun ProfileInfo(label: String, value: String) {
 }
 
 @Composable
-private fun MapScreen() = Box(Modifier.fillMaxSize())
+private fun LegacyMapScreen() = Box(Modifier.fillMaxSize())
 
 @Composable
 private fun ChatRoomScreen(
