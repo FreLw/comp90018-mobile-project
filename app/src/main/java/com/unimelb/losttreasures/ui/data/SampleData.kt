@@ -32,6 +32,8 @@ val sampleRelics = listOf(
         progress = 0.68f,
         mapX = 0.18f,
         mapY = 0.38f,
+        latitude = -37.798156,
+        longitude = 144.960481,
         tone = RelicTone.Gold,
         story = "A brass compass linked to early campus wayfinding stories."
     ),
@@ -45,6 +47,8 @@ val sampleRelics = listOf(
         progress = 0.42f,
         mapX = 0.62f,
         mapY = 0.28f,
+        latitude = -37.7986,
+        longitude = 144.9602,
         tone = RelicTone.Red,
         story = "A study lantern revealed through coordinated team signals."
     ),
@@ -58,6 +62,8 @@ val sampleRelics = listOf(
         progress = 0.83f,
         mapX = 0.46f,
         mapY = 0.62f,
+        latitude = -37.79856,
+        longitude = 144.96050,
         tone = RelicTone.Gold,
         story = "A hidden sundial that reacts to direction and stillness."
     ),
@@ -71,6 +77,8 @@ val sampleRelics = listOf(
         progress = 0.34f,
         mapX = 0.82f,
         mapY = 0.52f,
+        latitude = -37.7981,
+        longitude = 144.9612,
         tone = RelicTone.Red,
         story = "A ceremonial bell recovered through a shared team hunt."
     )

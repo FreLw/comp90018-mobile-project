@@ -22,6 +22,8 @@ data class Relic(
     val progress: Float,
     val mapX: Float,
     val mapY: Float,
+    val latitude: Double,
+    val longitude: Double,
     val tone: RelicTone,
     val story: String
 )
