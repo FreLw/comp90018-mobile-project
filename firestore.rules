@@ -26,7 +26,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'createdAt', 'updatedAt'
+          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'avatarUrl', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
@@ -37,13 +37,16 @@ service cloud.firestore {
         && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
         && request.resource.data.bio is string
         && request.resource.data.bio.size() <= 500
+        && (!('avatarUrl' in request.resource.data)
+          || (request.resource.data.avatarUrl is string
+            && request.resource.data.avatarUrl.size() <= 2000))
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if isOwner(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['username', 'displayName', 'gender', 'bio', 'updatedAt'])
+          .hasOnly(['username', 'displayName', 'gender', 'bio', 'avatarUrl', 'updatedAt'])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.displayName is string
@@ -51,6 +54,9 @@ service cloud.firestore {
         && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
         && request.resource.data.bio is string
         && request.resource.data.bio.size() <= 500
+        && (!('avatarUrl' in request.resource.data)
+          || (request.resource.data.avatarUrl is string
+            && request.resource.data.avatarUrl.size() <= 2000))
         && request.resource.data.updatedAt == request.time;
       allow delete: if isOwner(userId);
     }
@@ -80,10 +86,8 @@ service cloud.firestore {
     match /rooms/{roomId} {
       // A direct-chat opener must be able to check whether its deterministic ID exists.
       // Existing room content remains visible only to its members.
-      allow get: if signedIn() && (
-        !exists(/databases/$(database)/documents/rooms/$(roomId))
-        || request.auth.uid in resource.data.memberIds
-      );
+      // A room ID can be shared so authenticated explorers can join that exact room.
+      allow get: if signedIn();
       allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
@@ -96,20 +100,38 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 80
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
-      allow update: if isRoomMember(roomId)
+      allow update: if (
+        isRoomMember(roomId)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.memberIds == resource.data.memberIds
         && request.resource.data.title == resource.data.title
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt'])
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+      ) || (
+        signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+        && request.resource.data.memberIds.size() <= 20
+        && request.resource.data.creatorId == resource.data.creatorId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+      );
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
 
       match /messages/{messageId} {
         allow read: if isRoomMember(roomId);
         allow create: if isRoomMember(roomId)
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 30
+          && request.resource.data.senderAvatarUrl is string
+          && request.resource.data.senderAvatarUrl.size() <= 2000
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000

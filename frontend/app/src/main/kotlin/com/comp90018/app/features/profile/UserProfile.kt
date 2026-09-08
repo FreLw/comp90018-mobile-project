@@ -8,4 +8,5 @@ data class UserProfile(
     val displayName: String,
     val gender: String,
     val bio: String,
+    val avatarUrl: String,
 )

@@ -52,5 +52,6 @@ dependencies {
 	implementation("androidx.compose.ui:ui-tooling-preview")
 	implementation("com.google.firebase:firebase-auth")
 	implementation("com.google.firebase:firebase-firestore")
+	implementation("com.google.firebase:firebase-storage")
 	debugImplementation("androidx.compose.ui:ui-tooling")
 }

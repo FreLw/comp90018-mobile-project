@@ -1,5 +1,6 @@
 package com.comp90018.app
 
+import android.net.Uri
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
@@ -10,6 +11,7 @@ import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 
 object FirebaseAuthService {
 	fun login(
@@ -71,6 +73,7 @@ object FirebaseAuthService {
 				"displayName" to "",
 				"gender" to "unspecified",
 				"bio" to "",
+				"avatarUrl" to "",
 				"createdAt" to FieldValue.serverTimestamp(),
 				"updatedAt" to FieldValue.serverTimestamp(),
 			)
@@ -86,6 +89,7 @@ object FirebaseAuthService {
 		username: String,
 		gender: String,
 		bio: String,
+		avatarUrl: String? = null,
 		onComplete: (String?) -> Unit,
 	) {
 		val cleanUsername = username.trim().lowercase()
@@ -103,16 +107,33 @@ object FirebaseAuthService {
 			return
 		}
 
-		firestore.collection("users").document(uid).update(
-			mapOf(
+		val updates = mutableMapOf<String, Any>(
 				"username" to cleanUsername,
 				"gender" to gender,
 				"bio" to cleanBio,
 				"updatedAt" to FieldValue.serverTimestamp(),
-			),
-		).addOnCompleteListener { task ->
+		)
+		avatarUrl?.let { updates["avatarUrl"] = it }
+		firestore.collection("users").document(uid).update(updates).addOnCompleteListener { task ->
 			onComplete(if (task.isSuccessful) null else task.exception.toUserMessage())
 		}
+	}
+
+	fun uploadAvatar(
+		storage: FirebaseStorage,
+		uid: String,
+		avatarUri: Uri,
+		onComplete: (String?, String?) -> Unit,
+	) {
+		val avatarRef = storage.reference.child("avatars/$uid/profile.jpg")
+		avatarRef.putFile(avatarUri)
+			.continueWithTask { upload ->
+				if (!upload.isSuccessful) throw (upload.exception ?: IllegalStateException("Avatar upload failed"))
+				avatarRef.downloadUrl
+			}
+			.addOnCompleteListener { task ->
+				onComplete(if (task.isSuccessful) task.result.toString() else null, task.exception.toUserMessage())
+			}
 	}
 
 	private fun defaultUsername(user: FirebaseUser): String {

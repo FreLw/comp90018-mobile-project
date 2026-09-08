@@ -31,15 +31,16 @@ import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Group
-import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,12 +48,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Typography
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,10 +74,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.comp90018.app.features.profile.ProfileScreen
+import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,11 +90,31 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal val Brand = Color(0xFF4B5FE7)
-internal val BrandSoft = Color(0xFFE9ECFF)
-internal val Background = Color(0xFFF7F8FC)
-internal val Ink = Color(0xFF18203A)
-internal val Muted = Color(0xFF7B8198)
+// Shared with the prototype: a calm field-guide palette with relic-colour accents.
+internal val Brand = Color(0xFF0A6A5A)
+internal val BrandSoft = Color(0xFFE6ECE8)
+internal val Background = Color(0xFFF6F8F5)
+internal val Ink = Color(0xFF18211F)
+internal val Muted = Color(0xFF48524E)
+internal val RelicGold = Color(0xFFD19A2A)
+internal val RelicRed = Color(0xFFB84A52)
+internal val RelicBlue = Color(0xFF3867D6)
+
+private val RelicColorScheme = lightColorScheme(
+    primary = Brand,
+    onPrimary = Color.White,
+    secondary = RelicRed,
+    tertiary = RelicBlue,
+    background = Background,
+    onBackground = Ink,
+    surface = Color.White,
+    onSurface = Ink,
+    surfaceVariant = BrandSoft,
+    onSurfaceVariant = Muted,
+    outline = Color(0xFF74807B),
+)
+
+private val RelicTypography = Typography()
 
 @Composable
 private fun Comp90018App() {
@@ -102,7 +128,7 @@ private fun Comp90018App() {
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
-    MaterialTheme {
+    MaterialTheme(colorScheme = RelicColorScheme, typography = RelicTypography) {
         Surface(color = Background, modifier = Modifier.fillMaxSize()) {
             if (user == null) AuthScreen(auth)
             else LoggedInApp(requireNotNull(user), firestore, onLogout = auth::signOut)
@@ -125,15 +151,15 @@ private fun AuthScreen(auth: FirebaseAuth) {
             colors = CardDefaults.cardColors(containerColor = Color.White),
         ) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("COMP90018", style = MaterialTheme.typography.labelLarge, color = Brand)
+                Text("LOST TREASURES", style = MaterialTheme.typography.labelLarge, color = RelicGold)
                 Text(
-                    if (loginMode) "Welcome back" else "Create account",
+                    if (loginMode) "Return to the hunt" else "Begin your hunt",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Ink,
                 )
                 Text(
-                    if (loginMode) "Sign in with Firebase" else "A Firestore profile will be created automatically.",
+                    if (loginMode) "Sign in to continue your campus adventure." else "Your explorer profile will be created automatically.",
                     color = Muted,
                 )
                 AppTextField("Email", email, { email = it }, keyboardType = KeyboardType.Email)
@@ -213,17 +239,17 @@ internal fun AppTextField(
 }
 
 private enum class AppDestination(val label: String, val icon: ImageVector) {
-    Home("Home", Icons.Rounded.Home),
-    Search("Search", Icons.Rounded.Search),
-    Chats("Chats", Icons.AutoMirrored.Rounded.Chat),
-    Friends("Friends", Icons.Rounded.Group),
-    Profile("Profile", Icons.Rounded.Person),
+    Home("treasure", Icons.Rounded.Star),
+    Search("Rooms", Icons.Rounded.Forum),
+    Chats("Map", Icons.Rounded.LocationOn),
+    Friends("friend", Icons.Rounded.Group),
+    Profile("profile", Icons.Rounded.Person),
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> Unit) {
-    var destination by remember { mutableStateOf(AppDestination.Search) }
+    // Start on the populated friend list rather than an intentionally empty placeholder tab.
+    var destination by remember { mutableStateOf(AppDestination.Friends) }
     var profile by remember(user.uid) { mutableStateOf<UserProfile?>(null) }
     var profileError by remember(user.uid) { mutableStateOf<String?>(null) }
     var reloadKey by remember(user.uid) { mutableStateOf(0) }
@@ -246,6 +272,7 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
                     displayName = snapshot.getString("displayName").orEmpty(),
                     gender = snapshot.getString("gender") ?: "unspecified",
                     bio = snapshot.getString("bio").orEmpty(),
+                    avatarUrl = snapshot.getString("avatarUrl").orEmpty(),
                 )
                 if (username.isBlank() && !creatingProfile) {
                     creatingProfile = true
@@ -267,31 +294,13 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
 
     Scaffold(
         containerColor = Background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("COMP90018", color = Brand, style = MaterialTheme.typography.labelMedium)
-                        Text(destination.label, color = Ink, fontWeight = FontWeight.Bold)
-                    }
-                },
-                actions = {
-                    if (destination == AppDestination.Profile) {
-                        IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "Sign out", tint = Muted)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Background),
-            )
-        },
         bottomBar = { AppBottomNavigation(destination) { destination = it } },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 20.dp)) {
             when (destination) {
                 AppDestination.Home -> HomeScreen()
-                AppDestination.Search -> SearchScreen()
-                AppDestination.Chats -> ChatInboxScreen(user, firestore)
+                AppDestination.Search -> SearchScreen(user, firestore, profile)
+                AppDestination.Chats -> MapScreen()
                 AppDestination.Friends -> FriendsScreen(user, firestore, profile)
                 AppDestination.Profile -> ProfileScreen(
                     user, firestore, profile, profileError,
@@ -341,13 +350,70 @@ private fun AppBottomNavigation(selected: AppDestination, onSelected: (AppDestin
 private fun HomeScreen() = Box(Modifier.fillMaxSize())
 
 @Composable
-private fun SearchScreen() = Box(Modifier.fillMaxSize())
+private fun SearchScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
+    var joining by remember { mutableStateOf(false) }
+    var roomId by remember { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(top = 56.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(Modifier.size(78.dp).clip(CircleShape).background(BrandSoft), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Group, contentDescription = null, tint = Brand, modifier = Modifier.size(36.dp))
+        }
+        Text("You’re not in a room yet.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
+        Text(
+            "Create a room or join one to team up and hunt for treasure together.",
+            color = Muted,
+            textAlign = TextAlign.Center,
+        )
+        if (joining) {
+            AppTextField("Enter room ID", roomId, { roomId = it })
+        }
+        message?.let { Text(it, color = if (it.startsWith("Room")) Brand else MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
+        Button(
+            onClick = {
+                working = true
+                message = null
+                FirebaseSocialService.createRoom(firestore, user.uid, profile?.username.orEmpty()) { id, error ->
+                    working = false
+                    message = error ?: "Room created. Share this room ID: $id"
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !working,
+            colors = ButtonDefaults.buttonColors(containerColor = Brand),
+        ) { Text(if (working && !joining) "Creating…" else "Create a room") }
+        OutlinedButton(
+            onClick = {
+                if (!joining) {
+                    joining = true
+                    message = null
+                } else {
+                    working = true
+                    message = null
+                    FirebaseSocialService.joinRoom(firestore, roomId, user.uid) { error ->
+                        working = false
+                        message = error ?: "Room joined successfully."
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !working,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand),
+        ) { Text(if (working && joining) "Joining…" else "Join the room") }
+    }
+}
 
 @Composable
 private fun FriendFinder(
     user: FirebaseUser,
     firestore: FirebaseFirestore,
     currentUsername: String,
+    currentAvatarUrl: String,
     onClose: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -364,6 +430,8 @@ private fun FriendFinder(
             roomId = requireNotNull(roomId),
             currentUid = user.uid,
             title = target?.username ?: "Chat",
+            currentUsername = currentUsername,
+            currentAvatarUrl = currentAvatarUrl,
             onBack = { roomId = null },
         )
         return
@@ -506,18 +574,37 @@ private fun FriendsScreen(
     var requestMessage by remember { mutableStateOf<String?>(null) }
     var activeRoomId by remember { mutableStateOf<String?>(null) }
     var activeRoomTitle by remember { mutableStateOf("") }
+    var activeFriend by remember { mutableStateOf<FriendSummary?>(null) }
+    var showFriendProfile by remember { mutableStateOf(false) }
 
     LaunchedEffect(user.uid, profile?.username) {
         FirebaseSocialService.migrateAcceptedFriendships(firestore, user.uid, profile?.username.orEmpty())
     }
 
     if (activeRoomId != null) {
+        if (showFriendProfile && activeFriend != null) {
+            FriendProfileScreen(
+                firestore = firestore,
+                friend = requireNotNull(activeFriend),
+                currentUid = user.uid,
+                onBack = { showFriendProfile = false },
+                onRemoved = {
+                    showFriendProfile = false
+                    activeRoomId = null
+                    activeFriend = null
+                },
+            )
+            return
+        }
         ChatRoomScreen(
             firestore = firestore,
             roomId = requireNotNull(activeRoomId),
             currentUid = user.uid,
             title = activeRoomTitle,
+            currentUsername = profile?.username.orEmpty(),
+            currentAvatarUrl = profile?.avatarUrl.orEmpty(),
             onBack = { activeRoomId = null },
+            onViewFriend = { showFriendProfile = true },
         )
         return
     }
@@ -527,6 +614,7 @@ private fun FriendsScreen(
             user = user,
             firestore = firestore,
             currentUsername = profile?.username.orEmpty(),
+            currentAvatarUrl = profile?.avatarUrl.orEmpty(),
             onClose = { addFriendMode = false },
         )
         return
@@ -605,21 +693,19 @@ private fun FriendsScreen(
                 friends.forEach { friend ->
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FriendListAvatar(firestore, friend)
+                            Spacer(Modifier.width(12.dp))
                             Text(friend.username, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
                             TextButton(onClick = {
                                 FirebaseSocialService.openDirectRoom(firestore, user.uid, friend.uid, friend.username) { roomId, error ->
                                     requestMessage = error
-                                    if (roomId != null) {
-                                        activeRoomTitle = friend.username
-                                        activeRoomId = roomId
-                                    }
+                                if (roomId != null) {
+                                    activeRoomTitle = friend.username
+                                    activeRoomId = roomId
+                                    activeFriend = friend
                                 }
-                            }) { Text("Chat") }
-                            TextButton(onClick = {
-                                FirebaseSocialService.removeFriend(firestore, user.uid, friend.uid) { error ->
-                                    requestMessage = error ?: "Friend removed"
-                                }
-                            }) { Text("Remove") }
+                            }
+                        }) { Text("Chat") }
                         }
                     }
                 }
@@ -629,59 +715,89 @@ private fun FriendsScreen(
 }
 
 @Composable
-private fun ChatInboxScreen(user: FirebaseUser, firestore: FirebaseFirestore) {
-    var rooms by remember { mutableStateOf<List<ChatRoomSummary>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var activeRoom by remember { mutableStateOf<ChatRoomSummary?>(null) }
-
-    activeRoom?.let { room ->
-        ChatRoomScreen(
-            firestore = firestore,
-            roomId = room.id,
-            currentUid = user.uid,
-            title = room.title,
-            onBack = { activeRoom = null },
-        )
-        return
+private fun FriendListAvatar(firestore: FirebaseFirestore, friend: FriendSummary) {
+    var avatarUrl by remember(friend.uid) { mutableStateOf("") }
+    DisposableEffect(friend.uid, firestore) {
+        val registration = firestore.collection("users").document(friend.uid).addSnapshotListener { snapshot, _ ->
+            avatarUrl = snapshot?.getString("avatarUrl").orEmpty()
+        }
+        onDispose { registration.remove() }
     }
+    ProfileAvatar(avatarUrl, friend.username, 40.dp)
+}
 
-    DisposableEffect(user.uid, firestore) {
-        val registration = FirebaseSocialService.observeRooms(firestore, user.uid) { updatedRooms, newError ->
-            rooms = updatedRooms
-            error = newError
+@Composable
+private fun FriendProfileScreen(
+    firestore: FirebaseFirestore,
+    friend: FriendSummary,
+    currentUid: String,
+    onBack: () -> Unit,
+    onRemoved: () -> Unit,
+) {
+    var profile by remember(friend.uid) { mutableStateOf<UserProfile?>(null) }
+    var error by remember(friend.uid) { mutableStateOf<String?>(null) }
+    var removing by remember(friend.uid) { mutableStateOf(false) }
+
+    DisposableEffect(friend.uid, firestore) {
+        val registration = firestore.collection("users").document(friend.uid).addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                error = exception.localizedMessage ?: "Unable to load friend profile"
+            } else if (snapshot != null && snapshot.exists()) {
+                profile = UserProfile(
+                    uid = friend.uid,
+                    email = snapshot.getString("email").orEmpty(),
+                    username = snapshot.getString("username") ?: friend.username,
+                    displayName = snapshot.getString("displayName").orEmpty(),
+                    gender = snapshot.getString("gender") ?: "unspecified",
+                    bio = snapshot.getString("bio").orEmpty(),
+                    avatarUrl = snapshot.getString("avatarUrl").orEmpty(),
+                )
+                error = null
+            }
         }
         onDispose { registration.remove() }
     }
 
-    Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Chats", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
-        Text("Start a chat from the Friends tab. Your conversations appear here.", color = Muted)
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (rooms.isEmpty()) {
-            EmptyState(Icons.AutoMirrored.Rounded.Chat, "No conversations yet", "Add a friend, then tap Chat to start talking.")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(rooms, key = { it.id }) { room ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        onClick = { activeRoom = room },
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(42.dp).clip(CircleShape).background(BrandSoft),
-                                contentAlignment = Alignment.Center,
-                            ) { Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = Brand) }
-                            Spacer(Modifier.width(12.dp))
-                            Text(room.title, modifier = Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
+    Column(Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+            Text("Friend profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Ink)
+        }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(profile?.username ?: friend.username, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
+                profile?.email?.takeIf { it.isNotBlank() }?.let { ProfileInfo("Email", it) }
+                profile?.gender?.let { ProfileInfo("Gender", genderLabel(it)) }
+                profile?.bio?.takeIf { it.isNotBlank() }?.let { ProfileInfo("About", it) }
+                if (profile == null && error == null) CircularProgressIndicator(Modifier.size(20.dp), color = Brand, strokeWidth = 2.dp)
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         }
+        Button(
+            onClick = {
+                removing = true
+                FirebaseSocialService.removeFriend(firestore, currentUid, friend.uid) { removeError ->
+                    removing = false
+                    if (removeError == null) onRemoved() else error = removeError
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !removing,
+            colors = ButtonDefaults.buttonColors(containerColor = RelicRed),
+        ) { Text(if (removing) "Removing…" else "Remove friend") }
     }
 }
+
+@Composable
+private fun ProfileInfo(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Muted)
+        Text(value, color = Ink)
+    }
+}
+
+@Composable
+private fun MapScreen() = Box(Modifier.fillMaxSize())
 
 @Composable
 private fun ChatRoomScreen(
@@ -689,7 +805,10 @@ private fun ChatRoomScreen(
     roomId: String,
     currentUid: String,
     title: String,
+    currentUsername: String,
+    currentAvatarUrl: String,
     onBack: () -> Unit,
+    onViewFriend: (() -> Unit)? = null,
 ) {
     var messages by remember(roomId) { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var input by remember(roomId) { mutableStateOf("") }
@@ -710,7 +829,12 @@ private fun ChatRoomScreen(
             }
             Column {
                 Text(title, fontWeight = FontWeight.Bold, color = Ink)
-                Text("Room ${roomId.take(8)}", color = Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(Modifier.weight(1f))
+            onViewFriend?.let { openProfile ->
+                IconButton(onClick = openProfile) {
+                    Icon(Icons.Rounded.Person, contentDescription = "View friend profile", tint = Brand)
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -730,19 +854,29 @@ private fun ChatRoomScreen(
                 ) {
                     items(messages, key = { it.id }) { chatMessage ->
                         val mine = chatMessage.senderId == currentUid
+                        val senderName = chatMessage.senderName.ifBlank {
+                            if (mine) currentUsername.ifBlank { "You" } else title
+                        }
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+                            verticalAlignment = Alignment.Top,
                         ) {
-                            Surface(
-                                color = if (mine) Brand else BrandSoft,
-                                shape = RoundedCornerShape(18.dp),
-                            ) {
-                                Text(
-                                    chatMessage.text,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    color = if (mine) Color.White else Ink,
-                                )
+                            if (!mine) {
+                                ProfileAvatar(chatMessage.senderAvatarUrl, senderName, 40.dp)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                                Text(senderName, color = Muted, style = MaterialTheme.typography.labelMedium)
+                                Text(formatMessageTime(chatMessage.sentAtMillis), color = Muted, style = MaterialTheme.typography.labelSmall)
+                                Spacer(Modifier.height(3.dp))
+                                Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
+                                    Text(chatMessage.text, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), color = if (mine) Color.White else Ink)
+                                }
+                            }
+                            if (mine) {
+                                Spacer(Modifier.width(8.dp))
+                                ProfileAvatar(chatMessage.senderAvatarUrl.ifBlank { currentAvatarUrl }, senderName, 40.dp)
                             }
                         }
                     }
@@ -757,7 +891,9 @@ private fun ChatRoomScreen(
             onClick = {
                 val sending = input
                 input = ""
-                FirebaseSocialService.sendMessage(firestore, roomId, currentUid, sending) { error = it }
+                FirebaseSocialService.sendMessage(
+                    firestore, roomId, currentUid, currentUsername.ifBlank { "You" }, currentAvatarUrl, sending,
+                ) { error = it }
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = input.isNotBlank(),
@@ -769,6 +905,9 @@ private fun ChatRoomScreen(
         }
     }
 }
+
+private fun formatMessageTime(timestamp: Long): String =
+    if (timestamp == 0L) "Sending…" else SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
 
 @Composable
 private fun FeatureCard(icon: ImageVector, title: String, subtitle: String) {

@@ -22,7 +22,10 @@ enum class FriendshipStatus {
 data class ChatMessage(
     val id: String,
     val senderId: String,
+    val senderName: String,
+    val senderAvatarUrl: String,
     val text: String,
+    val sentAtMillis: Long,
 )
 
 data class ChatRoomSummary(
@@ -419,6 +422,36 @@ object FirebaseSocialService {
         }
     }
 
+    fun joinRoom(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        currentUid: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        val cleanRoomId = roomId.trim()
+        if (cleanRoomId.isBlank()) {
+            onComplete("Enter a room ID")
+            return
+        }
+        val reference = firestore.collection("rooms").document(cleanRoomId)
+        reference.get().addOnCompleteListener { readTask ->
+            if (!readTask.isSuccessful) {
+                onComplete(readTask.exception?.localizedMessage ?: "Unable to find room")
+            } else if (!readTask.result.exists()) {
+                onComplete("Room not found")
+            } else if (currentUid in (readTask.result.get("memberIds") as? List<*>).orEmpty()) {
+                onComplete(null)
+            } else {
+                reference.update(
+                    "memberIds", FieldValue.arrayUnion(currentUid),
+                    "updatedAt", FieldValue.serverTimestamp(),
+                ).addOnCompleteListener { updateTask ->
+                    onComplete(if (updateTask.isSuccessful) null else updateTask.exception?.localizedMessage ?: "Unable to join room")
+                }
+            }
+        }
+    }
+
     fun observeRooms(
         firestore: FirebaseFirestore,
         currentUid: String,
@@ -455,7 +488,14 @@ object FirebaseSocialService {
             }
             val messages = snapshot?.documents.orEmpty().mapNotNull { document ->
                 val senderId = document.getString("senderId") ?: return@mapNotNull null
-                ChatMessage(document.id, senderId, document.getString("text").orEmpty())
+                ChatMessage(
+                    id = document.id,
+                    senderId = senderId,
+                    senderName = document.getString("senderName").orEmpty(),
+                    senderAvatarUrl = document.getString("senderAvatarUrl").orEmpty(),
+                    text = document.getString("text").orEmpty(),
+                    sentAtMillis = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
+                )
             }
             onChange(messages, null)
         }
@@ -464,6 +504,8 @@ object FirebaseSocialService {
         firestore: FirebaseFirestore,
         roomId: String,
         senderId: String,
+        senderName: String,
+        senderAvatarUrl: String,
         text: String,
         onComplete: (String?) -> Unit,
     ) {
@@ -471,6 +513,8 @@ object FirebaseSocialService {
         if (cleanText.isBlank()) return
         val message = mapOf(
             "senderId" to senderId,
+            "senderName" to senderName.trim().take(30),
+            "senderAvatarUrl" to senderAvatarUrl,
             "text" to cleanText.take(1000),
             "createdAt" to FieldValue.serverTimestamp(),
         )
