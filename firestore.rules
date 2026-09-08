@@ -15,6 +15,13 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
     }
 
+    function hasAcceptedFriendRequest(requestId, memberIds) {
+      return exists(/databases/$(database)/documents/friendRequests/$(requestId))
+        && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.status == 'accepted'
+        && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.fromUid in memberIds
+        && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.toUid in memberIds;
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
       allow create: if isOwner(userId)
@@ -52,12 +59,14 @@ service cloud.firestore {
       allow read: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'fromUsername', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'fromUsername', 'toUsername', 'status', 'createdAt'])
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
         && request.resource.data.fromUsername is string
         && request.resource.data.fromUsername.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.toUsername is string
+        && request.resource.data.toUsername.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt == request.time;
       allow update: if signedIn()
@@ -69,7 +78,13 @@ service cloud.firestore {
     }
 
     match /rooms/{roomId} {
-      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      // A direct-chat opener must be able to check whether its deterministic ID exists.
+      // Existing room content remains visible only to its members.
+      allow get: if signedIn() && (
+        !exists(/databases/$(database)/documents/rooms/$(roomId))
+        || request.auth.uid in resource.data.memberIds
+      );
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'title', 'creatorId', 'memberIds', 'createdAt', 'updatedAt'
@@ -84,7 +99,9 @@ service cloud.firestore {
       allow update: if isRoomMember(roomId)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.memberIds.size() <= 20
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt'])
         && request.resource.data.updatedAt == request.time;
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
 
@@ -99,6 +116,23 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }
+    }
+
+    match /users/{userId}/friends/{friendUid} {
+      allow read: if isOwner(userId);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'friendUid', 'username', 'sourceRequestId', 'createdAt'])
+        && request.resource.data.ownerUid == userId
+        && request.resource.data.friendUid == friendUid
+        && request.resource.data.friendUid is string
+        && request.resource.data.friendUid != userId
+        && request.auth.uid in [userId, friendUid]
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.sourceRequestId is string
+        && hasAcceptedFriendRequest(request.resource.data.sourceRequestId, [userId, friendUid])
+        && request.resource.data.createdAt == request.time;
+      allow delete: if signedIn() && request.auth.uid in [resource.data.ownerUid, resource.data.friendUid];
     }
 
     match /{document=**} {

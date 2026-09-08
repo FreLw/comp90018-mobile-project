@@ -25,6 +25,12 @@ data class ChatMessage(
     val text: String,
 )
 
+data class ChatRoomSummary(
+    val id: String,
+    val title: String,
+    val updatedAtMillis: Long,
+)
+
 data class IncomingFriendRequest(
     val fromUid: String,
     val fromUsername: String,
@@ -119,6 +125,7 @@ object FirebaseSocialService {
         fromUid: String,
         toUid: String,
         fromUsername: String,
+        toUsername: String,
         onComplete: (String?) -> Unit,
     ) {
         val requestId = "${fromUid}_$toUid"
@@ -126,6 +133,7 @@ object FirebaseSocialService {
             "fromUid" to fromUid,
             "toUid" to toUid,
             "fromUsername" to fromUsername.trim().lowercase(),
+            "toUsername" to toUsername.trim().lowercase(),
             "status" to "pending",
             "createdAt" to FieldValue.serverTimestamp(),
         )
@@ -178,11 +186,17 @@ object FirebaseSocialService {
         firestore: FirebaseFirestore,
         fromUid: String,
         toUid: String,
+        fromUsername: String,
+        toUsername: String,
         onComplete: (String?) -> Unit,
     ) {
-        firestore.collection("friendRequests").document("${fromUid}_${toUid}")
-            .update("status", "accepted")
-            .addOnCompleteListener { task ->
+        val request = firestore.collection("friendRequests").document("${fromUid}_${toUid}")
+        val sourceRequestId = "${fromUid}_${toUid}"
+        firestore.batch().apply {
+            update(request, "status", "accepted")
+            set(userFriendReference(firestore, fromUid, toUid), userFriendData(fromUid, toUid, toUsername, sourceRequestId))
+            set(userFriendReference(firestore, toUid, fromUid), userFriendData(toUid, fromUid, fromUsername, sourceRequestId))
+        }.commit().addOnCompleteListener { task ->
                 onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to accept friend request")
             }
     }
@@ -211,68 +225,74 @@ object FirebaseSocialService {
                 onChange(emptyList(), exception.localizedMessage ?: "Unable to load friend requests")
                 return@addSnapshotListener
             }
-            val pending = snapshot?.documents.orEmpty()
+            val requests = snapshot?.documents.orEmpty()
                 .filter { it.getString("status") == "pending" && !isLegacyFriendship(it) }
                 .mapNotNull { document ->
                     val fromUid = document.getString("fromUid") ?: return@mapNotNull null
-                    fromUid to document.getString("fromUsername").orEmpty()
-                }
-            resolveUsernames(firestore, pending.map { it.first }) { usernames ->
-                val requests = pending.map { (fromUid, storedUsername) ->
                     IncomingFriendRequest(
                         fromUid = fromUid,
-                        fromUsername = usernames[fromUid] ?: storedUsername.ifBlank { fromUid.take(8) },
+                        fromUsername = document.getString("fromUsername").orEmpty().ifBlank { fromUid.take(8) },
                     )
                 }
-                onChange(requests, null)
-            }
+            onChange(requests, null)
         }
 
     fun observeFriends(
         firestore: FirebaseFirestore,
         currentUid: String,
         onChange: (List<FriendSummary>, String?) -> Unit,
-    ): ListenerRegistration {
-        var outgoingIds = emptyList<String>()
-        var incomingIds = emptyList<String>()
-
-        fun publish() {
-            val friendIds = (outgoingIds + incomingIds).distinct()
-            resolveUsernames(firestore, friendIds) { usernames ->
-                onChange(
-                    friendIds.map { uid -> FriendSummary(uid, usernames[uid] ?: uid.take(8)) },
-                    null,
-                )
+    ): ListenerRegistration = firestore.collection("users").document(currentUid).collection("friends")
+        .addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                onChange(emptyList(), exception.localizedMessage ?: "Unable to load friends")
+                return@addSnapshotListener
             }
+            val friends = snapshot?.documents.orEmpty().mapNotNull { document ->
+                val friendUid = document.getString("friendUid") ?: return@mapNotNull null
+                val friendName = document.getString("username").orEmpty().ifBlank { friendUid.take(8) }
+                FriendSummary(friendUid, friendName)
+            }.sortedBy { it.username }
+            onChange(friends, null)
         }
 
-        val outgoingRegistration = firestore.collection("friendRequests")
-            .whereEqualTo("fromUid", currentUid)
-            .addSnapshotListener { snapshot, exception ->
-                if (exception != null) {
-                    onChange(emptyList(), exception.localizedMessage ?: "Unable to load friends")
-                    return@addSnapshotListener
-                }
-                outgoingIds = snapshot?.documents.orEmpty()
+    fun migrateAcceptedFriendships(
+        firestore: FirebaseFirestore,
+        currentUid: String,
+        currentUsername: String,
+    ) {
+        if (currentUsername.isBlank()) return
+        val outgoing = firestore.collection("friendRequests").whereEqualTo("fromUid", currentUid).get()
+        val incoming = firestore.collection("friendRequests").whereEqualTo("toUid", currentUid).get()
+
+        outgoing.addOnCompleteListener { outgoingTask ->
+            if (!outgoingTask.isSuccessful) return@addOnCompleteListener
+            incoming.addOnCompleteListener { incomingTask ->
+                if (!incomingTask.isSuccessful) return@addOnCompleteListener
+                (outgoingTask.result.documents + incomingTask.result.documents)
                     .filter { isFriendship(it) }
-                    .mapNotNull { it.getString("toUid") }
-                publish()
+                    .forEach { document ->
+                        val fromUid = document.getString("fromUid") ?: return@forEach
+                        val toUid = document.getString("toUid") ?: return@forEach
+                        val otherUid = if (fromUid == currentUid) toUid else fromUid
+                        val storedName = if (fromUid == currentUid) {
+                            document.getString("toUsername").orEmpty()
+                        } else {
+                            document.getString("fromUsername").orEmpty()
+                        }
+                        fun createIfMissing(otherUsername: String) {
+                            val friend = userFriendReference(firestore, currentUid, otherUid)
+                            friend.get().addOnCompleteListener { friendTask ->
+                                if (friendTask.isSuccessful && !friendTask.result.exists()) {
+                                    friend.set(userFriendData(currentUid, otherUid, otherUsername, document.id))
+                                }
+                            }
+                        }
+                        if (storedName.isNotBlank()) createIfMissing(storedName)
+                        else firestore.collection("users").document(otherUid).get().addOnCompleteListener { userTask ->
+                            if (userTask.isSuccessful) createIfMissing(userTask.result.getString("username").orEmpty())
+                        }
+                    }
             }
-        val incomingRegistration = firestore.collection("friendRequests")
-            .whereEqualTo("toUid", currentUid)
-            .addSnapshotListener { snapshot, exception ->
-                if (exception != null) {
-                    onChange(emptyList(), exception.localizedMessage ?: "Unable to load friends")
-                    return@addSnapshotListener
-                }
-                incomingIds = snapshot?.documents.orEmpty()
-                    .filter { isFriendship(it) }
-                    .mapNotNull { it.getString("fromUid") }
-                publish()
-            }
-        return ListenerRegistration {
-            outgoingRegistration.remove()
-            incomingRegistration.remove()
         }
     }
 
@@ -298,7 +318,13 @@ object FirebaseSocialService {
                         fallback()
                         return@addOnCompleteListener
                     }
-                    request.reference.delete().addOnCompleteListener { deleteTask ->
+                    val from = request.getString("fromUid") ?: fromUid
+                    val to = request.getString("toUid") ?: toUid
+                    firestore.batch().apply {
+                        delete(request.reference)
+                        delete(userFriendReference(firestore, from, to))
+                        delete(userFriendReference(firestore, to, from))
+                    }.commit().addOnCompleteListener { deleteTask ->
                         onComplete(if (deleteTask.isSuccessful) null else deleteTask.exception?.localizedMessage ?: "Unable to remove friend")
                     }
                 }
@@ -308,28 +334,6 @@ object FirebaseSocialService {
         }
     }
 
-    private fun resolveUsernames(
-        firestore: FirebaseFirestore,
-        uids: List<String>,
-        onComplete: (Map<String, String>) -> Unit,
-    ) {
-        val usernames = mutableMapOf<String, String>()
-        fun resolveAt(index: Int) {
-            if (index >= uids.size) {
-                onComplete(usernames)
-                return
-            }
-            val uid = uids[index]
-            firestore.collection("users").document(uid).get().addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    task.result.getString("username")?.takeIf { it.isNotBlank() }?.let { usernames[uid] = it }
-                }
-                resolveAt(index + 1)
-            }
-        }
-        resolveAt(0)
-    }
-
     // Requests created before the friend-request workflow stored no sender username.
     // Those legacy records represent the pre-existing friendship and are shown as accepted.
     private fun isLegacyFriendship(document: com.google.firebase.firestore.DocumentSnapshot): Boolean =
@@ -337,6 +341,24 @@ object FirebaseSocialService {
 
     private fun isFriendship(document: com.google.firebase.firestore.DocumentSnapshot): Boolean =
         document.getString("status") == "accepted" || isLegacyFriendship(document)
+
+    private fun userFriendReference(firestore: FirebaseFirestore, ownerUid: String, friendUid: String) =
+        firestore.collection("users").document(ownerUid).collection("friends").document(friendUid)
+
+    private fun userFriendData(
+        ownerUid: String,
+        friendUid: String,
+        friendUsername: String,
+        sourceRequestId: String,
+    ): Map<String, Any> {
+        return mapOf(
+            "ownerUid" to ownerUid,
+            "friendUid" to friendUid,
+            "username" to friendUsername.trim().lowercase(),
+            "sourceRequestId" to sourceRequestId,
+            "createdAt" to FieldValue.serverTimestamp(),
+        )
+    }
 
     private fun friendshipStatusFor(document: com.google.firebase.firestore.DocumentSnapshot?): String? = when {
         document == null -> null
@@ -397,6 +419,27 @@ object FirebaseSocialService {
         }
     }
 
+    fun observeRooms(
+        firestore: FirebaseFirestore,
+        currentUid: String,
+        onChange: (List<ChatRoomSummary>, String?) -> Unit,
+    ): ListenerRegistration = firestore.collection("rooms")
+        .whereArrayContains("memberIds", currentUid)
+        .addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                onChange(emptyList(), exception.localizedMessage ?: "Unable to load chats")
+                return@addSnapshotListener
+            }
+            val rooms = snapshot?.documents.orEmpty().map { document ->
+                ChatRoomSummary(
+                    id = document.id,
+                    title = document.getString("title").orEmpty().ifBlank { "Chat" },
+                    updatedAtMillis = document.getTimestamp("updatedAt")?.toDate()?.time ?: 0L,
+                )
+            }.sortedByDescending { it.updatedAtMillis }
+            onChange(rooms, null)
+        }
+
     fun observeMessages(
         firestore: FirebaseFirestore,
         roomId: String,
@@ -431,8 +474,11 @@ object FirebaseSocialService {
             "text" to cleanText.take(1000),
             "createdAt" to FieldValue.serverTimestamp(),
         )
-        firestore.collection("rooms").document(roomId).collection("messages").add(message)
-            .addOnCompleteListener { task ->
+        val room = firestore.collection("rooms").document(roomId)
+        firestore.batch().apply {
+            set(room.collection("messages").document(), message)
+            update(room, "updatedAt", FieldValue.serverTimestamp())
+        }.commit().addOnCompleteListener { task ->
                 onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
             }
     }

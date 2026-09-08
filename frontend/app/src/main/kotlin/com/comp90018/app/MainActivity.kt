@@ -55,6 +55,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -214,6 +215,7 @@ internal fun AppTextField(
 private enum class AppDestination(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Rounded.Home),
     Search("Search", Icons.Rounded.Search),
+    Chats("Chats", Icons.AutoMirrored.Rounded.Chat),
     Friends("Friends", Icons.Rounded.Group),
     Profile("Profile", Icons.Rounded.Person),
 }
@@ -289,6 +291,7 @@ private fun LoggedInApp(user: FirebaseUser, firestore: FirebaseFirestore, onLogo
             when (destination) {
                 AppDestination.Home -> HomeScreen()
                 AppDestination.Search -> SearchScreen()
+                AppDestination.Chats -> ChatInboxScreen(user, firestore)
                 AppDestination.Friends -> FriendsScreen(user, firestore, profile)
                 AppDestination.Profile -> ProfileScreen(
                     user, firestore, profile, profileError,
@@ -414,7 +417,9 @@ private fun FriendFinder(
                 FriendshipStatus.IncomingPending -> Button(
                     onClick = {
                         actionInProgress = true
-                        FirebaseSocialService.acceptFriendRequest(firestore, foundUser.uid, user.uid) { error ->
+                        FirebaseSocialService.acceptFriendRequest(
+                            firestore, foundUser.uid, user.uid, foundUser.username, currentUsername,
+                        ) { error ->
                             actionInProgress = false
                             friendship = if (error == null) FriendshipStatus.Friends else friendship
                             message = error ?: "Friend request accepted"
@@ -432,7 +437,9 @@ private fun FriendFinder(
                 FriendshipStatus.None -> Button(
                     onClick = {
                         actionInProgress = true
-                        FirebaseSocialService.sendFriendRequest(firestore, user.uid, foundUser.uid, currentUsername) { error ->
+                        FirebaseSocialService.sendFriendRequest(
+                            firestore, user.uid, foundUser.uid, currentUsername, foundUser.username,
+                        ) { error ->
                             actionInProgress = false
                             friendship = if (error == null) FriendshipStatus.OutgoingPending else friendship
                             message = error ?: "Friend request sent"
@@ -497,6 +504,23 @@ private fun FriendsScreen(
     var incomingRequests by remember { mutableStateOf<List<IncomingFriendRequest>>(emptyList()) }
     var friends by remember { mutableStateOf<List<FriendSummary>>(emptyList()) }
     var requestMessage by remember { mutableStateOf<String?>(null) }
+    var activeRoomId by remember { mutableStateOf<String?>(null) }
+    var activeRoomTitle by remember { mutableStateOf("") }
+
+    LaunchedEffect(user.uid, profile?.username) {
+        FirebaseSocialService.migrateAcceptedFriendships(firestore, user.uid, profile?.username.orEmpty())
+    }
+
+    if (activeRoomId != null) {
+        ChatRoomScreen(
+            firestore = firestore,
+            roomId = requireNotNull(activeRoomId),
+            currentUid = user.uid,
+            title = activeRoomTitle,
+            onBack = { activeRoomId = null },
+        )
+        return
+    }
 
     if (addFriendMode) {
         FriendFinder(
@@ -566,7 +590,9 @@ private fun FriendsScreen(
                             FirebaseSocialService.declineFriendRequest(firestore, request.fromUid, user.uid) { requestMessage = it }
                         }) { Text("Decline") }
                         Button(onClick = {
-                            FirebaseSocialService.acceptFriendRequest(firestore, request.fromUid, user.uid) { requestMessage = it }
+                            FirebaseSocialService.acceptFriendRequest(
+                                firestore, request.fromUid, user.uid, request.fromUsername, profile?.username.orEmpty(),
+                            ) { requestMessage = it }
                         }) { Text("Accept") }
                     }
                 }
@@ -581,10 +607,74 @@ private fun FriendsScreen(
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(friend.username, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
                             TextButton(onClick = {
+                                FirebaseSocialService.openDirectRoom(firestore, user.uid, friend.uid, friend.username) { roomId, error ->
+                                    requestMessage = error
+                                    if (roomId != null) {
+                                        activeRoomTitle = friend.username
+                                        activeRoomId = roomId
+                                    }
+                                }
+                            }) { Text("Chat") }
+                            TextButton(onClick = {
                                 FirebaseSocialService.removeFriend(firestore, user.uid, friend.uid) { error ->
                                     requestMessage = error ?: "Friend removed"
                                 }
                             }) { Text("Remove") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatInboxScreen(user: FirebaseUser, firestore: FirebaseFirestore) {
+    var rooms by remember { mutableStateOf<List<ChatRoomSummary>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var activeRoom by remember { mutableStateOf<ChatRoomSummary?>(null) }
+
+    activeRoom?.let { room ->
+        ChatRoomScreen(
+            firestore = firestore,
+            roomId = room.id,
+            currentUid = user.uid,
+            title = room.title,
+            onBack = { activeRoom = null },
+        )
+        return
+    }
+
+    DisposableEffect(user.uid, firestore) {
+        val registration = FirebaseSocialService.observeRooms(firestore, user.uid) { updatedRooms, newError ->
+            rooms = updatedRooms
+            error = newError
+        }
+        onDispose { registration.remove() }
+    }
+
+    Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Chats", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
+        Text("Start a chat from the Friends tab. Your conversations appear here.", color = Muted)
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (rooms.isEmpty()) {
+            EmptyState(Icons.AutoMirrored.Rounded.Chat, "No conversations yet", "Add a friend, then tap Chat to start talking.")
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(rooms, key = { it.id }) { room ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        onClick = { activeRoom = room },
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(42.dp).clip(CircleShape).background(BrandSoft),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = Brand) }
+                            Spacer(Modifier.width(12.dp))
+                            Text(room.title, modifier = Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
