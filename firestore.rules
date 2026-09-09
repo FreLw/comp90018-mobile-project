@@ -1,0 +1,247 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isRoomMember(roomId) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
+    }
+
+    function isTeamRoomMember(roomId) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/teamRooms/$(roomId)).data.memberIds;
+    }
+
+    function hasAcceptedFriendRequest(requestId, memberIds) {
+      return exists(/databases/$(database)/documents/friendRequests/$(requestId))
+        && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.status == 'accepted'
+        && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.fromUid in memberIds
+        && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.toUid in memberIds;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'avatarUrl', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 500
+        && (!('avatarUrl' in request.resource.data)
+          || (request.resource.data.avatarUrl is string
+            && request.resource.data.avatarUrl.size() <= 2000))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['username', 'displayName', 'gender', 'bio', 'avatarUrl', 'updatedAt'])
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 500
+        && (!('avatarUrl' in request.resource.data)
+          || (request.resource.data.avatarUrl is string
+            && request.resource.data.avatarUrl.size() <= 2000))
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner(userId);
+    }
+
+    match /friendRequests/{requestId} {
+      allow read: if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'fromUsername', 'toUsername', 'status', 'createdAt'])
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.fromUsername is string
+        && request.resource.data.fromUsername.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.toUsername is string
+        && request.resource.data.toUsername.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn()
+        && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['accepted', 'declined'];
+      allow delete: if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+    match /rooms/{roomId} {
+      // A direct-chat opener must be able to check whether its deterministic ID exists.
+      // Existing room content remains visible only to its members.
+      // A room ID can be shared so authenticated explorers can join that exact room.
+      allow get: if signedIn();
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'title', 'creatorId', 'memberIds', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.creatorId == request.auth.uid
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.memberIds.size() <= 20
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if (
+        isRoomMember(roomId)
+        && request.resource.data.creatorId == resource.data.creatorId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt'])
+        && request.resource.data.updatedAt == request.time
+      ) || (
+        signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+        && request.resource.data.memberIds.size() <= 20
+        && request.resource.data.creatorId == resource.data.creatorId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+      );
+      allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId)
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 30
+          && request.resource.data.senderAvatarUrl is string
+          && request.resource.data.senderAvatarUrl.size() <= 2000
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    match /users/{userId}/friends/{friendUid} {
+      allow read: if isOwner(userId);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'friendUid', 'username', 'sourceRequestId', 'createdAt'])
+        && request.resource.data.ownerUid == userId
+        && request.resource.data.friendUid == friendUid
+        && request.resource.data.friendUid is string
+        && request.resource.data.friendUid != userId
+        && request.auth.uid in [userId, friendUid]
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.sourceRequestId is string
+        && hasAcceptedFriendRequest(request.resource.data.sourceRequestId, [userId, friendUid])
+        && request.resource.data.createdAt == request.time;
+      allow delete: if signedIn() && request.auth.uid in [resource.data.ownerUid, resource.data.friendUid];
+    }
+
+    match /teamMemberships/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['roomId', 'createdAt'])
+        && request.resource.data.roomId is string
+        && request.resource.data.createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/teamRooms/$(request.resource.data.roomId))
+        && request.auth.uid in getAfter(/databases/$(database)/documents/teamRooms/$(request.resource.data.roomId)).data.memberIds;
+      allow delete: if isOwner(userId)
+        || (signedIn()
+          && exists(/databases/$(database)/documents/teamRooms/$(resource.data.roomId))
+          && get(/databases/$(database)/documents/teamRooms/$(resource.data.roomId)).data.creatorId == request.auth.uid);
+      allow update: if false;
+    }
+
+    match /teamRooms/{roomId} {
+      // A room ID is intentionally shareable; listing all rooms remains private.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'createdAt', 'updatedAt'])
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.memberIds.size() == 1
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.taskId is string
+        && request.resource.data.taskTitle is string
+        && request.resource.data.taskStatus == 'unassigned'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+        && request.resource.data.memberIds.size() <= 2
+        && request.resource.data.creatorId == resource.data.creatorId
+        && request.resource.data.taskId == resource.data.taskId
+        && request.resource.data.taskTitle == resource.data.taskTitle
+        && request.resource.data.taskStatus == resource.data.taskStatus
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/teamMemberships/$(request.auth.uid));
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.memberIds
+        && request.auth.uid != resource.data.creatorId
+        && !(request.auth.uid in request.resource.data.memberIds)
+        && resource.data.memberIds.hasAll(request.resource.data.memberIds)
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
+        && request.resource.data.creatorId == resource.data.creatorId
+        && request.resource.data.taskId == resource.data.taskId
+        && request.resource.data.taskTitle == resource.data.taskTitle
+        && request.resource.data.taskStatus == resource.data.taskStatus
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow read: if isTeamRoomMember(roomId);
+        allow create: if isTeamRoomMember(roomId)
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 30
+          && request.resource.data.senderAvatarUrl is string
+          && request.resource.data.senderAvatarUrl.size() <= 2000
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if signedIn()
+          && get(/databases/$(database)/documents/teamRooms/$(roomId)).data.creatorId == request.auth.uid;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
