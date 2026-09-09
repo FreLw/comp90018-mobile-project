@@ -2,32 +2,26 @@
 
 ## Scope
 
-This document specifies the implemented application behaviour. “Explorer”
-means an authenticated user. The app is intentionally limited to social and
-two-person room functionality; the Treasure and Map tabs are reserved for
-future work.
+This document records the behaviour implemented in the Android client. “Explorer” means an authenticated user. The released scope is social connection, private chat, and two-person rooms; Treasure and Map are reserved for future work.
 
 ## Functional requirements
 
 ### FR-01 Account access
 
-- An explorer can register with a valid email address and a password of at
-  least six characters.
-- An explorer can sign in and sign out using Firebase Authentication.
-- On registration, the app creates a matching Firestore profile document.
+- An explorer can register with a valid email address and a password of at least six characters.
+- An explorer can sign in and sign out with Firebase Authentication.
+- The app creates a Firestore profile document for a newly authenticated account, assigning a valid default username when required.
 
-**Acceptance:** A new account can register, sign in, sign out, and sign in
-again without manually creating Firestore data.
+**Acceptance:** A new account can register, sign in, sign out, and sign in again without manually creating Firestore data.
 
 ### FR-02 Explorer profile
 
-- An explorer can view their email, username, gender, bio, and profile photo.
-- An explorer can edit their username and gender and can choose a profile
-  image from the device.
-- Usernames contain 3–30 lowercase letters, digits, or underscores.
+- An explorer can view their email, username, gender, biography, and profile photo.
+- An explorer can edit their username and gender and choose a profile image from the device.
+- A username must contain 3–30 lowercase letters, digits, or underscores.
+- The current implementation validates username format but does not enforce global username uniqueness; friend discovery returns one exact match.
 
-**Acceptance:** Saved profile changes are visible after reopening the profile
-page and to other authenticated explorers who view the profile.
+**Acceptance:** Saved username, gender, and photo changes remain visible after reopening the profile and are visible to other authenticated explorers.
 
 ### FR-03 Friend discovery and requests
 
@@ -36,94 +30,97 @@ page and to other authenticated explorers who view the profile.
 - The recipient can view pending requests and accept or decline each request.
 - Either explorer can remove an accepted friendship.
 
-**Acceptance:** After acceptance, both accounts list each other as friends.
-After removal, neither account lists the other as a friend.
+**Acceptance:** After acceptance, both accounts list each other as friends. After removal, neither account lists the other as a friend.
 
 ### FR-04 Direct friend chat
 
 - Accepted friends can open a private direct-chat room.
 - Both participants can send and receive messages in real time.
-- A direct chat provides access to the other explorer’s profile.
+- A direct chat provides access to the other explorer's profile and the option to remove that friend.
 
-**Acceptance:** A message sent on one device appears in the other friend’s
-chat without manually refreshing the app.
+**Acceptance:** A message sent on one device appears in the other explorer's chat without a manual refresh.
 
 ### FR-05 Create and join a two-person room
 
-- An explorer without an active room can create one room.
-- The creator enters the room immediately after creation.
-- A room exposes a shareable Room ID.
-- Another explorer can enter that Room ID to join the room.
-- A room contains no more than two members; an explorer can belong to one
-  active room at a time.
+- An explorer without an active room can create one room and enters it immediately.
+- A room exposes a shareable Room ID, which another explorer can use to join.
+- A room contains at most two members, and an explorer can hold only one active room membership at a time.
 
-**Acceptance:** Creating a room immediately opens its chat page. A second
-account can join using the copied Room ID. A third account is rejected.
+**Acceptance:** Creating a room opens its chat page. A second account can join using the copied ID, and a third account is rejected.
 
 ### FR-06 Room chat and details
 
-- Every room member can read and send real-time room messages.
+- Every room member can read and send real-time messages.
 - The room header and information icon open Room details.
-- Room details display the Room ID, a Copy action, current members, and room
-capacity.
+- Room details show the Room ID, a copy action, current members, and capacity.
 - Selecting a member opens their profile.
-- A member profile displays **Chat** for an existing friend, **Add friend**
-  for a non-friend, **Accept request** for an incoming request, or a pending
-  state when a request was sent.
+- A member profile provides the action appropriate to the friend relationship: **Chat**, **Add friend**, **Accept request**, or a pending state.
 
-**Acceptance:** Each member can copy the Room ID, open the other member’s
-profile, and exchange messages while they remain room members.
+**Acceptance:** Room members can copy the Room ID, view the other member, manage friendship, and exchange messages while they remain members.
 
 ### FR-07 Leave and dismiss a room
 
-- A non-owner can leave their room from Room details.
+- A non-owner can leave a room from Room details.
 - Only the creator/owner can dismiss the room.
-- Dismissing deletes all room messages, all active member links, and the room
-document.
-- Leaving or dismissing returns the initiating explorer to the no-room entry
-screen.
+- Dismissal deletes the room document, its messages, and the active membership links for its members.
+- Leaving or dismissal returns the initiating explorer to the no-room entry screen.
 
-**Acceptance:** After a participant leaves, they can create or join another
-room. After an owner dismisses, both previous members see the no-room entry
-screen and the old Room ID cannot be joined.
+**Acceptance:** After leaving, a participant can create or join another room. After dismissal, the Room ID cannot be joined and both former members lose the active room membership.
 
 ## Non-functional and security requirements
 
 ### NFR-01 Live updates
 
-Profile, friendship, room membership, and message views use Firestore snapshot
-listeners so changes appear without an explicit refresh action.
+Profile, friend-request, friend-list, room-membership, room, and message views use Cloud Firestore snapshot listeners. Changes appear without an explicit refresh action.
 
 ### NFR-02 Authorization
 
-Firestore Security Rules enforce the following:
+Firestore Security Rules enforce these controls:
 
-- Only an owner can edit or delete their own profile.
-- Friend requests can only be read by their sender or recipient.
-- Direct-chat messages can only be read or created by direct-room members.
-- Team-room messages can only be read or created by active room members.
-- Only a room owner can dismiss a room or delete its messages.
-- A participant can remove only their own active room membership.
+- Explorers can write only their own profile.
+- Friend requests are visible only to their sender or recipient.
+- Friend-list references are visible only to their owner and can be created or removed only by the friendship participants under the rule constraints.
+- Direct-chat messages are readable and creatable only by direct-room members.
+- Two-person-room messages are readable and creatable only by active members.
+- Only a two-person-room owner can dismiss its room or delete its messages.
+- An explorer can delete only their own active membership, except the owner may remove memberships as part of dismissal.
 
-### NFR-03 Input constraints
+### NFR-03 Input and storage constraints
 
-- Usernames: 3–30 permitted lowercase characters.
-- Profile display name: up to 80 characters.
-- Biography: up to 500 characters.
-- Chat message: 1–1000 characters.
-- Sender name: up to 30 characters.
-- Avatar URL: up to 2000 characters.
-- Room capacity: two members.
+| Item | Constraint |
+| --- | --- |
+| Username | 3–30 lowercase letters, digits, or underscores |
+| Profile display name | Up to 80 characters in the stored schema |
+| Biography | Up to 500 characters |
+| Chat message | 1–1,000 characters |
+| Sender name | Up to 30 characters |
+| Avatar URL | Up to 2,000 characters |
+| Uploaded avatar | Image under 5 MiB |
+| Room capacity | Two members |
 
 ### NFR-04 Supported environment
 
-The client is an Android app, built with Kotlin and Jetpack Compose, requiring
-network access to Firebase. The minimum Android SDK is 26.
+The client is an Android app built with Kotlin and Jetpack Compose. It requires network access to Firebase, Android API level 26 or higher, Android SDK Platform 37 for compilation, and JDK 21.
+
+### NFR-05 Firebase project configuration and credential handling
+
+- Each developer must download the Firebase Android configuration for the
+  project package `com.comp90018.app` from Firebase Console and place it at
+  `frontend/app/google-services.json` before building the app.
+- `google-services.json` is local Firebase project configuration. It is
+  ignored by `frontend/.gitignore`, must not be committed to Git, and must not
+  be uploaded to a public repository.
+- Team members who need to manage Firebase must be invited to the Firebase
+  project with an appropriate IAM role. **Editor** is the normal role for app
+  development; **Owner** is required only for project and access management.
+- Firebase CLI authentication is performed locally by each developer using
+  `firebase login`; Google passwords and verification codes must never be
+  shared in source control or project documentation.
 
 ## Out of scope / future work
 
 - Treasure discovery, collection, scoring, and task assignment.
 - Map rendering and device-location features.
-- Group rooms larger than two explorers.
+- Rooms with more than two explorers.
 - Push notifications, read receipts, typing indicators, and message editing.
-- Room restoration after an owner dismisses it.
+- Restoring a room after its owner has dismissed it.

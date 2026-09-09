@@ -1,120 +1,114 @@
 # Lost Treasures
 
-Lost Treasures is an Android campus-explorer app built with Kotlin and Jetpack
-Compose. It lets explorers create a profile, find friends, send private
-messages, and form a two-person treasure room with its own real-time chat.
+Lost Treasures is an Android app for campus explorers. The current release
+focuses on the social experience: accounts and profiles, friend requests,
+one-to-one chat, and a shareable two-person room with real-time messaging.
 
-## Features
+> The Treasure and Map tabs are intentionally empty placeholders for future
+> coursework features; they do not currently provide gameplay or mapping.
 
-- Email/password registration and sign-in with Firebase Authentication.
-- Explorer profiles: username, gender, bio, and optional profile photo.
-- Friend discovery by username, friend requests, accept/decline, and removal.
-- One-to-one real-time friend chat.
-- Two-person rooms: create or join with a shareable Room ID, real-time chat,
-  member details, Room ID copy, and room lifecycle controls.
-  - The owner can dismiss a room, removing the room, its messages, and all
-    member links.
-  - A non-owner can leave; they return to the room entry screen.
-- Firestore rules protect profile writes, friendships, direct messages, room
-  membership, room messages, leaving, and dismissal.
+## Implemented features
 
-The **Treasure** and **Map** tabs are navigation placeholders. They are not yet
-implemented as treasure or map experiences.
+- Email/password registration, sign-in, and sign-out with Firebase Authentication.
+- An automatically created explorer profile, with username, gender, bio, and optional photo stored in Firebase.
+- Profile editing for username, gender, and profile photo.
+- Exact username lookup, friend requests, accept/decline actions, and friend removal.
+- Private, real-time direct chat between accepted friends.
+- One active two-person room per explorer: create a room, share/copy its ID, join by ID, chat in real time, inspect room members, leave, or dismiss.
+- Firebase Security Rules for Firestore and Storage.
 
 ## Technology
 
-| Area | Choice |
+| Area | Implementation |
 | --- | --- |
-| Android UI | Kotlin + Jetpack Compose + Material 3 |
-| Authentication | Firebase Authentication |
+| Android client | Kotlin, Jetpack Compose, Material 3 |
+| Build | Gradle 9.7.1, Android Gradle Plugin 9.3.2, JDK 21 |
+| Authentication | Firebase Authentication (email/password) |
 | Data and live updates | Cloud Firestore snapshot listeners |
-| Profile photos | Firebase Storage |
-| Access control | Firestore Security Rules |
+| Images | Firebase Storage |
+| Access control | Firestore and Storage Security Rules |
+
+The Android app has `minSdk 26`, `targetSdk 37`, and package name `com.comp90018.app`.
 
 ## Repository layout
 
 ```text
-frontend/                 Android Studio project
+frontend/                 Android Studio / Gradle project
   app/                    Compose UI and Firebase service classes
 firestore.rules           Firestore authorization and validation rules
 firestore.indexes.json    Firestore indexes
 storage.rules             Firebase Storage rules
 firebase.json             Firebase deployment and emulator configuration
-REQUIREMENTS.md           Functional requirements and acceptance criteria
+REQUIREMENTS.md           Implemented requirements and acceptance criteria
 ```
 
-## Setup
+## Run the app
 
-Prerequisites: Android Studio with a compatible Android SDK, a Firebase
-project, and Firebase CLI for deploying rules.
+### Prerequisites
 
-1. In Firebase, create/register an Android application with package name
-   `com.comp90018.app`.
-2. Download its `google-services.json` and place it at
-   `frontend/app/google-services.json`. Do not commit this file.
-3. Enable **Authentication → Sign-in method → Email/Password**.
-4. Create the default **Cloud Firestore** database and enable **Firebase
-   Storage**.
-5. From the repository root, deploy the security rules and indexes:
+- Android Studio with Android SDK Platform 37 and JDK 21.
+- A Firebase project and the Firebase CLI.
+- An Android emulator or device with internet access.
+
+### Firebase setup
+
+1. Create a Firebase project and register an Android app with package name `com.comp90018.app`.
+2. Download `google-services.json` and place it at `frontend/app/google-services.json`. Treat this as local configuration; do not commit it.
+3. In Firebase Authentication, enable **Email/Password** as a sign-in provider.
+4. Create the default Cloud Firestore database and enable Firebase Storage.
+5. From the repository root, deploy the rules and Firestore index:
 
    ```powershell
    firebase deploy --only firestore,storage
    ```
 
-6. Open the `frontend` folder in Android Studio, let Gradle sync, select an
-   emulator or physical device with internet access, and press **Run**.
+### Build and launch
 
-## How to use the app
+1. Open the `frontend` directory in Android Studio.
+2. Allow Gradle sync to finish, select a device, then choose **Run**.
+
+Or, from `frontend` in PowerShell:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+The module-specific [frontend README](frontend/README.md) has the same quick-start details for Android Studio users.
+
+## Use the app
 
 ### Account and profile
 
-1. Select **Create account**, enter a valid email and a password of at least
-   six characters, then create the account.
-2. Open **profile** from the bottom navigation to review or edit the account.
-3. Set a unique username (3–30 lowercase letters, numbers, or `_`), choose a
-   gender option, and optionally choose a profile photo. Use **Save changes**.
-4. Use **Sign out** on the profile page when finished.
+1. Create an account with a valid email and a password of at least six characters, or sign in to an existing account.
+2. Open **profile** in the bottom navigation to view the profile or sign out.
+3. Select **Edit profile** to set a username, choose a gender option, and optionally select a profile photo. A username must be 3–30 lowercase letters, digits, or underscores.
 
 ### Friends and direct chat
 
 1. Open **friend** and select **Add friend**.
-2. Search for the other explorer's username.
-3. Select **Add friend**. The recipient opens **Friend requests** and chooses
-   **Accept** or **Decline**.
-4. Once accepted, either user can select **Chat** next to the friend to open a
-   private conversation. Select the profile icon in a direct chat to inspect
-   or remove that friend.
+2. Search for another explorer by their exact username and select **Add friend**.
+3. The recipient opens **Friend requests** and selects **Accept** or **Decline**.
+4. Once accepted, either explorer selects **Chat** beside that friend to open the private conversation. The friend profile in a direct chat also provides a remove-friend action.
 
 ### Two-person rooms
 
-1. Open **Rooms** and select **Create a room**. The app immediately opens the
-   new room.
-2. Select the information icon—or anywhere on the room header—to open **Room
-   details**. Select **Copy** beside the Room ID and send the ID to the second
-   explorer.
-3. On the other account/device, open **Rooms**, select **Join the room**, enter
-   the Room ID, then select **Join the room** again.
-4. Both members can send messages in the room. In Room details, select a
-   member to view their profile; the screen offers **Chat** for friends or
-   **Add friend** otherwise.
-5. In Room details, the owner uses **Dismiss room** to permanently remove the
-   room and its messages. A participant uses **Leave room** to exit. Both
-   actions return the current user to the room entry page.
+1. Open **Rooms** and select **Create a room**.
+2. Select the room header or information icon to open **Room details**. Copy the Room ID and share it with one other explorer.
+3. The second explorer opens **Rooms**, selects **Join the room**, enters the ID, then selects **Join the room**.
+4. Both members can exchange messages. In Room details, select a member to view their profile and send or manage a friend request.
+5. The owner can select **Dismiss room**, which permanently removes the room and its messages. A participant can select **Leave room**. Either action returns the initiating user to the room entry screen.
 
 ## Data model
 
-| Collection/path | Purpose |
+| Path | Purpose |
 | --- | --- |
 | `users/{uid}` | Explorer profile |
 | `users/{uid}/friends/{friendUid}` | Accepted friendship reference |
-| `friendRequests/{fromUid_toUid}` | Pending, accepted, or declined request |
-| `rooms/{roomId}` | Direct-chat room |
+| `friendRequests/{fromUid_toUid}` | Friend-request state |
+| `rooms/{roomId}` | Deterministic private direct-chat room |
 | `rooms/{roomId}/messages/{messageId}` | Direct-chat message |
 | `teamRooms/{roomId}` | Two-person room and member IDs |
-| `teamRooms/{roomId}/messages/{messageId}` | Team room message |
-| `teamMemberships/{uid}` | A user's active team-room reference |
+| `teamRooms/{roomId}/messages/{messageId}` | Two-person room message |
+| `teamMemberships/{uid}` | Explorer's active two-person-room reference |
 
-See [REQUIREMENTS.md](REQUIREMENTS.md) for functional requirements and
-acceptance criteria. The Android module has an additional
-[frontend README](frontend/README.md) for opening and running it in Android
-Studio.
+See [REQUIREMENTS.md](REQUIREMENTS.md) for detailed requirements, constraints, and acceptance criteria.
