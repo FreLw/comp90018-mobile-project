@@ -30,11 +30,30 @@ one-to-one chat, and a shareable two-person room with real-time messaging.
 
 The Android app has `minSdk 26`, `targetSdk 37`, and package name `com.comp90018.app`.
 
+## Architecture
+
+The client uses a feature-oriented MVVM structure. Compose screens render a
+`UiState` and delegate user actions to a ViewModel. ViewModels own transient
+state and real-time subscription lifecycles; they call repository interfaces
+instead of Firebase service objects directly.
+
+| Layer | Responsibility |
+| --- | --- |
+| `features/` | Compose screens and feature ViewModels (`auth`, `friends`, `chat`, `rooms`, `profile`) |
+| `data/auth`, `data/profile`, `data/social`, `data/chat`, `data/rooms` | Repository interfaces and Firebase-backed implementations |
+| `Firebase*Service` | Firebase persistence implementation used only from repository adapters |
+
+This separation keeps friend requests, direct chat, team rooms, profile reads,
+and authentication testable independently of Compose. Firebase SDK types are
+still passed through a small number of screen composition boundaries while
+repositories are created; UI business logic does not call Firestore, Storage,
+or Firebase service APIs directly.
+
 ## Repository layout
 
 ```text
 frontend/                 Android Studio / Gradle project
-  app/                    Compose UI and Firebase service classes
+  app/                    Compose UI, ViewModels, repositories, and Firebase adapters
 firestore.rules           Firestore authorization and validation rules
 firestore.indexes.json    Firestore indexes
 storage.rules             Firebase Storage rules

@@ -18,53 +18,42 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.Brand
-import com.comp90018.app.FirebaseAuthService
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicGold
+import com.comp90018.app.data.auth.AuthRepository
 import com.comp90018.app.ui.components.AppTextField
-import com.google.firebase.auth.FirebaseAuth
 
 @Composable
-fun AuthScreen(auth: FirebaseAuth) {
-    var loginMode by remember { mutableStateOf(true) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var submitting by remember { mutableStateOf(false) }
+fun AuthScreen(repository: AuthRepository) {
+    val viewModel: AuthViewModel = viewModel(factory = AuthViewModel.factory(repository))
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("LOST TREASURES", style = MaterialTheme.typography.labelLarge, color = RelicGold)
-                Text(if (loginMode) "Return to the hunt" else "Begin your hunt", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
-                Text(if (loginMode) "Sign in to continue your campus adventure." else "Your explorer profile will be created automatically.", color = Muted)
-                AppTextField("Email", email, { email = it }, keyboardType = KeyboardType.Email)
-                AppTextField("Password (at least 6 characters)", password, { password = it }, password = true, keyboardType = KeyboardType.Password)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Text(if (state.loginMode) "Return to the hunt" else "Begin your hunt", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
+                Text(if (state.loginMode) "Sign in to continue your campus adventure." else "Your explorer profile will be created automatically.", color = Muted)
+                AppTextField("Email", state.email, viewModel::updateEmail, keyboardType = KeyboardType.Email)
+                AppTextField("Password (at least 6 characters)", state.password, viewModel::updatePassword, password = true, keyboardType = KeyboardType.Password)
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(
-                    onClick = {
-                        error = validateCredentials(email, password)
-                        if (error != null) return@Button
-                        submitting = true
-                        val complete: (String?) -> Unit = { message -> submitting = false; error = message }
-                        if (loginMode) FirebaseAuthService.login(auth, email, password, complete) else FirebaseAuthService.register(auth, email, password, complete)
-                    },
-                    modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 14.dp), enabled = !submitting,
+                    onClick = { viewModel.submit(validateCredentials(state.email, state.password)) },
+                    modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 14.dp), enabled = !state.submitting,
                     colors = ButtonDefaults.buttonColors(containerColor = Brand),
-                ) { Text(if (submitting) "Please wait…" else if (loginMode) "Sign in" else "Create account") }
-                TextButton(onClick = { loginMode = !loginMode; error = null }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (loginMode) "No account? Create one" else "Already have an account? Sign in", color = Brand)
+                ) { Text(if (state.submitting) "Please wait..." else if (state.loginMode) "Sign in" else "Create account") }
+                TextButton(onClick = viewModel::toggleMode, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (state.loginMode) "No account? Create one" else "Already have an account? Sign in", color = Brand)
                 }
             }
         }

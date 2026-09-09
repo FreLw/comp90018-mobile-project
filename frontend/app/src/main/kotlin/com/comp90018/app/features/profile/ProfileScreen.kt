@@ -55,30 +55,27 @@ import androidx.compose.ui.unit.dp
 import com.comp90018.app.ui.components.AppTextField
 import com.comp90018.app.Brand
 import com.comp90018.app.BrandSoft
-import com.comp90018.app.FirebaseAuthService
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.comp90018.app.data.profile.ProfileRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
 
 /** Read-only explorer card with a separate edit flow for mutable profile details. */
 @Composable
-fun ProfileScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, profileError: String?, onRetry: () -> Unit, onLogout: () -> Unit) {
+fun ProfileScreen(userUid: String, userEmail: String, repository: ProfileRepository, profile: UserProfile?, profileError: String?, onRetry: () -> Unit, onLogout: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
     if (editing && profile != null) {
-        EditProfileScreen(user, firestore, profile, onBack = { editing = false }, onSaved = { editing = false })
+        EditProfileScreen(userUid, repository, profile, onBack = { editing = false }, onSaved = { editing = false })
     } else {
-        ProfileOverview(user, profile, profileError, onRetry, onEdit = { editing = true }, onLogout = onLogout)
+        ProfileOverview(userEmail, profile, profileError, onRetry, onEdit = { editing = true }, onLogout = onLogout)
     }
 }
 
 @Composable
-private fun ProfileOverview(user: FirebaseUser, profile: UserProfile?, profileError: String?, onRetry: () -> Unit, onEdit: () -> Unit, onLogout: () -> Unit) {
-    val email = profile?.email ?: user.email.orEmpty()
+private fun ProfileOverview(userEmail: String, profile: UserProfile?, profileError: String?, onRetry: () -> Unit, onEdit: () -> Unit, onLogout: () -> Unit) {
+    val email = profile?.email ?: userEmail
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 30.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         when {
             profileError != null -> {
@@ -118,8 +115,7 @@ private fun ProfileOverview(user: FirebaseUser, profile: UserProfile?, profileEr
 }
 
 @Composable
-private fun EditProfileScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile, onBack: () -> Unit, onSaved: () -> Unit) {
-    val storage = remember { FirebaseStorage.getInstance() }
+private fun EditProfileScreen(userUid: String, repository: ProfileRepository, profile: UserProfile, onBack: () -> Unit, onSaved: () -> Unit) {
     var username by remember(profile.uid) { mutableStateOf(profile.username) }
     var gender by remember(profile.uid) { mutableStateOf(profile.gender) }
     var selectedAvatar by remember { mutableStateOf<Uri?>(null) }
@@ -157,9 +153,9 @@ private fun EditProfileScreen(user: FirebaseUser, firestore: FirebaseFirestore, 
                 Button(onClick = {
                     saving = true; message = null
                     val finishSave: (String?) -> Unit = { error -> saving = false; message = error ?: "Profile saved"; if (error == null) onSaved() }
-                    val saveDetails: (String?) -> Unit = { avatarUrl -> FirebaseAuthService.updateProfile(firestore, user.uid, username, gender, profile.bio, avatarUrl, finishSave) }
+                    val saveDetails: (String?) -> Unit = { avatarUrl -> repository.updateProfile(userUid, username, gender, profile.bio, avatarUrl, finishSave) }
                     selectedAvatar?.let { uri ->
-                        FirebaseAuthService.uploadAvatar(storage, user.uid, uri) { url, error ->
+                        repository.uploadAvatar(userUid, uri) { url, error ->
                             if (url == null) { saving = false; message = error ?: "Unable to upload avatar" } else saveDetails(url)
                         }
                     } ?: saveDetails(profile.avatarUrl.takeIf { it.isNotBlank() })

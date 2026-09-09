@@ -20,7 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,36 +30,53 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.Brand
-import com.comp90018.app.FirebaseSocialService
 import com.comp90018.app.FriendSummary
 import com.comp90018.app.IncomingFriendRequest
 import com.comp90018.app.Ink
+import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.ui.components.EmptyState
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
+/** Renders friend state and delegates social actions to [FriendsViewModel]. */
 @Composable
 fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
+    val repository = remember(firestore) { FirebaseSocialRepository(firestore) }
+    val viewModel: FriendsViewModel = viewModel(
+        key = user.uid,
+        factory = FriendsViewModel.factory(repository, user.uid, profile?.username.orEmpty()),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(profile?.username) { viewModel.updateCurrentUsername(profile?.username.orEmpty()) }
+    val chatTarget = state.chatTarget
     var addFriendMode by remember { mutableStateOf(false) }
-    var showRequests by remember { mutableStateOf(false) }
-    var requests by remember { mutableStateOf<List<IncomingFriendRequest>>(emptyList()) }
-    var friends by remember { mutableStateOf<List<FriendSummary>>(emptyList()) }
-    var message by remember { mutableStateOf<String?>(null) }
-    var roomId by remember { mutableStateOf<String?>(null) }
-    var roomTitle by remember { mutableStateOf("") }
-    var activeFriend by remember { mutableStateOf<FriendSummary?>(null) }
-    var viewingProfile by remember { mutableStateOf(false) }
+    var viewingProfile by remember(chatTarget) { mutableStateOf(false) }
 
-    LaunchedEffect(user.uid, profile?.username) { FirebaseSocialService.migrateAcceptedFriendships(firestore, user.uid, profile?.username.orEmpty()) }
-
-    if (roomId != null) {
-        if (viewingProfile && activeFriend != null) {
-            FriendProfileScreen(firestore, requireNotNull(activeFriend), user.uid, onBack = { viewingProfile = false }, onRemoved = { viewingProfile = false; roomId = null; activeFriend = null })
+    if (chatTarget != null) {
+        if (viewingProfile) {
+            FriendProfileScreen(
+                firestore = firestore,
+                friend = chatTarget.friend,
+                onBack = { viewingProfile = false },
+                onRemoved = { viewingProfile = false; viewModel.closeChat() },
+                onRemoveFriend = viewModel::removeFriend,
+            )
         } else {
-            DirectChatScreen(firestore, requireNotNull(roomId), user.uid, roomTitle, profile?.username.orEmpty(), profile?.avatarUrl.orEmpty(), onBack = { roomId = null }, onViewFriend = { viewingProfile = true })
+            DirectChatScreen(
+                firestore = firestore,
+                roomId = chatTarget.roomId,
+                currentUid = user.uid,
+                title = chatTarget.friend.username,
+                currentUsername = profile?.username.orEmpty(),
+                currentAvatarUrl = profile?.avatarUrl.orEmpty(),
+                onBack = viewModel::closeChat,
+                onViewFriend = { viewingProfile = true },
+            )
         }
         return
     }
@@ -69,25 +85,32 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
         return
     }
 
-    DisposableEffect(user.uid, firestore) {
-        val requestListener = FirebaseSocialService.observeIncomingFriendRequests(firestore, user.uid) { data, error -> requests = data; message = error }
-        val friendListener = FirebaseSocialService.observeFriends(firestore, user.uid) { data, error -> friends = data; if (error != null) message = error }
-        onDispose { requestListener.remove(); friendListener.remove() }
-    }
+    FriendsContent(
+        state = state,
+        onAddFriend = { addFriendMode = true },
+        onToggleRequests = viewModel::toggleRequests,
+        onAccept = viewModel::accept,
+        onDecline = viewModel::decline,
+        onOpenChat = viewModel::openChat,
+    )
+}
+
+@Composable
+private fun FriendsContent(state: FriendsUiState, onAddFriend: () -> Unit, onToggleRequests: () -> Unit, onAccept: (IncomingFriendRequest) -> Unit, onDecline: (IncomingFriendRequest) -> Unit, onOpenChat: (FriendSummary) -> Unit) {
     Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Button(onClick = { addFriendMode = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand), shape = RoundedCornerShape(16.dp)) { androidx.compose.material3.Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(6.dp)); Text("Add friend") }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Button(onClick = onAddFriend, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand), shape = RoundedCornerShape(16.dp)) { androidx.compose.material3.Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(6.dp)); Text("Add friend") }
+        state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Friends", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Ink)
-            TextButton(onClick = { showRequests = !showRequests }) { Text(if (requests.isEmpty()) "Friend requests" else "Friend requests (${requests.size})") }
+            TextButton(onClick = onToggleRequests) { Text(if (state.requests.isEmpty()) "Friend requests" else "Friend requests (${state.requests.size})") }
         }
-        if (showRequests) RequestsList(requests, firestore, user.uid, profile?.username.orEmpty(), onError = { message = it })
-        else if (friends.isEmpty()) EmptyState(Icons.Rounded.Group, "No friends yet", "Tap Add friend to search by username.")
-        else friends.forEach { friend ->
+        if (state.showRequests) RequestsList(state.requests, onAccept, onDecline)
+        else if (state.friends.isEmpty()) EmptyState(Icons.Rounded.Group, "No friends yet", "Tap Add friend to search by username.")
+        else state.friends.forEach { friend ->
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FriendAvatar(firestore, friend); Spacer(Modifier.width(12.dp)); Text(friend.username, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
-                    TextButton(onClick = { FirebaseSocialService.openDirectRoom(firestore, user.uid, friend.uid, friend.username) { id, error -> message = error; if (id != null) { roomTitle = friend.username; roomId = id; activeFriend = friend } } }) { Text("Chat") }
+                    Text(friend.username, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
+                    TextButton(onClick = { onOpenChat(friend) }) { Text("Chat") }
                 }
             }
         }
@@ -95,14 +118,14 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
 }
 
 @Composable
-private fun RequestsList(requests: List<IncomingFriendRequest>, firestore: FirebaseFirestore, uid: String, username: String, onError: (String?) -> Unit) {
+private fun RequestsList(requests: List<IncomingFriendRequest>, onAccept: (IncomingFriendRequest) -> Unit, onDecline: (IncomingFriendRequest) -> Unit) {
     if (requests.isEmpty()) EmptyState(Icons.Rounded.Group, "No friend requests", "New requests will appear here.")
     else requests.forEach { request ->
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(request.fromUsername, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
-                TextButton(onClick = { FirebaseSocialService.declineFriendRequest(firestore, request.fromUid, uid, onError) }) { Text("Decline") }
-                Button(onClick = { FirebaseSocialService.acceptFriendRequest(firestore, request.fromUid, uid, request.fromUsername, username, onError) }) { Text("Accept") }
+                TextButton(onClick = { onDecline(request) }) { Text("Decline") }
+                Button(onClick = { onAccept(request) }) { Text("Accept") }
             }
         }
     }

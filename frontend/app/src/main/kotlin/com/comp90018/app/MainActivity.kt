@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.comp90018.app.data.auth.FirebaseAuthRepository
 import com.comp90018.app.features.auth.AuthScreen
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -28,6 +29,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Comp90018App() {
     val auth = remember { FirebaseAuth.getInstance() }
+    val authRepository = remember(auth) { FirebaseAuthRepository(auth) }
     val firestore = remember { FirebaseFirestore.getInstance() }
     var user by remember { mutableStateOf(auth.currentUser) }
 
@@ -39,7 +41,7 @@ private fun Comp90018App() {
 
     MaterialTheme(colorScheme = RelicColorScheme, typography = RelicTypography) {
         Surface(color = Background, modifier = Modifier.fillMaxSize()) {
-            if (user == null) AuthScreen(auth)
+            if (user == null) AuthScreen(authRepository)
             else AppShell(requireNotNull(user), firestore, onLogout = auth::signOut)
         }
     }

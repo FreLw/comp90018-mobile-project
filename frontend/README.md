@@ -4,6 +4,18 @@ This directory is the Kotlin and Jetpack Compose Android client for Lost
 Treasures. It connects directly to Firebase Authentication, Cloud Firestore,
 and Firebase Storage; no Spring Boot server is required.
 
+## Code structure
+
+The app separates UI state from Firebase operations:
+
+- `features/` contains Compose screens and ViewModels.
+- `data/` contains repository interfaces plus Firebase implementations for
+  authentication, profiles, social features, direct chat, and team rooms.
+- The ViewModels own snapshot-listener cleanup and expose `StateFlow` UI state.
+
+Firebase service calls are contained in data-layer adapters; feature screens do
+not directly invoke Firebase services or Firestore/Storage APIs.
+
 ## Run in Android Studio
 
 1. Complete the Firebase setup in the repository [README](../README.md),

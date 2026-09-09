@@ -9,3 +9,4 @@ local.properties
 # Gradle cache
 .gradle/
 .gradle-user/
+.gradle-project-cache/

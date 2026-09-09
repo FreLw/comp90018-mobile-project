@@ -16,19 +16,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
+import com.comp90018.app.data.chat.FirebaseChatRepository
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.ui.components.AppTextField
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: String, title: String, currentUsername: String, currentAvatarUrl: String, onBack: () -> Unit, onViewFriend: (() -> Unit)? = null) {
-    var messages by remember(roomId) { mutableStateOf<List<ChatMessage>>(emptyList()) }
-    var input by remember(roomId) { mutableStateOf("") }
-    var error by remember(roomId) { mutableStateOf<String?>(null) }
-    DisposableEffect(roomId, firestore) {
-        val listener = FirebaseSocialService.observeMessages(firestore, roomId) { data, issue -> messages = data; error = issue }
-        onDispose { listener.remove() }
+    val repository = remember(firestore) { FirebaseChatRepository(firestore) }
+    val viewModel: DirectChatViewModel = viewModel(
+        key = "direct_chat_${roomId}_$currentUid",
+        factory = DirectChatViewModel.factory(repository, roomId, currentUid, currentUsername, currentAvatarUrl),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(currentUsername, currentAvatarUrl) {
+        viewModel.updateCurrentUser(currentUsername, currentAvatarUrl)
     }
     Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -37,13 +42,13 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
             onViewFriend?.let { IconButton(onClick = it) { Icon(Icons.Rounded.Person, "View friend profile", tint = Brand) } }
         }
         Card(Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            if (messages.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(error ?: "Start the conversation.", color = Muted) }
+            if (state.messages.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(state.error ?: "Start the conversation.", color = Muted) }
             else LazyColumn(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                items(messages, key = { it.id }) { msg -> ChatMessageRow(msg, currentUid, title, currentUsername, currentAvatarUrl) }
+                items(state.messages, key = { it.id }) { msg -> ChatMessageRow(msg, currentUid, title, currentUsername, currentAvatarUrl) }
             }
         }
-        AppTextField("Message", input, { input = it }, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
-        Button(onClick = { val text = input; input = ""; FirebaseSocialService.sendMessage(firestore, roomId, currentUid, currentUsername.ifBlank { "You" }, currentAvatarUrl, text) { error = it } }, modifier = Modifier.fillMaxWidth(), enabled = input.isNotBlank()) { Icon(Icons.AutoMirrored.Rounded.Send, null); Text("Send") }
+        AppTextField("Message", state.input, viewModel::updateInput, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
+        Button(onClick = viewModel::send, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending) { Icon(Icons.AutoMirrored.Rounded.Send, null); Text(if (state.sending) "Sending..." else "Send") }
     }
 }
 

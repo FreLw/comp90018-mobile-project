@@ -24,7 +24,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
+import com.comp90018.app.data.profile.FirebaseProfileRepository
+import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
+import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.chat.DirectChatScreen
@@ -34,66 +39,46 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
-    var activeRoomId by remember(user.uid) { mutableStateOf<String?>(null) }
-    var membershipError by remember(user.uid) { mutableStateOf<String?>(null) }
-    DisposableEffect(user.uid, firestore) {
-        val listener = FirebaseTeamRoomService.observeMembership(firestore, user.uid) { roomId, error ->
-            activeRoomId = roomId; membershipError = error
-        }
-        onDispose { listener.remove() }
-    }
-    activeRoomId?.let { TeamRoomChatScreen(it, user, firestore, profile, onRoomExited = { activeRoomId = null }) }
-        ?: RoomEntryScreen(user, firestore, membershipError) { activeRoomId = it }
+    val repository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
+    val viewModel: RoomsViewModel = viewModel(
+        key = "rooms_${user.uid}",
+        factory = RoomsViewModel.factory(repository, user.uid),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    state.activeRoomId?.let { TeamRoomChatScreen(it, user, firestore, profile, onRoomExited = {}) }
+        ?: RoomEntryScreen(state, viewModel)
 }
 
 @Composable
-private fun RoomEntryScreen(user: FirebaseUser, firestore: FirebaseFirestore, message: String?, onEnterRoom: (String) -> Unit) {
-    var joining by remember { mutableStateOf(false) }
-    var roomId by remember { mutableStateOf("") }
-    var working by remember { mutableStateOf(false) }
-    var actionMessage by remember { mutableStateOf<String?>(null) }
+private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel) {
     Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.size(78.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Group, null, tint = Brand, modifier = Modifier.size(36.dp)) }
-        Text("You’re not in a room yet.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
+        Text("You're not in a room yet.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
         Text("Create a room or join one to team up and hunt for treasure together.", color = Muted, textAlign = TextAlign.Center)
-        if (joining) AppTextField("Enter room ID", roomId, { roomId = it })
-        (actionMessage ?: message)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
-        Button(onClick = {
-            working = true; actionMessage = null
-            FirebaseTeamRoomService.createRoom(firestore, user.uid) { id, error ->
-                working = false
-                if (id != null) onEnterRoom(id) else actionMessage = error
-            }
-        }, modifier = Modifier.fillMaxWidth(), enabled = !working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (working && !joining) "Creating…" else "Create a room") }
+        if (state.joining) AppTextField("Enter room ID", state.roomIdInput, viewModel::updateRoomId)
+        (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
+        Button(onClick = viewModel::createRoom, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
         OutlinedButton(onClick = {
-            if (!joining) { joining = true; actionMessage = null }
-            else {
-                working = true; actionMessage = null
-                FirebaseTeamRoomService.joinRoom(firestore, roomId, user.uid) { error ->
-                    working = false
-                    if (error == null) onEnterRoom(roomId.trim()) else actionMessage = error
-                }
-            }
-        }, modifier = Modifier.fillMaxWidth(), enabled = !working, colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) { Text(if (working && joining) "Joining…" else "Join the room") }
+            if (!state.joining) viewModel.beginJoin() else viewModel.joinRoom()
+        }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) { Text(if (state.working && state.joining) "Joining..." else "Join the room") }
     }
 }
 
 @Composable
 private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, onRoomExited: () -> Unit) {
-    var room by remember(roomId) { mutableStateOf<TeamRoom?>(null) }
-    var messages by remember(roomId) { mutableStateOf<List<ChatMessage>>(emptyList()) }
-    var members by remember(roomId) { mutableStateOf<List<TeamRoomMember>>(emptyList()) }
-    var input by remember(roomId) { mutableStateOf("") }
-    var error by remember(roomId) { mutableStateOf<String?>(null) }
+    val repository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
+    val viewModel: TeamRoomChatViewModel = viewModel(
+        key = "team_room_${roomId}_${user.uid}",
+        factory = TeamRoomChatViewModel.factory(repository, roomId, user.uid),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val room = state.room
+    val messages = state.messages
+    val members = state.members
+    val error = state.error
     var showDetails by remember(roomId) { mutableStateOf(false) }
     var viewingMember by remember(roomId) { mutableStateOf<TeamRoomMember?>(null) }
     var directChatId by remember(roomId) { mutableStateOf<String?>(null) }
-    DisposableEffect(roomId, firestore) {
-        val roomListener = FirebaseTeamRoomService.observeRoom(firestore, roomId) { data, issue -> room = data; error = issue }
-        val messageListener = FirebaseTeamRoomService.observeMessages(firestore, roomId) { data, issue -> messages = data; if (issue != null) error = issue }
-        onDispose { roomListener.remove(); messageListener.remove() }
-    }
-    LaunchedEffect(room?.memberIds) { room?.memberIds?.let { FirebaseTeamRoomService.loadMembers(firestore, it) { loaded -> members = loaded } } }
     if (directChatId != null) {
         DirectChatScreen(firestore, requireNotNull(directChatId), user.uid, viewingMember?.name ?: "Chat", profile?.username.orEmpty(), profile?.avatarUrl.orEmpty(), onBack = { directChatId = null })
         return
@@ -127,12 +112,11 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             else LazyColumn(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(messages, key = { it.id }) { TeamMessageRow(it, user.uid, profile) } }
         }
         Spacer(Modifier.height(10.dp))
-        AppTextField("Message", input, { input = it }, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
+        AppTextField("Message", state.input, viewModel::updateInput, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
         Button(onClick = {
-            val text = input; input = ""
             val name = profile?.username.orEmpty().ifBlank { profile?.displayName.orEmpty().ifBlank { "You" } }.take(30)
-            FirebaseTeamRoomService.sendMessage(firestore, roomId, user.uid, name, profile?.avatarUrl.orEmpty(), text) { error = it }
-        }, modifier = Modifier.fillMaxWidth(), enabled = input.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
+            viewModel.send(name, profile?.avatarUrl.orEmpty())
+        }, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending, colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
             Icon(Icons.AutoMirrored.Rounded.Send, null); Spacer(Modifier.width(8.dp)); Text("Send")
         }
     }
@@ -141,16 +125,8 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
         members = members,
         isOwner = room?.creatorId == user.uid,
         onMemberClick = { viewingMember = it; showDetails = false },
-        onLeave = {
-            FirebaseTeamRoomService.leaveRoom(firestore, roomId, user.uid) { issue ->
-                if (issue == null) onRoomExited() else error = issue
-            }
-        },
-        onDismissRoom = {
-            FirebaseTeamRoomService.dismissRoom(firestore, roomId, user.uid) { issue ->
-                if (issue == null) onRoomExited() else error = issue
-            }
-        },
+        onLeave = { viewModel.leave(onRoomExited) },
+        onDismissRoom = { viewModel.dismiss(onRoomExited) },
         onDismiss = { showDetails = false },
     )
 }
@@ -178,28 +154,21 @@ private fun RoomMemberProfileScreen(
     onBack: () -> Unit,
     onOpenChat: (String) -> Unit,
 ) {
-    var memberProfile by remember(member.uid) { mutableStateOf<UserProfile?>(null) }
-    var friendship by remember(member.uid) { mutableStateOf<FriendshipStatus?>(null) }
-    var message by remember(member.uid) { mutableStateOf<String?>(null) }
-    var working by remember(member.uid) { mutableStateOf(false) }
     val isCurrentUser = member.uid == currentUser.uid
-    DisposableEffect(member.uid, firestore) {
-        val listener = firestore.collection("users").document(member.uid).addSnapshotListener { document, issue ->
-            if (issue != null) message = issue.localizedMessage
-            else if (document?.exists() == true) {
-                memberProfile = UserProfile(
-                    uid = member.uid,
-                    email = document.getString("email").orEmpty(),
-                    username = document.getString("username").orEmpty(),
-                    displayName = document.getString("displayName").orEmpty(),
-                    gender = document.getString("gender") ?: "unspecified",
-                    bio = document.getString("bio").orEmpty(),
-                    avatarUrl = document.getString("avatarUrl").orEmpty(),
-                )
-            }
+    val profileRepository = remember(firestore) { FirebaseProfileRepository(firestore) }
+    val socialRepository = remember(firestore) { FirebaseSocialRepository(firestore) }
+    val viewModel: RoomMemberProfileViewModel = viewModel(
+        key = "room_member_${member.uid}_${currentUser.uid}",
+        factory = RoomMemberProfileViewModel.factory(profileRepository, socialRepository, currentUser.uid, member.uid, currentProfile?.username.orEmpty()),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val memberProfile = state.profile
+    val directRoomId = state.directRoomId
+    LaunchedEffect(directRoomId) {
+        if (directRoomId != null) {
+            onOpenChat(directRoomId)
+            viewModel.consumeDirectRoom()
         }
-        if (!isCurrentUser) FirebaseSocialService.getFriendshipStatus(firestore, currentUser.uid, member.uid) { status, issue -> friendship = status; if (issue != null) message = issue }
-        onDispose { listener.remove() }
     }
     val username = memberProfile?.username.orEmpty().ifBlank { member.name }
     val displayName = memberProfile?.displayName.orEmpty().ifBlank { username }
@@ -218,29 +187,11 @@ private fun RoomMemberProfileScreen(
             }
         }
         Spacer(Modifier.weight(1f))
-        message?.let { Text(it, color = if (it.startsWith("Friend request")) Brand else MaterialTheme.colorScheme.error) }
-        if (!isCurrentUser) when (friendship) {
-            FriendshipStatus.Friends -> Button(onClick = {
-                working = true
-                FirebaseSocialService.openDirectRoom(firestore, currentUser.uid, member.uid, username) { id, issue ->
-                    working = false
-                    if (id != null) onOpenChat(id) else message = issue
-                }
-            }, modifier = Modifier.fillMaxWidth(), enabled = !working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (working) "Opening…" else "Chat") }
-            FriendshipStatus.None -> Button(onClick = {
-                working = true
-                FirebaseSocialService.sendFriendRequest(firestore, currentUser.uid, member.uid, currentProfile?.username.orEmpty(), username) { issue ->
-                    working = false; message = issue ?: "Friend request sent"
-                    if (issue == null) friendship = FriendshipStatus.OutgoingPending
-                }
-            }, modifier = Modifier.fillMaxWidth(), enabled = !working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (working) "Sending…" else "Add friend") }
-            FriendshipStatus.IncomingPending -> Button(onClick = {
-                working = true
-                FirebaseSocialService.acceptFriendRequest(firestore, member.uid, currentUser.uid, username, currentProfile?.username.orEmpty()) { issue ->
-                    working = false; message = issue ?: "Friend request accepted"
-                    if (issue == null) friendship = FriendshipStatus.Friends
-                }
-            }, modifier = Modifier.fillMaxWidth(), enabled = !working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (working) "Processing…" else "Accept request") }
+        state.error?.let { Text(it, color = if (it.startsWith("Friend request")) Brand else MaterialTheme.colorScheme.error) }
+        if (!isCurrentUser) when (state.friendship) {
+            FriendshipStatus.Friends -> Button(onClick = { viewModel.openChat(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Opening..." else "Chat") }
+            FriendshipStatus.None -> Button(onClick = { viewModel.sendFriendRequest(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Sending..." else "Add friend") }
+            FriendshipStatus.IncomingPending -> Button(onClick = { viewModel.acceptFriendRequest(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Processing..." else "Accept request") }
             FriendshipStatus.OutgoingPending -> Button(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = false) { Text("Friend request sent") }
             null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = Brand)
         }
