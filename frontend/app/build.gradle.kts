@@ -41,11 +41,17 @@ android {
 dependencies {
 	val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
 	val firebaseBom = platform("com.google.firebase:firebase-bom:34.18.0")
+	val cameraxVersion = "1.4.1"
 	implementation(composeBom)
 	androidTestImplementation(composeBom)
 	implementation(firebaseBom)
 
 	implementation("androidx.activity:activity-compose:1.13.0")
+	implementation("androidx.camera:camera-core:$cameraxVersion")
+	implementation("androidx.camera:camera-camera2:$cameraxVersion")
+	implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+	implementation("androidx.camera:camera-view:$cameraxVersion")
+	implementation("com.google.mlkit:barcode-scanning:17.3.0")
 	implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 	implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
 	implementation("androidx.compose.material3:material3")
