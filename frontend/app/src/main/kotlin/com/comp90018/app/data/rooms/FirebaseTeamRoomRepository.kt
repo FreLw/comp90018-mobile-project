@@ -6,6 +6,7 @@ import com.comp90018.app.TeamRoom
 import com.comp90018.app.TeamRoomMember
 import com.comp90018.app.data.social.Subscription
 import com.google.firebase.firestore.FirebaseFirestore
+import android.net.Uri
 
 /** Firebase implementation of [TeamRoomRepository]. */
 class FirebaseTeamRoomRepository(
@@ -37,6 +38,8 @@ class FirebaseTeamRoomRepository(
 
     override fun sendMessage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, senderName, senderAvatarUrl, text, onComplete)
+    override fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.sendImage(firestore, roomId, senderId, senderName, senderAvatarUrl, imageUri, onComplete)
 
     override fun leaveRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.leaveRoom(firestore, roomId, userId, onComplete)

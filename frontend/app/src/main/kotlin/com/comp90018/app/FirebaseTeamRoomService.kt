@@ -3,6 +3,7 @@ package com.comp90018.app
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import android.net.Uri
 import com.google.firebase.firestore.ListenerRegistration
 
 /** Separate persistence boundary for two-person treasure teams; never used for direct messages. */
@@ -123,6 +124,7 @@ object FirebaseTeamRoomService {
                         senderAvatarUrl = document.getString("senderAvatarUrl").orEmpty(),
                         text = document.getString("text").orEmpty(),
                         sentAtMillis = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
+                        imageUrl = document.getString("imageUrl").orEmpty(),
                     )
                 }, null)
             }
@@ -147,6 +149,16 @@ object FirebaseTeamRoomService {
             "createdAt" to FieldValue.serverTimestamp(),
         )).addOnCompleteListener { task ->
             onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
+        }
+    }
+
+    fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
+        FirebaseSocialService.uploadChatImage("teamRooms", roomId, senderId, imageUri) { url, error ->
+            if (url == null) return@uploadChatImage onComplete(error)
+            firestore.collection("teamRooms").document(roomId).collection("messages").document().set(mapOf(
+                "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
+                "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp(),
+            )).addOnCompleteListener { onComplete(if (it.isSuccessful) null else it.exception?.localizedMessage ?: "Unable to send photo") }
         }
     }
 

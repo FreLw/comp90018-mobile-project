@@ -2,6 +2,7 @@ package com.comp90018.app.data.chat
 
 import com.comp90018.app.ChatMessage
 import com.comp90018.app.data.social.Subscription
+import android.net.Uri
 
 /** Data boundary for direct-message operations. */
 interface ChatRepository {
@@ -15,4 +16,5 @@ interface ChatRepository {
         text: String,
         onComplete: (String?) -> Unit,
     )
+    fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit)
 }

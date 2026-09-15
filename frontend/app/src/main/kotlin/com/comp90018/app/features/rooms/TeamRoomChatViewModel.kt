@@ -10,6 +10,7 @@ import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import android.net.Uri
 
 data class TeamRoomChatUiState(
     val room: TeamRoom? = null,
@@ -50,6 +51,13 @@ class TeamRoomChatViewModel(
         if (text.isBlank() || mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(input = "", error = null, sending = true)
         repository.sendMessage(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, text) { error ->
+            mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+        }
+    }
+    fun sendImage(uri: Uri, senderName: String, senderAvatarUrl: String) {
+        if (mutableUiState.value.sending) return
+        mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
+        repository.sendImage(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, uri) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
         }
     }

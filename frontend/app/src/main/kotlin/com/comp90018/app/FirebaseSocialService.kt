@@ -3,6 +3,9 @@ package com.comp90018.app
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import android.net.Uri
+import com.google.firebase.storage.FirebaseStorage
+import java.util.UUID
 
 data class SearchUser(
     val uid: String,
@@ -26,6 +29,7 @@ data class ChatMessage(
     val senderAvatarUrl: String,
     val text: String,
     val sentAtMillis: Long,
+    val imageUrl: String = "",
 )
 
 data class ChatRoomSummary(
@@ -495,6 +499,7 @@ object FirebaseSocialService {
                     senderAvatarUrl = document.getString("senderAvatarUrl").orEmpty(),
                     text = document.getString("text").orEmpty(),
                     sentAtMillis = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
+                    imageUrl = document.getString("imageUrl").orEmpty(),
                 )
             }
             onChange(messages, null)
@@ -525,5 +530,23 @@ object FirebaseSocialService {
         }.commit().addOnCompleteListener { task ->
                 onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
             }
+    }
+
+    fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
+        uploadChatImage("rooms", roomId, senderId, imageUri) { url, error ->
+            if (url == null) return@uploadChatImage onComplete(error)
+            val message = mapOf("senderId" to senderId, "senderName" to senderName.trim().take(30), "senderAvatarUrl" to senderAvatarUrl, "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp())
+            val room = firestore.collection("rooms").document(roomId)
+            firestore.batch().apply { set(room.collection("messages").document(), message); update(room, "updatedAt", FieldValue.serverTimestamp()) }.commit()
+                .addOnCompleteListener { onComplete(if (it.isSuccessful) null else it.exception?.localizedMessage ?: "Unable to send photo") }
+        }
+    }
+
+    internal fun uploadChatImage(chatType: String, roomId: String, senderId: String, imageUri: Uri, onComplete: (String?, String?) -> Unit) {
+        val ref = FirebaseStorage.getInstance().reference.child("chatImages/$chatType/$roomId/$senderId/${UUID.randomUUID()}.jpg")
+        ref.putFile(imageUri).continueWithTask { upload ->
+            if (!upload.isSuccessful) throw (upload.exception ?: IllegalStateException("Photo upload failed"))
+            ref.downloadUrl
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) task.result.toString() else null, task.exception?.localizedMessage ?: "Unable to upload photo") }
     }
 }

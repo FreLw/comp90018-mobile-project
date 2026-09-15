@@ -34,6 +34,7 @@ import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.ui.components.AppTextField
+import com.comp90018.app.ui.components.ChatComposer
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -112,7 +113,7 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             else LazyColumn(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(messages, key = { it.id }) { TeamMessageRow(it, user.uid, profile) } }
         }
         Spacer(Modifier.height(10.dp))
-        AppTextField("Message", state.input, viewModel::updateInput, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
+        ChatComposer(state.input, viewModel::updateInput)
         Button(onClick = {
             val name = profile?.username.orEmpty().ifBlank { profile?.displayName.orEmpty().ifBlank { "You" } }.take(30)
             viewModel.send(name, profile?.avatarUrl.orEmpty())
@@ -139,7 +140,9 @@ private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: Us
         if (!mine) { ProfileAvatar(message.senderAvatarUrl, name, 40.dp); Spacer(Modifier.width(8.dp)) }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) { Text(message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink) }
+            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
+                Text(message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+            }
         }
         if (mine) { Spacer(Modifier.width(8.dp)); ProfileAvatar(message.senderAvatarUrl.ifBlank { profile?.avatarUrl.orEmpty() }, name, 40.dp) }
     }
