@@ -4,6 +4,7 @@ import com.comp90018.app.ChatMessage
 import com.comp90018.app.FirebaseSocialService
 import com.comp90018.app.data.social.Subscription
 import com.google.firebase.firestore.FirebaseFirestore
+import android.net.Uri
 
 /** Firebase implementation of [ChatRepository]. */
 class FirebaseChatRepository(
@@ -30,4 +31,6 @@ class FirebaseChatRepository(
         text,
         onComplete,
     )
+    override fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
+        FirebaseSocialService.sendImage(firestore, roomId, senderId, senderName, senderAvatarUrl, imageUri, onComplete)
 }

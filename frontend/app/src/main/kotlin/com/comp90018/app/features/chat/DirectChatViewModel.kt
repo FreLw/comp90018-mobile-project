@@ -8,6 +8,7 @@ import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import android.net.Uri
 
 data class DirectChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -47,6 +48,13 @@ class DirectChatViewModel(
         if (text.isBlank() || mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(input = "", error = null, sending = true)
         repository.sendMessage(roomId, currentUid, currentUsername.ifBlank { "You" }, currentAvatarUrl, text) { error ->
+            mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+        }
+    }
+    fun sendImage(uri: Uri) {
+        if (mutableUiState.value.sending) return
+        mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
+        repository.sendImage(roomId, currentUid, currentUsername.ifBlank { "You" }, currentAvatarUrl, uri) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
         }
     }

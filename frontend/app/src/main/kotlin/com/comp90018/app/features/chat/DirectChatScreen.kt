@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.*
@@ -21,7 +20,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
 import com.comp90018.app.data.chat.FirebaseChatRepository
 import com.comp90018.app.features.profile.ProfileAvatar
-import com.comp90018.app.ui.components.AppTextField
+import com.comp90018.app.ui.components.ChatComposer
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
@@ -47,7 +46,7 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
                 items(state.messages, key = { it.id }) { msg -> ChatMessageRow(msg, currentUid, title, currentUsername, currentAvatarUrl) }
             }
         }
-        AppTextField("Message", state.input, viewModel::updateInput, leadingIcon = Icons.AutoMirrored.Rounded.Chat)
+        ChatComposer(state.input, viewModel::updateInput)
         Button(onClick = viewModel::send, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending) { Icon(Icons.AutoMirrored.Rounded.Send, null); Text(if (state.sending) "Sending..." else "Send") }
     }
 }
@@ -58,7 +57,9 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
         if (!mine) { ProfileAvatar(msg.senderAvatarUrl, name, 40.dp); Spacer(Modifier.width(8.dp)) }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) { Text(msg.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink) }
+            Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
+                Text(msg.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+            }
         }
         if (mine) { Spacer(Modifier.width(8.dp)); ProfileAvatar(msg.senderAvatarUrl.ifBlank { myAvatar }, name, 40.dp) }
     }
