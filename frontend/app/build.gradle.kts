@@ -39,6 +39,7 @@ android {
 }
 
 dependencies {
+	testImplementation("junit:junit:4.13.2")
 	val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
 	val firebaseBom = platform("com.google.firebase:firebase-bom:34.18.0")
 	val cameraxVersion = "1.4.1"
