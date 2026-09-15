@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ClaudeCodeEditorTabs">
+    <option name="activeSessionId" value="2416e4c4-e5a8-4451-bc3d-0838b609a806" />
+    <option name="openSessionIds">
+      <list>
+        <option value="77a8eded-4053-4c8b-80e9-2bf15155ce42" />
+        <option value="2416e4c4-e5a8-4451-bc3d-0838b609a806" />
+      </list>
+    </option>
+    <option name="sessionPaths">
+      <map>
+        <entry key="2416e4c4-e5a8-4451-bc3d-0838b609a806" value="/sessions/d0d7c541-008a-44a2-85aa-d25ed4ecde54" />
+        <entry key="77a8eded-4053-4c8b-80e9-2bf15155ce42" value="/sessions/new" />
+      </map>
+    </option>
+    <option name="sessionTitles">
+      <map>
+        <entry key="2416e4c4-e5a8-4451-bc3d-0838b609a806" value="现在的app能运行吗" />
+        <entry key="77a8eded-4053-4c8b-80e9-2bf15155ce42" value="Claude Code" />
+      </map>
+    </option>
+  </component>
+</project>
