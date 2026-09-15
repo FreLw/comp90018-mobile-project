@@ -6,7 +6,16 @@ enum class DirectionAlignment { UNKNOWN, ALIGNED, MISALIGNED }
 enum class TurnDirection { UNKNOWN, NONE, TURN_LEFT, TURN_RIGHT }
 
 /** UNKNOWN includes absent input; UNRELIABLE means rejected input. */
-enum class SensorValidity { UNKNOWN, WARMING_UP, VALID, UNRELIABLE }
+enum class SensorValidity { UNKNOWN, INACTIVE, WARMING_UP, VALID, UNAVAILABLE, UNRELIABLE, STALE }
+
+data class SensorState(
+    val motion: MotionOutput = MotionOutput(validity = SensorValidity.INACTIVE),
+    val stability: StabilityOutput = StabilityOutput(validity = SensorValidity.INACTIVE),
+    val direction: DirectionOutput = DirectionOutput(
+        headingValidity = SensorValidity.INACTIVE,
+        comparisonValidity = SensorValidity.INACTIVE,
+    ),
+)
 
 data class MotionOutput(
     val classification: MotionState = MotionState.UNKNOWN,

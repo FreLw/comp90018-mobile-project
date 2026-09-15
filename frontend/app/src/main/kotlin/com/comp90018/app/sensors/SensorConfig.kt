@@ -15,8 +15,14 @@ data class SensorConfig(
     val stabilityExitThreshold: Double = 0.25,
     val headingTimeConstantNanos: Long = 200_000_000L,
     val sampleGapTimeoutNanos: Long = 2_000_000_000L,
+    val samplingPeriodMicros: Int = 20_000,
+    val staleCheckIntervalMillis: Long = 250L,
+    val minimumHeadingProjection: Double = 0.01,
 ) {
     init {
+        require(samplingPeriodMicros >= 5_000)
+        require(staleCheckIntervalMillis > 0 && staleCheckIntervalMillis <= sampleGapTimeoutNanos / 1_000_000L)
+        require(minimumHeadingProjection.isFinite() && minimumHeadingProjection > 0 && minimumHeadingProjection < 1)
         require(gravityTimeConstantNanos > 0 && motionTimeConstantNanos > 0)
         require(headingTimeConstantNanos > 0 && motionWarmUpNanos > 0)
         require(stabilityWindowNanos > 0 && sampleGapTimeoutNanos > 0)
