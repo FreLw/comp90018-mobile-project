@@ -23,6 +23,8 @@ class FirebaseProfileRepository(
                         username = document.getString("username").orEmpty(),
                         displayName = document.getString("displayName").orEmpty(),
                         gender = document.getString("gender") ?: "unspecified",
+                        studentNumber = document.getString("studentNumber").orEmpty(),
+                        faculty = document.getString("faculty").orEmpty(),
                         bio = document.getString("bio").orEmpty(),
                         avatarUrl = document.getString("avatarUrl").orEmpty(),
                     ),
@@ -46,6 +48,8 @@ class FirebaseProfileRepository(
                 val updates = mutableMapOf<String, Any>()
                 if (readTask.result.getString("username").isNullOrBlank()) updates["username"] = defaultUsername(uid, email)
                 if (readTask.result.getString("gender").isNullOrBlank()) updates["gender"] = "unspecified"
+                if (!readTask.result.contains("studentNumber")) updates["studentNumber"] = ""
+                if (!readTask.result.contains("faculty")) updates["faculty"] = ""
                 if (updates.isEmpty()) {
                     onComplete(null)
                 } else {
@@ -62,6 +66,8 @@ class FirebaseProfileRepository(
                         "username" to defaultUsername(uid, email),
                         "displayName" to "",
                         "gender" to "unspecified",
+                        "studentNumber" to "",
+                        "faculty" to "",
                         "bio" to "",
                         "avatarUrl" to "",
                         "createdAt" to FieldValue.serverTimestamp(),
@@ -79,8 +85,15 @@ class FirebaseProfileRepository(
         return if (base.length >= 3) base else "explorer_${uid.take(6)}"
     }
 
-    override fun updateProfile(uid: String, username: String, gender: String, bio: String, avatarUrl: String?, onComplete: (String?) -> Unit) =
-        FirebaseAuthService.updateProfile(firestore, uid, username, gender, bio, avatarUrl, onComplete)
+    override fun updateProfile(
+        uid: String,
+        username: String,
+        studentNumber: String,
+        faculty: String,
+        bio: String,
+        avatarUrl: String?,
+        onComplete: (String?) -> Unit,
+    ) = FirebaseAuthService.updateProfile(firestore, uid, username, studentNumber, faculty, bio, avatarUrl, onComplete)
 
     override fun uploadAvatar(uid: String, avatarUri: Uri, onComplete: (String?, String?) -> Unit) =
         FirebaseAuthService.uploadAvatar(com.google.firebase.storage.FirebaseStorage.getInstance(), uid, avatarUri, onComplete)

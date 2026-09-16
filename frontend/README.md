@@ -36,11 +36,16 @@ To build a debug APK from PowerShell instead:
 
 | Bottom tab | Current behaviour |
 | --- | --- |
-| `treasure` | Placeholder for future treasure gameplay |
-| `Rooms` | Create/join a two-person room, room details, and room chat |
-| `Map` | Placeholder for future map support |
-| `friend` | Friend lookup, requests, friend list, and private chat |
-| `profile` | Profile view/edit and sign out |
+| `Profile` | Profile view/edit, local display preferences, and sign out |
+| `Social` | Friend lookup, private chat, team rooms, and room chat |
+| `Map` | Offline campus map prototype with selectable relic markers and the complete demo search flow |
+| `Hunt` | Current active treasure and its hunt progress |
+| `Collection` | Previously found relics and their distance from the player |
+
+The map currently uses a local illustrated placeholder instead of a map SDK. The
+searching state simulates sensor readiness for two seconds before the relic can
+be collected; it is intentionally structured so GPS/orientation state can
+replace the delay later.
 
 For end-user instructions, Firebase setup, the data model, and detailed
 acceptance criteria, see the repository [README](../README.md) and

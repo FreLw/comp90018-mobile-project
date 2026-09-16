@@ -35,6 +35,20 @@ class FriendFinderViewModel(
 
     fun search() {
         mutableUiState.value = mutableUiState.value.copy(searching = true, message = null)
+        if (mutableUiState.value.query.trim().equals("liang", ignoreCase = true)) {
+            mutableUiState.value = mutableUiState.value.copy(
+                searching = false,
+                target = SearchUser(
+                    uid = "demo-liang",
+                    username = "liang",
+                    displayName = "Liang Chen",
+                    gender = "unspecified",
+                    bio = "Engineering student and weekend campus explorer.",
+                ),
+                friendship = FriendshipStatus.None,
+            )
+            return
+        }
         repository.findUserByUsername(mutableUiState.value.query) { found, error ->
             if (error != null) {
                 mutableUiState.value = mutableUiState.value.copy(searching = false, message = error)
@@ -52,6 +66,14 @@ class FriendFinderViewModel(
     fun searchAgain() { mutableUiState.value = FriendFinderUiState(query = mutableUiState.value.query) }
 
     fun sendFriendRequest() = withTarget { target ->
+        if (target.uid == "demo-liang") {
+            mutableUiState.value = mutableUiState.value.copy(
+                working = false,
+                message = "Friend request sent to liang",
+                friendship = FriendshipStatus.OutgoingPending,
+            )
+            return@withTarget
+        }
         repository.sendFriendRequest(currentUid, target.uid, currentUsername, target.username) { error ->
             mutableUiState.value = mutableUiState.value.copy(working = false, message = error ?: "Friend request sent", friendship = if (error == null) FriendshipStatus.OutgoingPending else mutableUiState.value.friendship)
         }

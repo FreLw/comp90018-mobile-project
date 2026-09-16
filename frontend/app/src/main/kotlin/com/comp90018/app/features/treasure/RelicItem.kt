@@ -1,0 +1,78 @@
+package com.comp90018.app.features.treasure
+
+import androidx.compose.ui.graphics.Color
+
+/** Lightweight local content used by the treasure-hunt prototype. */
+data class RelicItem(
+    val id: String,
+    val name: String,
+    val shortName: String,
+    val address: String,
+    val distance: String,
+    val description: String,
+    val story: String,
+    val foundBy: Int,
+    val accent: Color,
+    val mapX: Float,
+    val mapY: Float,
+    val discoverers: List<String>,
+)
+
+val DemoRelics = listOf(
+    RelicItem(
+        id = "old-quad-seal",
+        name = "The Old Quad Founder's Seal",
+        shortName = "Founder's Seal",
+        address = "Old Quadrangle, Professors Walk, Parkville VIC 3010",
+        distance = "120 m away",
+        description = "A weathered brass seal said to have marked the University's earliest correspondence.",
+        story = "Look for the bluestone arch where the old courtyard meets Professors Walk. The seal's pattern echoes the carved details hidden around the Quad.",
+        foundBy = 128,
+        accent = Color(0xFFC58A3A),
+        mapX = 0.30f,
+        mapY = 0.34f,
+        discoverers = listOf("Mia", "Noah", "Ava", "Leo"),
+    ),
+    RelicItem(
+        id = "baillieu-compass",
+        name = "Baillieu Explorer's Compass",
+        shortName = "Explorer's Compass",
+        address = "Baillieu Library, 13 Professors Walk, Parkville VIC 3052",
+        distance = "260 m away",
+        description = "A pocket compass left by a curious student explorer, still pointing toward the next story.",
+        story = "This fictional compass celebrates the generations of students who have crossed South Lawn in search of knowledge, friends and a quiet study desk.",
+        foundBy = 94,
+        accent = Color(0xFF346D84),
+        mapX = 0.67f,
+        mapY = 0.46f,
+        discoverers = listOf("Zoe", "Sam", "Ivy"),
+    ),
+    RelicItem(
+        id = "union-house-key",
+        name = "The Union House Key",
+        shortName = "Union House Key",
+        address = "University Plaza, Union Road, Parkville VIC 3010",
+        distance = "410 m away",
+        description = "A ceremonial key representing decades of clubs, performances and campus friendships.",
+        story = "Follow the busy paths near University Plaza. The key remembers the student spaces that made campus feel like a community.",
+        foundBy = 76,
+        accent = Color(0xFF9B4F55),
+        mapX = 0.51f,
+        mapY = 0.69f,
+        discoverers = listOf("Eli", "Ruby", "Max", "Ana"),
+    ),
+    RelicItem(
+        id = "south-lawn-token",
+        name = "South Lawn Sun Token",
+        shortName = "Sun Token",
+        address = "South Lawn, Masson Road, Parkville VIC 3010",
+        distance = "540 m away",
+        description = "A bright token inspired by afternoons shared beneath the trees of South Lawn.",
+        story = "The token appears when the lawn is viewed from the right direction - a reminder that familiar places can still hold surprises.",
+        foundBy = 151,
+        accent = Color(0xFFD49A22),
+        mapX = 0.76f,
+        mapY = 0.75f,
+        discoverers = listOf("Kai", "Isla", "Finn"),
+    ),
+)

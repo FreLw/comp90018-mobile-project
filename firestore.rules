@@ -31,7 +31,8 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'avatarUrl', 'createdAt', 'updatedAt'
+          'uid', 'email', 'username', 'displayName', 'gender', 'studentNumber', 'faculty',
+          'bio', 'avatarUrl', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
@@ -40,8 +41,12 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 80
         && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
+        && request.resource.data.studentNumber is string
+        && request.resource.data.studentNumber.matches('^$|^[0-9]{6,12}$')
+        && request.resource.data.faculty is string
+        && request.resource.data.faculty.size() <= 80
         && request.resource.data.bio is string
-        && request.resource.data.bio.size() <= 500
+        && request.resource.data.bio.size() <= 150
         && (!('avatarUrl' in request.resource.data)
           || (request.resource.data.avatarUrl is string
             && request.resource.data.avatarUrl.size() <= 2000))
@@ -51,14 +56,18 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['username', 'displayName', 'gender', 'bio', 'avatarUrl', 'updatedAt'])
+          .hasOnly(['username', 'displayName', 'gender', 'studentNumber', 'faculty', 'bio', 'avatarUrl', 'updatedAt'])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 80
         && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
+        && request.resource.data.studentNumber is string
+        && request.resource.data.studentNumber.matches('^$|^[0-9]{6,12}$')
+        && request.resource.data.faculty is string
+        && request.resource.data.faculty.size() <= 80
         && request.resource.data.bio is string
-        && request.resource.data.bio.size() <= 500
+        && request.resource.data.bio.size() <= 150
         && (!('avatarUrl' in request.resource.data)
           || (request.resource.data.avatarUrl is string
             && request.resource.data.avatarUrl.size() <= 2000))

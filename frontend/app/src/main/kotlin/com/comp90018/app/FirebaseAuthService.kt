@@ -55,6 +55,12 @@ object FirebaseAuthService {
 				if (readTask.result.getString("gender").isNullOrBlank()) {
 					updates["gender"] = "unspecified"
 				}
+				if (!readTask.result.contains("studentNumber")) {
+					updates["studentNumber"] = ""
+				}
+				if (!readTask.result.contains("faculty")) {
+					updates["faculty"] = ""
+				}
 				if (updates.isNotEmpty()) {
 					updates["updatedAt"] = FieldValue.serverTimestamp()
 					reference.update(updates).addOnCompleteListener { updateTask ->
@@ -70,9 +76,11 @@ object FirebaseAuthService {
 				"uid" to user.uid,
 				"email" to user.email.orEmpty(),
 				"username" to defaultUsername(user),
-				"displayName" to "",
-				"gender" to "unspecified",
-				"bio" to "",
+					"displayName" to "",
+					"gender" to "unspecified",
+					"studentNumber" to "",
+					"faculty" to "",
+					"bio" to "",
 				"avatarUrl" to "",
 				"createdAt" to FieldValue.serverTimestamp(),
 				"updatedAt" to FieldValue.serverTimestamp(),
@@ -87,29 +95,37 @@ object FirebaseAuthService {
 		firestore: FirebaseFirestore,
 		uid: String,
 		username: String,
-		gender: String,
+		studentNumber: String,
+		faculty: String,
 		bio: String,
 		avatarUrl: String? = null,
 		onComplete: (String?) -> Unit,
 	) {
 		val cleanUsername = username.trim().lowercase()
+		val cleanStudentNumber = studentNumber.trim()
+		val cleanFaculty = faculty.trim()
 		val cleanBio = bio.trim()
 		if (!Regex("^[a-z0-9_]{3,30}$").matches(cleanUsername)) {
 			onComplete("Username must be 3–30 lowercase letters, numbers, or underscores")
 			return
 		}
-		if (gender !in setOf("unspecified", "male", "female", "prefer_not_to_say")) {
-			onComplete("Select a valid gender option")
+		if (cleanStudentNumber.isNotEmpty() && !Regex("^\\d{6,12}$").matches(cleanStudentNumber)) {
+			onComplete("Student number must contain 6–12 digits")
 			return
 		}
-		if (cleanBio.length > 500) {
-			onComplete("Bio cannot exceed 500 characters")
+		if (cleanFaculty.length > 80) {
+			onComplete("Faculty cannot exceed 80 characters")
+			return
+		}
+		if (cleanBio.length > 150) {
+			onComplete("Bio cannot exceed 150 characters")
 			return
 		}
 
 		val updates = mutableMapOf<String, Any>(
 				"username" to cleanUsername,
-				"gender" to gender,
+				"studentNumber" to cleanStudentNumber,
+				"faculty" to cleanFaculty,
 				"bio" to cleanBio,
 				"updatedAt" to FieldValue.serverTimestamp(),
 		)

@@ -1,0 +1,4 @@
+#Sat Sep 05 21:59:36 AEST 2026
+base.0=/Users/macbookpro/Documents/GitHub/Mobile/comp90018-mobile-project/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
+path.0=0/classes.dex
+renamed.0=classes.dex

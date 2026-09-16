@@ -8,6 +8,14 @@ import com.comp90018.app.features.profile.UserProfile
 interface ProfileRepository {
     fun observeProfile(uid: String, onChange: (UserProfile?, String?) -> Unit): Subscription
     fun ensureProfile(uid: String, email: String, onComplete: (String?) -> Unit)
-    fun updateProfile(uid: String, username: String, gender: String, bio: String, avatarUrl: String?, onComplete: (String?) -> Unit)
+    fun updateProfile(
+        uid: String,
+        username: String,
+        studentNumber: String,
+        faculty: String,
+        bio: String,
+        avatarUrl: String?,
+        onComplete: (String?) -> Unit,
+    )
     fun uploadAvatar(uid: String, avatarUri: Uri, onComplete: (String?, String?) -> Unit)
 }

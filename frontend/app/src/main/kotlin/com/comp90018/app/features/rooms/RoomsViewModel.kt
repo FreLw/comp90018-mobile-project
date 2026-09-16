@@ -28,7 +28,7 @@ class RoomsViewModel(
     }
 
     fun updateRoomId(roomId: String) {
-        mutableUiState.value = mutableUiState.value.copy(roomIdInput = roomId)
+        mutableUiState.value = mutableUiState.value.copy(roomIdInput = roomId.filter(Char::isDigit).take(8), actionError = null)
     }
 
     fun beginJoin() {
@@ -49,7 +49,11 @@ class RoomsViewModel(
 
     fun joinRoom() {
         val roomId = mutableUiState.value.roomIdInput.trim()
-        if (roomId.isBlank() || mutableUiState.value.working) return
+        if (mutableUiState.value.working) return
+        if (!roomId.matches(Regex("^[0-9]{8}$"))) {
+            mutableUiState.value = mutableUiState.value.copy(actionError = "Room ID must contain exactly 8 digits")
+            return
+        }
         mutableUiState.value = mutableUiState.value.copy(working = true, actionError = null)
         repository.joinRoom(roomId, userId) { error ->
             mutableUiState.value = mutableUiState.value.copy(

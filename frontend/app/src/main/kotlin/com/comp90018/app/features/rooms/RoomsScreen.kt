@@ -2,6 +2,9 @@ package com.comp90018.app.features.rooms
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -35,19 +38,30 @@ import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.ui.components.AppTextField
 import com.comp90018.app.ui.components.ChatComposer
+import com.comp90018.app.ui.components.RemoteChatImage
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
+fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, onBack: (() -> Unit)? = null) {
     val repository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
     val viewModel: RoomsViewModel = viewModel(
         key = "rooms_${user.uid}",
         factory = RoomsViewModel.factory(repository, user.uid),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    state.activeRoomId?.let { TeamRoomChatScreen(it, user, firestore, profile, onRoomExited = {}) }
-        ?: RoomEntryScreen(state, viewModel)
+    Column(Modifier.fillMaxSize()) {
+        onBack?.let { back ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                Text(if (state.activeRoomId == null) "Join or create room" else "Room", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Ink)
+            }
+        }
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            state.activeRoomId?.let { TeamRoomChatScreen(it, user, firestore, profile, onRoomExited = {}) }
+                ?: RoomEntryScreen(state, viewModel)
+        }
+    }
 }
 
 @Composable
@@ -80,6 +94,10 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
     var showDetails by remember(roomId) { mutableStateOf(false) }
     var viewingMember by remember(roomId) { mutableStateOf<TeamRoomMember?>(null) }
     var directChatId by remember(roomId) { mutableStateOf<String?>(null) }
+    val senderName = profile?.username.orEmpty().ifBlank { profile?.displayName.orEmpty().ifBlank { "You" } }.take(30)
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { viewModel.sendImage(it, senderName, profile?.avatarUrl.orEmpty()) }
+    }
     if (directChatId != null) {
         DirectChatScreen(firestore, requireNotNull(directChatId), user.uid, viewingMember?.name ?: "Chat", profile?.username.orEmpty(), profile?.avatarUrl.orEmpty(), onBack = { directChatId = null })
         return
@@ -96,16 +114,21 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
         return
     }
     Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
-        Row(
-            Modifier.fillMaxWidth().clickable { showDetails = true }.padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text("Treasure Room", fontWeight = FontWeight.Bold, color = Ink, style = MaterialTheme.typography.titleLarge)
-                Text("${room?.memberIds?.size ?: 1} of 2 explorers", color = Muted, style = MaterialTheme.typography.labelMedium)
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            members.forEach { member ->
+                Column(
+                    Modifier.clickable { viewingMember = member }.padding(end = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    ProfileAvatar(member.avatarUrl, member.name, 48.dp)
+                    Text(member.name, color = Ink, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+            }
+            if (members.isEmpty()) {
+                ProfileAvatar(profile?.avatarUrl.orEmpty(), profile?.username.orEmpty().ifBlank { "You" }, 48.dp)
             }
             Spacer(Modifier.weight(1f))
-            Icon(Icons.Rounded.Info, "Room details", tint = Brand, modifier = Modifier.padding(12.dp).size(24.dp))
+            IconButton(onClick = { showDetails = true }) { Icon(Icons.Rounded.Info, "Room details", tint = Brand) }
         }
         Spacer(Modifier.height(8.dp))
         Card(Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -113,10 +136,13 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             else LazyColumn(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(messages, key = { it.id }) { TeamMessageRow(it, user.uid, profile) } }
         }
         Spacer(Modifier.height(10.dp))
-        ChatComposer(state.input, viewModel::updateInput)
+        ChatComposer(
+            state.input,
+            viewModel::updateInput,
+            onPickImage = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        )
         Button(onClick = {
-            val name = profile?.username.orEmpty().ifBlank { profile?.displayName.orEmpty().ifBlank { "You" } }.take(30)
-            viewModel.send(name, profile?.avatarUrl.orEmpty())
+            viewModel.send(senderName, profile?.avatarUrl.orEmpty())
         }, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending, colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
             Icon(Icons.AutoMirrored.Rounded.Send, null); Spacer(Modifier.width(8.dp)); Text("Send")
         }
@@ -140,7 +166,8 @@ private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: Us
         if (!mine) { ProfileAvatar(message.senderAvatarUrl, name, 40.dp); Spacer(Modifier.width(8.dp)) }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
+            if (message.imageUrl.isNotBlank()) RemoteChatImage(message.imageUrl)
+            if (message.text.isNotBlank()) Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
                 Text(message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
             }
         }
@@ -195,7 +222,7 @@ private fun RoomMemberProfileScreen(
             FriendshipStatus.Friends -> Button(onClick = { viewModel.openChat(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Opening..." else "Chat") }
             FriendshipStatus.None -> Button(onClick = { viewModel.sendFriendRequest(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Sending..." else "Add friend") }
             FriendshipStatus.IncomingPending -> Button(onClick = { viewModel.acceptFriendRequest(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Processing..." else "Accept request") }
-            FriendshipStatus.OutgoingPending -> Button(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = false) { Text("Friend request sent") }
+            FriendshipStatus.OutgoingPending -> Button(onClick = { viewModel.openChat(username) }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working) "Opening..." else "Message") }
             null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = Brand)
         }
     }
@@ -218,10 +245,10 @@ private fun RoomDetailsDialog(
             Column {
                 Text("ROOM ID", color = Muted, style = MaterialTheme.typography.labelMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(roomId, color = Ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text(numericRoomCode(roomId), color = Ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     TextButton(onClick = {
                         val clipboard = context.getSystemService(ClipboardManager::class.java)
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Room ID", roomId))
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Room ID", numericRoomCode(roomId)))
                         copied = true
                     }) { Text(if (copied) "Copied" else "Copy", color = Brand) }
                 }

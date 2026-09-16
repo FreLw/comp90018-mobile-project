@@ -1,5 +1,8 @@
 package com.comp90018.app.features.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +24,7 @@ import com.comp90018.app.*
 import com.comp90018.app.data.chat.FirebaseChatRepository
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.ui.components.ChatComposer
+import com.comp90018.app.ui.components.RemoteChatImage
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
@@ -34,6 +38,7 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
     LaunchedEffect(currentUsername, currentAvatarUrl) {
         viewModel.updateCurrentUser(currentUsername, currentAvatarUrl)
     }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(viewModel::sendImage) }
     Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
@@ -46,7 +51,7 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
                 items(state.messages, key = { it.id }) { msg -> ChatMessageRow(msg, currentUid, title, currentUsername, currentAvatarUrl) }
             }
         }
-        ChatComposer(state.input, viewModel::updateInput)
+        ChatComposer(state.input, viewModel::updateInput, onPickImage = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
         Button(onClick = viewModel::send, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending) { Icon(Icons.AutoMirrored.Rounded.Send, null); Text(if (state.sending) "Sending..." else "Send") }
     }
 }
@@ -57,7 +62,8 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
         if (!mine) { ProfileAvatar(msg.senderAvatarUrl, name, 40.dp); Spacer(Modifier.width(8.dp)) }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
+            if (msg.imageUrl.isNotBlank()) RemoteChatImage(msg.imageUrl)
+            if (msg.text.isNotBlank()) Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
                 Text(msg.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
             }
         }

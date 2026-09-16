@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 import com.google.firebase.firestore.ListenerRegistration
+import java.util.concurrent.ThreadLocalRandom
 
 /** Separate persistence boundary for two-person treasure teams; never used for direct messages. */
 data class TeamRoom(
@@ -21,6 +22,12 @@ data class TeamRoomMember(
     val name: String,
     val avatarUrl: String,
 )
+
+fun numericRoomCode(roomId: String): String {
+    if (roomId.matches(Regex("^[0-9]{8}$"))) return roomId
+    val value = roomId.fold(0L) { total, character -> (total * 131L + character.code) % 100_000_000L }
+    return value.toString().padStart(8, '0')
+}
 
 object FirebaseTeamRoomService {
     fun observeMembership(
@@ -45,7 +52,8 @@ object FirebaseTeamRoomService {
             } else if (membershipTask.result.exists()) {
                 onComplete(null, "You are already in a treasure room")
             } else {
-                val room = firestore.collection("teamRooms").document()
+                val roomCode = ThreadLocalRandom.current().nextInt(10_000_000, 100_000_000).toString()
+                val room = firestore.collection("teamRooms").document(roomCode)
                 firestore.batch().apply {
                     set(room, mapOf(
                         "creatorId" to userId,

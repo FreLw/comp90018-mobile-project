@@ -1,0 +1,4 @@
+com.unimelb.losttreasures.test.app-androidTest-0 /Users/macbookpro/Documents/GitHub/Mobile/comp90018-mobile-project/app/build/generated/res/resValues/androidTest/debug
+com.unimelb.losttreasures.test.app-mergeDebugAndroidTestResources-1 /Users/macbookpro/Documents/GitHub/Mobile/comp90018-mobile-project/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/merged.dir
+com.unimelb.losttreasures.test.app-mergeDebugAndroidTestResources-2 /Users/macbookpro/Documents/GitHub/Mobile/comp90018-mobile-project/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/stripped.dir
+com.unimelb.losttreasures.test.app-debugAndroidTest-3 /Users/macbookpro/Documents/GitHub/Mobile/comp90018-mobile-project/app/build/intermediates/merged_res/debugAndroidTest/mergeDebugAndroidTestResources
