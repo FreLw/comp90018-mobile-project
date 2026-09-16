@@ -56,8 +56,8 @@ class AndroidLocationSensor(
 
     @SuppressLint("MissingPermission")
     override fun start() {
-        started = true
         if (permissionState() != LocationPermissionState.GRANTED) {
+            started = false
             _output.value = _output.value.copy(
                 permission = LocationPermissionState.DENIED,
                 availability = LocationAvailabilityState.UNAVAILABLE,
@@ -65,6 +65,11 @@ class AndroidLocationSensor(
             )
             return
         }
+        if (started) {
+            refreshOutput()
+            return
+        }
+        started = true
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             if (location != null) onLocation(location)
         }

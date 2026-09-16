@@ -53,6 +53,7 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import java.util.Locale
 
@@ -140,6 +141,10 @@ private fun GoogleMapView(
     val mapView = remember {
         MapView(context).apply { onCreate(Bundle()) }
     }
+    var renderedSelectedRelicId by remember { mutableStateOf<String?>(null) }
+    var cameraInitialised by remember { mutableStateOf(false) }
+    var cameraSelectedRelicId by remember { mutableStateOf<String?>(null) }
+    var currentLocationMarker by remember { mutableStateOf<Marker?>(null) }
     MapLifecycle(mapView)
 
     AndroidView(
@@ -157,9 +162,21 @@ private fun GoogleMapView(
                     } ?: false
                 }
                 enableMyLocationIfAllowed(map, hasLocationPermission)
-                renderRelics(map, relics, selectedRelic)
-                renderCurrentLocation(map, locationOutput.currentLocation)
-                moveCameraToCampus(map, relics, locationOutput.currentLocation)
+                if (renderedSelectedRelicId != selectedRelic.id) {
+                    map.clear()
+                    currentLocationMarker = null
+                    renderRelics(map, relics, selectedRelic)
+                    renderedSelectedRelicId = selectedRelic.id
+                }
+                currentLocationMarker = renderCurrentLocation(map, currentLocationMarker, locationOutput.currentLocation)
+                if (!cameraInitialised) {
+                    moveCameraToCampus(map, relics, locationOutput.currentLocation)
+                    cameraInitialised = true
+                    cameraSelectedRelicId = selectedRelic.id
+                } else if (cameraSelectedRelicId != selectedRelic.id) {
+                    moveCameraToRelic(map, selectedRelic)
+                    cameraSelectedRelicId = selectedRelic.id
+                }
             }
         },
     )
@@ -215,7 +232,6 @@ private fun MapLifecycle(mapView: MapView) {
 }
 
 private fun renderRelics(map: GoogleMap, relics: List<MapRelic>, selectedRelic: MapRelic) {
-    map.clear()
     relics.forEach { relic ->
         val marker = map.addMarker(
             MarkerOptions()
@@ -232,11 +248,20 @@ private fun renderRelics(map: GoogleMap, relics: List<MapRelic>, selectedRelic: 
     }
 }
 
-private fun renderCurrentLocation(map: GoogleMap, currentLocation: GeoCoordinate?) {
-    if (currentLocation == null) return
-    map.addMarker(
+private fun renderCurrentLocation(
+    map: GoogleMap,
+    currentLocationMarker: Marker?,
+    currentLocation: GeoCoordinate?,
+): Marker? {
+    if (currentLocation == null) return currentLocationMarker
+    val position = currentLocation.toLatLng()
+    if (currentLocationMarker != null) {
+        currentLocationMarker.position = position
+        return currentLocationMarker
+    }
+    return map.addMarker(
         MarkerOptions()
-            .position(currentLocation.toLatLng())
+            .position(position)
             .title("Current location")
             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)),
     )
@@ -248,6 +273,10 @@ private fun moveCameraToCampus(map: GoogleMap, relics: List<MapRelic>, currentLo
         currentLocation?.let { include(it.toLatLng()) }
     }.build()
     map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 120))
+}
+
+private fun moveCameraToRelic(map: GoogleMap, selectedRelic: MapRelic) {
+    map.animateCamera(CameraUpdateFactory.newLatLngZoom(selectedRelic.coordinate.toLatLng(), 17f))
 }
 
 @SuppressLint("MissingPermission")

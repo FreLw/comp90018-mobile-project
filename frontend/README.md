@@ -23,7 +23,18 @@ not directly invoke Firebase services or Firestore/Storage APIs.
    deploying the Firestore and Storage rules.
 2. Open this `frontend` directory in Android Studio.
 3. Configure Android Studio to use JDK 21 and install Android SDK Platform 37.
-4. Wait for Gradle sync to complete, choose an Android API 26+ emulator or
+4. Add a Google Maps API key to your local Gradle user properties file. Do not
+   commit the key to this repository.
+
+   ```properties
+   # ~/.gradle/gradle.properties
+   MAPS_API_KEY=your_google_maps_api_key
+   ```
+
+   The key needs **Maps SDK for Android** enabled. If the key is restricted to
+   Android apps, use package name `com.comp90018.app` and the SHA-1 fingerprint
+   of the machine that builds the debug APK.
+5. Wait for Gradle sync to complete, choose an Android API 26+ emulator or
    physical device with internet access, and select **Run**.
 
 To build a debug APK from PowerShell instead:
@@ -38,7 +49,7 @@ To build a debug APK from PowerShell instead:
 | --- | --- |
 | `treasure` | Placeholder for future treasure gameplay |
 | `Rooms` | Create/join a two-person room, room details, and room chat |
-| `Map` | Placeholder for future map support |
+| `Map` | Google Map with campus relic markers and GPS/location status |
 | `friend` | Friend lookup, requests, friend list, and private chat |
 | `profile` | Profile view/edit and sign out |
 
