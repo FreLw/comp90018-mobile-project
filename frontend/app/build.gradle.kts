@@ -14,6 +14,7 @@ android {
 		targetSdk = 37
 		versionCode = 1
 		versionName = "1.0"
+		manifestPlaceholders["MAPS_API_KEY"] = providers.gradleProperty("MAPS_API_KEY").orElse("").get()
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 	}
@@ -53,6 +54,8 @@ dependencies {
 	implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
 	implementation("androidx.camera:camera-view:$cameraxVersion")
 	implementation("com.google.mlkit:barcode-scanning:17.3.0")
+	implementation("com.google.android.gms:play-services-location:21.4.0")
+	implementation("com.google.android.gms:play-services-maps:20.0.0")
 	implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 	implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
 	implementation("androidx.compose.material3:material3")

@@ -9,5 +9,8 @@ data class LocationOutput(
     val targetBearingDegrees: Double? = null,
     val proximity: ProximityState = ProximityState.UNKNOWN,
     val validity: SensorValidity = SensorValidity.UNKNOWN,
+    val permission: LocationPermissionState = LocationPermissionState.UNKNOWN,
+    val availability: LocationAvailabilityState = LocationAvailabilityState.UNKNOWN,
+    val accuracyMeters: Double? = null,
     val timestampNanos: Long? = null,
 )

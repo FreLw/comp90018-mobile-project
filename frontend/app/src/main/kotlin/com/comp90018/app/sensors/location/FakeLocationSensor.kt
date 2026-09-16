@@ -13,6 +13,7 @@ class FakeLocationSensor(
     private var currentLocation: GeoCoordinate? = null
     private var targetLocation: GeoCoordinate? = null
     private var timestampNanos: Long? = null
+    private var accuracyMeters: Double? = null
     private var started = false
 
     override fun setTargetLocation(targetLocation: GeoCoordinate?) {
@@ -33,9 +34,11 @@ class FakeLocationSensor(
     fun updateCurrentLocation(
         currentLocation: GeoCoordinate?,
         timestampNanos: Long? = null,
+        accuracyMeters: Double? = null,
     ) {
         this.currentLocation = currentLocation
         this.timestampNanos = timestampNanos
+        this.accuracyMeters = accuracyMeters
         refreshOutput()
     }
 
@@ -46,11 +49,17 @@ class FakeLocationSensor(
                 targetLocation = targetLocation,
                 timestampNanos = timestampNanos,
                 config = config,
+                permission = LocationPermissionState.GRANTED,
+                availability = LocationAvailabilityState.AVAILABLE,
+                accuracyMeters = accuracyMeters,
             )
         } else {
             LocationOutput(
                 currentLocation = currentLocation,
                 targetLocation = targetLocation,
+                permission = LocationPermissionState.GRANTED,
+                availability = LocationAvailabilityState.UNKNOWN,
+                accuracyMeters = accuracyMeters,
                 timestampNanos = timestampNanos,
             )
         }

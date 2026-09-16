@@ -14,12 +14,18 @@ object LocationCalculator {
         targetLocation: GeoCoordinate?,
         timestampNanos: Long? = null,
         config: LocationConfig = LocationConfig(),
+        permission: LocationPermissionState = LocationPermissionState.UNKNOWN,
+        availability: LocationAvailabilityState = LocationAvailabilityState.UNKNOWN,
+        accuracyMeters: Double? = null,
     ): LocationOutput {
         if (currentLocation == null || targetLocation == null) {
             return LocationOutput(
                 currentLocation = currentLocation,
                 targetLocation = targetLocation,
                 validity = SensorValidity.UNKNOWN,
+                permission = permission,
+                availability = availability,
+                accuracyMeters = accuracyMeters,
                 timestampNanos = timestampNanos,
             )
         }
@@ -28,6 +34,9 @@ object LocationCalculator {
                 currentLocation = currentLocation,
                 targetLocation = targetLocation,
                 validity = SensorValidity.UNRELIABLE,
+                permission = permission,
+                availability = availability,
+                accuracyMeters = accuracyMeters,
                 timestampNanos = timestampNanos,
             )
         }
@@ -42,6 +51,9 @@ object LocationCalculator {
             targetBearingDegrees = bearing,
             proximity = proximityState(distance, config.insideRadiusMeters, config.nearbyRadiusMeters),
             validity = SensorValidity.VALID,
+            permission = permission,
+            availability = availability,
+            accuracyMeters = accuracyMeters,
             timestampNanos = timestampNanos,
         )
     }
