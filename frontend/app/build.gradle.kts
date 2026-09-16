@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
 	id("com.android.application")
 	id("com.google.gms.google-services")
 	id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val localProperties = Properties().apply {
+	val localPropertiesFile = rootProject.file("local.properties")
+	if (localPropertiesFile.exists()) {
+		localPropertiesFile.inputStream().use(::load)
+	}
 }
 
 android {
@@ -14,7 +23,7 @@ android {
 		targetSdk = 37
 		versionCode = 1
 		versionName = "1.0"
-		manifestPlaceholders["MAPS_API_KEY"] = providers.gradleProperty("MAPS_API_KEY").orElse("").get()
+		manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 	}

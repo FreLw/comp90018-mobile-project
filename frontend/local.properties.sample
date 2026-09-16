@@ -1,0 +1,9 @@
+# Copy this file to local.properties, then replace the placeholder values.
+# local.properties is ignored by Git; never add real credentials to this sample file.
+#
+# Windows example (replace YOUR_USERNAME):
+sdk.dir=C\:\\Users\\YOUR_USERNAME\\AppData\\Local\\Android\\Sdk
+# macOS/Linux example: sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
+
+# Create a key with Maps SDK for Android enabled and restrict it to this Android app.
+MAPS_API_KEY=PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE
