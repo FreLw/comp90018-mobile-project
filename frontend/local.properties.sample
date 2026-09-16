@@ -1,0 +1,14 @@
+# Setup instructions for team members:
+# 1. Copy this file and rename the copy to local.properties in the same frontend folder.
+# 2. Update sdk.dir to the Android SDK path on your computer.
+# 3. Replace MAPS_API_KEY with your Google Maps API key.
+# 4. Do not commit local.properties. It is ignored by Git and may contain your API key.
+#
+# local.properties.sample is safe to commit because it contains placeholders only.
+#
+# Windows example (replace YOUR_USERNAME):
+sdk.dir=C\:\\Users\\YOUR_USERNAME\\AppData\\Local\\Android\\Sdk
+# macOS/Linux example: sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
+
+# Create a key with Maps SDK for Android enabled and restrict it to this Android app.
+MAPS_API_KEY=PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE
