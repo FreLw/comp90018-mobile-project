@@ -1,5 +1,10 @@
-# Copy this file to local.properties, then replace the placeholder values.
-# local.properties is ignored by Git; never add real credentials to this sample file.
+# Setup instructions for team members:
+# 1. Copy this file and rename the copy to local.properties in the same frontend folder.
+# 2. Update sdk.dir to the Android SDK path on your computer.
+# 3. Replace MAPS_API_KEY with your Google Maps API key.
+# 4. Do not commit local.properties. It is ignored by Git and may contain your API key.
+#
+# local.properties.sample is safe to commit because it contains placeholders only.
 #
 # Windows example (replace YOUR_USERNAME):
 sdk.dir=C\:\\Users\\YOUR_USERNAME\\AppData\\Local\\Android\\Sdk
