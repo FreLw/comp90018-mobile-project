@@ -7,6 +7,7 @@ import android.net.Uri
 /** Data boundary for direct-message operations. */
 interface ChatRepository {
     fun observeMessages(roomId: String, onChange: (List<ChatMessage>, String?) -> Unit): Subscription
+    fun markMessagesRead(currentUid: String, friendUid: String)
 
     fun sendMessage(
         roomId: String,

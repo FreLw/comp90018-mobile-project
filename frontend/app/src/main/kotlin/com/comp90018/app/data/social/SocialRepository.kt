@@ -16,6 +16,7 @@ interface SocialRepository {
     fun openDirectRoom(currentUid: String, targetUid: String, targetUsername: String, onComplete: (String?, String?) -> Unit)
     fun observeIncomingFriendRequests(currentUid: String, onChange: (List<IncomingFriendRequest>, String?) -> Unit): Subscription
     fun observeFriends(currentUid: String, onChange: (List<FriendSummary>, String?) -> Unit): Subscription
+    fun observeDirectChatActivity(currentUid: String, onChange: (Map<String, Long>, String?) -> Unit): Subscription
     fun migrateAcceptedFriendships(currentUid: String, currentUsername: String)
 }
 

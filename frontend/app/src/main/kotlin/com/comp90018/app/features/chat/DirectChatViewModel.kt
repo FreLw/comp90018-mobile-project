@@ -21,6 +21,7 @@ class DirectChatViewModel(
     private val repository: ChatRepository,
     private val roomId: String,
     private val currentUid: String,
+    private val friendUid: String,
     private var currentUsername: String,
     private var currentAvatarUrl: String,
 ) : ViewModel() {
@@ -31,6 +32,7 @@ class DirectChatViewModel(
     init {
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
             mutableUiState.value = mutableUiState.value.copy(messages = messages, error = error)
+            repository.markMessagesRead(currentUid, friendUid)
         }
     }
 
@@ -68,12 +70,13 @@ class DirectChatViewModel(
             repository: ChatRepository,
             roomId: String,
             currentUid: String,
+            friendUid: String,
             currentUsername: String,
             currentAvatarUrl: String,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                DirectChatViewModel(repository, roomId, currentUid, currentUsername, currentAvatarUrl) as T
+                DirectChatViewModel(repository, roomId, currentUid, friendUid, currentUsername, currentAvatarUrl) as T
         }
     }
 }

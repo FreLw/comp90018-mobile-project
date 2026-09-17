@@ -148,7 +148,7 @@ service cloud.firestore {
     match /users/{userId}/friends/{friendUid} {
       allow read: if isOwner(userId);
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['ownerUid', 'friendUid', 'username', 'sourceRequestId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['ownerUid', 'friendUid', 'username', 'sourceRequestId', 'createdAt', 'unreadCount'])
         && request.resource.data.ownerUid == userId
         && request.resource.data.friendUid == friendUid
         && request.resource.data.friendUid is string
@@ -158,7 +158,22 @@ service cloud.firestore {
         && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.sourceRequestId is string
         && hasAcceptedFriendRequest(request.resource.data.sourceRequestId, [userId, friendUid])
+        && request.resource.data.unreadCount == 0
         && request.resource.data.createdAt == request.time;
+      allow update: if signedIn()
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.friendUid == resource.data.friendUid
+        && request.resource.data.username == resource.data.username
+        && request.resource.data.sourceRequestId == resource.data.sourceRequestId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCount'])
+        && request.resource.data.unreadCount is int
+        && request.resource.data.unreadCount >= 0
+        && ((request.auth.uid == resource.data.ownerUid && request.resource.data.unreadCount == 0)
+          || (request.auth.uid == resource.data.friendUid
+            && ((!('unreadCount' in resource.data) && request.resource.data.unreadCount == 1)
+              || (('unreadCount' in resource.data)
+                && request.resource.data.unreadCount == resource.data.unreadCount + 1))));
       allow delete: if signedIn() && request.auth.uid in [resource.data.ownerUid, resource.data.friendUid];
     }
 
@@ -166,8 +181,9 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['roomId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['roomId', 'createdAt', 'unreadCount'])
         && request.resource.data.roomId is string
+        && request.resource.data.unreadCount == 0
         && request.resource.data.createdAt == request.time
         && existsAfter(/databases/$(database)/documents/teamRooms/$(request.resource.data.roomId))
         && request.auth.uid in getAfter(/databases/$(database)/documents/teamRooms/$(request.resource.data.roomId)).data.memberIds;
@@ -175,7 +191,20 @@ service cloud.firestore {
         || (signedIn()
           && exists(/databases/$(database)/documents/teamRooms/$(resource.data.roomId))
           && get(/databases/$(database)/documents/teamRooms/$(resource.data.roomId)).data.creatorId == request.auth.uid);
-      allow update: if false;
+      allow update: if signedIn()
+        && request.resource.data.roomId == resource.data.roomId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCount'])
+        && request.resource.data.unreadCount is int
+        && request.resource.data.unreadCount >= 0
+        && ((request.auth.uid == userId && request.resource.data.unreadCount == 0)
+          || (request.auth.uid != userId
+            && exists(/databases/$(database)/documents/teamRooms/$(resource.data.roomId))
+            && request.auth.uid in get(/databases/$(database)/documents/teamRooms/$(resource.data.roomId)).data.memberIds
+            && userId in get(/databases/$(database)/documents/teamRooms/$(resource.data.roomId)).data.memberIds
+            && ((!('unreadCount' in resource.data) && request.resource.data.unreadCount == 1)
+              || (('unreadCount' in resource.data)
+                && request.resource.data.unreadCount == resource.data.unreadCount + 1)));
     }
 
     match /teamRooms/{roomId} {

@@ -29,6 +29,8 @@ class FriendsViewModel(
     val uiState: StateFlow<FriendsUiState> = mutableUiState.asStateFlow()
     private var requestsSubscription: Subscription? = null
     private var friendsSubscription: Subscription? = null
+    private var directChatSubscription: Subscription? = null
+    private var friendActivity: Map<String, Long> = emptyMap()
 
     init {
         repository.migrateAcceptedFriendships(currentUid, currentUsername)
@@ -36,7 +38,17 @@ class FriendsViewModel(
             mutableUiState.value = mutableUiState.value.copy(requests = requests, message = error ?: mutableUiState.value.message)
         }
         friendsSubscription = repository.observeFriends(currentUid) { friends, error ->
-            mutableUiState.value = mutableUiState.value.copy(friends = friends, message = error ?: mutableUiState.value.message)
+            mutableUiState.value = mutableUiState.value.copy(
+                friends = sortFriendsByActivity(friends),
+                message = error ?: mutableUiState.value.message,
+            )
+        }
+        directChatSubscription = repository.observeDirectChatActivity(currentUid) { activity, error ->
+            friendActivity = activity
+            mutableUiState.value = mutableUiState.value.copy(
+                friends = sortFriendsByActivity(mutableUiState.value.friends),
+                message = error ?: mutableUiState.value.message,
+            )
         }
     }
 
@@ -65,7 +77,16 @@ class FriendsViewModel(
     fun openChat(friend: FriendSummary) {
         repository.openDirectRoom(currentUid, friend.uid, friend.username) { roomId, error ->
             mutableUiState.value = if (roomId == null) mutableUiState.value.copy(message = error)
-            else mutableUiState.value.copy(message = null, chatTarget = ChatTarget(roomId, friend))
+            else {
+                val openedFriend = friend.copy(unreadCount = 0)
+                mutableUiState.value.copy(
+                    friends = mutableUiState.value.friends.map {
+                        if (it.uid == friend.uid) openedFriend else it
+                    },
+                    message = null,
+                    chatTarget = ChatTarget(roomId, openedFriend),
+                )
+            }
         }
     }
 
@@ -83,7 +104,14 @@ class FriendsViewModel(
     override fun onCleared() {
         requestsSubscription?.cancel()
         friendsSubscription?.cancel()
+        directChatSubscription?.cancel()
     }
+
+    private fun sortFriendsByActivity(friends: List<FriendSummary>): List<FriendSummary> =
+        friends.sortedWith(
+            compareByDescending<FriendSummary> { friendActivity[it.uid] ?: 0L }
+                .thenBy { it.username.lowercase() },
+        )
 
     companion object {
         fun factory(repository: SocialRepository, currentUid: String, currentUsername: String) = object : ViewModelProvider.Factory {

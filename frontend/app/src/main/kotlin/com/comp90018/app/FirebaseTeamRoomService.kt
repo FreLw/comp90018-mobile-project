@@ -33,6 +33,24 @@ object FirebaseTeamRoomService {
             else onChange(snapshot?.getString("roomId"), null)
         }
 
+    fun observeUnreadMessages(
+        firestore: FirebaseFirestore,
+        userId: String,
+        onChange: (Int, String?) -> Unit,
+    ): ListenerRegistration = firestore.collection("teamMemberships").document(userId)
+        .addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                onChange(0, exception.localizedMessage ?: "Unable to load room unread messages")
+            } else {
+                onChange(
+                    (snapshot?.getLong("unreadCount") ?: 0L)
+                        .coerceIn(0L, Int.MAX_VALUE.toLong())
+                        .toInt(),
+                    null,
+                )
+            }
+        }
+
     fun createRoom(
         firestore: FirebaseFirestore,
         userId: String,
@@ -57,7 +75,7 @@ object FirebaseTeamRoomService {
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp(),
                     ))
-                    set(membership, mapOf("roomId" to room.id, "createdAt" to FieldValue.serverTimestamp()))
+                    set(membership, mapOf("roomId" to room.id, "createdAt" to FieldValue.serverTimestamp(), "unreadCount" to 0))
                 }.commit().addOnCompleteListener { task ->
                     onComplete(if (task.isSuccessful) room.id else null, task.exception?.localizedMessage ?: "Unable to create room")
                 }
@@ -80,7 +98,7 @@ object FirebaseTeamRoomService {
                 "memberIds" to FieldValue.arrayUnion(userId),
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
-            transaction.set(membership, mapOf("roomId" to cleanRoomId, "createdAt" to FieldValue.serverTimestamp()))
+            transaction.set(membership, mapOf("roomId" to cleanRoomId, "createdAt" to FieldValue.serverTimestamp(), "unreadCount" to 0))
         }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to join room") }
     }
 
@@ -141,24 +159,55 @@ object FirebaseTeamRoomService {
     ) {
         val cleanText = text.trim()
         if (cleanText.isBlank()) return onComplete(null)
-        firestore.collection("teamRooms").document(roomId).collection("messages").document().set(mapOf(
+        val message = mapOf(
             "senderId" to senderId,
             "senderName" to senderName,
             "senderAvatarUrl" to senderAvatarUrl,
             "text" to cleanText,
             "createdAt" to FieldValue.serverTimestamp(),
-        )).addOnCompleteListener { task ->
-            onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
-        }
+        )
+        sendTeamMessage(firestore, roomId, senderId, message, onComplete)
     }
 
     fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
         FirebaseSocialService.uploadChatImage("teamRooms", roomId, senderId, imageUri) { url, error ->
             if (url == null) return@uploadChatImage onComplete(error)
-            firestore.collection("teamRooms").document(roomId).collection("messages").document().set(mapOf(
+            val message = mapOf(
                 "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
                 "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp(),
-            )).addOnCompleteListener { onComplete(if (it.isSuccessful) null else it.exception?.localizedMessage ?: "Unable to send photo") }
+            )
+            sendTeamMessage(firestore, roomId, senderId, message, onComplete)
+        }
+    }
+
+    fun markMessagesRead(firestore: FirebaseFirestore, userId: String) {
+        firestore.collection("teamMemberships").document(userId).update("unreadCount", 0)
+    }
+
+    private fun sendTeamMessage(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        senderId: String,
+        message: Map<String, Any>,
+        onComplete: (String?) -> Unit,
+    ) {
+        val room = firestore.collection("teamRooms").document(roomId)
+        room.get().addOnCompleteListener { roomTask ->
+            if (!roomTask.isSuccessful) {
+                onComplete(roomTask.exception?.localizedMessage ?: "Unable to send message")
+                return@addOnCompleteListener
+            }
+            val recipientUid = (roomTask.result.get("memberIds") as? List<*>)
+                ?.filterIsInstance<String>()
+                ?.firstOrNull { it != senderId }
+            firestore.batch().apply {
+                set(room.collection("messages").document(), message)
+                recipientUid?.let { recipient ->
+                    update(firestore.collection("teamMemberships").document(recipient), "unreadCount", FieldValue.increment(1))
+                }
+            }.commit().addOnCompleteListener { task ->
+                onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
+            }
         }
     }
 
