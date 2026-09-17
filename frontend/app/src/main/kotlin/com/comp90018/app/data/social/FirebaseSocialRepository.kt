@@ -42,6 +42,11 @@ class FirebaseSocialRepository(
         return Subscription { registration.remove() }
     }
 
+    override fun observeDirectChatActivity(currentUid: String, onChange: (Map<String, Long>, String?) -> Unit): Subscription {
+        val registration = FirebaseSocialService.observeDirectChatActivity(firestore, currentUid, onChange)
+        return Subscription { registration.remove() }
+    }
+
     override fun migrateAcceptedFriendships(currentUid: String, currentUsername: String) =
         FirebaseSocialService.migrateAcceptedFriendships(firestore, currentUid, currentUsername)
 }

@@ -14,10 +14,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.data.profile.FirebaseProfileRepository
+import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
+import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.friends.FriendsScreen
+import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
+import com.comp90018.app.features.rooms.UnreadRoomMessagesViewModel
 import com.comp90018.app.navigation.AppBottomNavigation
 import com.comp90018.app.navigation.AppDestination
 import com.google.firebase.auth.FirebaseUser
@@ -33,8 +37,22 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = AppShellViewModel.factory(repository, user.uid, user.email.orEmpty()),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val socialRepository = remember(firestore) { FirebaseSocialRepository(firestore) }
+    val unreadMessagesViewModel: UnreadMessagesViewModel = viewModel(
+        key = "unread_messages_${user.uid}",
+        factory = UnreadMessagesViewModel.factory(socialRepository, user.uid),
+    )
+    val unreadFriendMessages by unreadMessagesViewModel.unreadCount.collectAsStateWithLifecycle()
+    val teamRoomRepository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
+    val unreadRoomMessagesViewModel: UnreadRoomMessagesViewModel = viewModel(
+        key = "unread_room_messages_${user.uid}",
+        factory = UnreadRoomMessagesViewModel.factory(teamRoomRepository, user.uid),
+    )
+    val unreadRoomMessages by unreadRoomMessagesViewModel.unreadCount.collectAsStateWithLifecycle()
 
-    Scaffold(containerColor = Background, bottomBar = { AppBottomNavigation(destination) { destination = it } }) { padding ->
+    Scaffold(containerColor = Background, bottomBar = {
+        AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
+    }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
                 AppDestination.Treasure -> HomeScreen()

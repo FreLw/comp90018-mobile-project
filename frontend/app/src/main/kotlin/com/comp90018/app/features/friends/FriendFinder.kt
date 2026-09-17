@@ -58,7 +58,8 @@ fun FriendFinder(user: FirebaseUser, firestore: FirebaseFirestore, currentUserna
 
     val roomId = state.roomId
     if (roomId != null) {
-        DirectChatScreen(firestore, roomId, user.uid, target?.username ?: "Chat", currentUsername, currentAvatarUrl, onBack = viewModel::closeChat)
+        val chatTarget = requireNotNull(target)
+        DirectChatScreen(firestore, roomId, user.uid, chatTarget.uid, chatTarget.username, currentUsername, currentAvatarUrl, onBack = viewModel::closeChat)
         return
     }
     if (target == null) {

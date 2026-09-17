@@ -46,6 +46,7 @@ data class IncomingFriendRequest(
 data class FriendSummary(
     val uid: String,
     val username: String,
+    val unreadCount: Int = 0,
 )
 
 object FirebaseSocialService {
@@ -257,9 +258,42 @@ object FirebaseSocialService {
             val friends = snapshot?.documents.orEmpty().mapNotNull { document ->
                 val friendUid = document.getString("friendUid") ?: return@mapNotNull null
                 val friendName = document.getString("username").orEmpty().ifBlank { friendUid.take(8) }
-                FriendSummary(friendUid, friendName)
+                FriendSummary(
+                    uid = friendUid,
+                    username = friendName,
+                    unreadCount = (document.getLong("unreadCount") ?: 0L)
+                        .coerceIn(0L, Int.MAX_VALUE.toLong())
+                        .toInt(),
+                )
             }.sortedBy { it.username }
             onChange(friends, null)
+        }
+
+    /** Observes the latest activity time for each of the user's direct-chat partners. */
+    fun observeDirectChatActivity(
+        firestore: FirebaseFirestore,
+        currentUid: String,
+        onChange: (Map<String, Long>, String?) -> Unit,
+    ): ListenerRegistration = firestore.collection("rooms")
+        .whereArrayContains("memberIds", currentUid)
+        .addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                onChange(emptyMap(), exception.localizedMessage ?: "Unable to load chat activity")
+                return@addSnapshotListener
+            }
+            val activityByFriend = snapshot?.documents.orEmpty()
+                .asSequence()
+                .filter { it.id.startsWith("direct_") }
+                .mapNotNull { document ->
+                    val friendUid = (document.get("memberIds") as? List<*>)
+                        ?.filterIsInstance<String>()
+                        ?.firstOrNull { it != currentUid }
+                        ?: return@mapNotNull null
+                    friendUid to (document.getTimestamp("updatedAt")?.toDate()?.time ?: 0L)
+                }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, timestamps) -> timestamps.maxOrNull() ?: 0L }
+            onChange(activityByFriend, null)
         }
 
     fun migrateAcceptedFriendships(
@@ -364,6 +398,7 @@ object FirebaseSocialService {
             "username" to friendUsername.trim().lowercase(),
             "sourceRequestId" to sourceRequestId,
             "createdAt" to FieldValue.serverTimestamp(),
+            "unreadCount" to 0,
         )
     }
 
@@ -523,22 +558,51 @@ object FirebaseSocialService {
             "text" to cleanText.take(1000),
             "createdAt" to FieldValue.serverTimestamp(),
         )
-        val room = firestore.collection("rooms").document(roomId)
-        firestore.batch().apply {
-            set(room.collection("messages").document(), message)
-            update(room, "updatedAt", FieldValue.serverTimestamp())
-        }.commit().addOnCompleteListener { task ->
-                onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
-            }
+        sendDirectMessage(firestore, roomId, senderId, message, onComplete)
     }
 
     fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
         uploadChatImage("rooms", roomId, senderId, imageUri) { url, error ->
             if (url == null) return@uploadChatImage onComplete(error)
             val message = mapOf("senderId" to senderId, "senderName" to senderName.trim().take(30), "senderAvatarUrl" to senderAvatarUrl, "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp())
-            val room = firestore.collection("rooms").document(roomId)
-            firestore.batch().apply { set(room.collection("messages").document(), message); update(room, "updatedAt", FieldValue.serverTimestamp()) }.commit()
-                .addOnCompleteListener { onComplete(if (it.isSuccessful) null else it.exception?.localizedMessage ?: "Unable to send photo") }
+            sendDirectMessage(firestore, roomId, senderId, message, onComplete)
+        }
+    }
+
+    fun markDirectMessagesRead(firestore: FirebaseFirestore, currentUid: String, friendUid: String) {
+        firestore.collection("users").document(currentUid).collection("friends").document(friendUid)
+            .update("unreadCount", 0)
+    }
+
+    private fun sendDirectMessage(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        senderId: String,
+        message: Map<String, Any>,
+        onComplete: (String?) -> Unit,
+    ) {
+        val room = firestore.collection("rooms").document(roomId)
+        room.get().addOnCompleteListener { roomTask ->
+            if (!roomTask.isSuccessful) {
+                onComplete(roomTask.exception?.localizedMessage ?: "Unable to send message")
+                return@addOnCompleteListener
+            }
+            val recipientUid = (roomTask.result.get("memberIds") as? List<*>)
+                ?.filterIsInstance<String>()
+                ?.firstOrNull { it != senderId }
+            if (recipientUid == null) {
+                onComplete("Unable to find message recipient")
+                return@addOnCompleteListener
+            }
+            val recipientFriend = firestore.collection("users").document(recipientUid)
+                .collection("friends").document(senderId)
+            firestore.batch().apply {
+                set(room.collection("messages").document(), message)
+                update(room, "updatedAt", FieldValue.serverTimestamp())
+                update(recipientFriend, "unreadCount", FieldValue.increment(1))
+            }.commit().addOnCompleteListener { task ->
+                onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
+            }
         }
     }
 

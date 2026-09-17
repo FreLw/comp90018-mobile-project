@@ -17,6 +17,11 @@ class FirebaseTeamRoomRepository(
         return Subscription { registration.remove() }
     }
 
+    override fun observeUnreadMessages(userId: String, onChange: (Int, String?) -> Unit): Subscription {
+        val registration = FirebaseTeamRoomService.observeUnreadMessages(firestore, userId, onChange)
+        return Subscription { registration.remove() }
+    }
+
     override fun createRoom(userId: String, onComplete: (String?, String?) -> Unit) =
         FirebaseTeamRoomService.createRoom(firestore, userId, onComplete)
 
@@ -32,6 +37,8 @@ class FirebaseTeamRoomRepository(
         val registration = FirebaseTeamRoomService.observeMessages(firestore, roomId, onChange)
         return Subscription { registration.remove() }
     }
+
+    override fun markMessagesRead(userId: String) = FirebaseTeamRoomService.markMessagesRead(firestore, userId)
 
     override fun loadMembers(memberIds: List<String>, onComplete: (List<TeamRoomMember>) -> Unit) =
         FirebaseTeamRoomService.loadMembers(firestore, memberIds, onComplete)

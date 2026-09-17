@@ -35,6 +35,7 @@ import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.ui.components.AppTextField
 import com.comp90018.app.ui.components.ChatComposer
+import com.comp90018.app.ui.components.formatMessageTimestamp
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -81,7 +82,8 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
     var viewingMember by remember(roomId) { mutableStateOf<TeamRoomMember?>(null) }
     var directChatId by remember(roomId) { mutableStateOf<String?>(null) }
     if (directChatId != null) {
-        DirectChatScreen(firestore, requireNotNull(directChatId), user.uid, viewingMember?.name ?: "Chat", profile?.username.orEmpty(), profile?.avatarUrl.orEmpty(), onBack = { directChatId = null })
+        val chatMember = requireNotNull(viewingMember)
+        DirectChatScreen(firestore, requireNotNull(directChatId), user.uid, chatMember.uid, chatMember.name, profile?.username.orEmpty(), profile?.avatarUrl.orEmpty(), onBack = { directChatId = null })
         return
     }
     if (viewingMember != null) {
@@ -142,6 +144,9 @@ private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: Us
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
                 Text(message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+            }
+            formatMessageTimestamp(message.sentAtMillis)?.let { timestamp ->
+                Text(timestamp, color = Muted, style = MaterialTheme.typography.labelSmall)
             }
         }
         if (mine) { Spacer(Modifier.width(8.dp)); ProfileAvatar(message.senderAvatarUrl.ifBlank { profile?.avatarUrl.orEmpty() }, name, 40.dp) }

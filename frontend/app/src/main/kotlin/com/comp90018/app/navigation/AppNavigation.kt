@@ -2,6 +2,7 @@ package com.comp90018.app.navigation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Badge
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
@@ -34,10 +36,16 @@ enum class AppDestination(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun AppBottomNavigation(selected: AppDestination, onSelected: (AppDestination) -> Unit) {
+fun AppBottomNavigation(
+    selected: AppDestination,
+    unreadFriendMessages: Int,
+    unreadRoomMessages: Int,
+    onSelected: (AppDestination) -> Unit,
+) {
     NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
         AppDestination.entries.forEach { destination ->
             val isRooms = destination == AppDestination.Rooms
+            val isFriends = destination == AppDestination.Friends
             NavigationBarItem(
                 selected = selected == destination,
                 onClick = { onSelected(destination) },
@@ -47,6 +55,20 @@ fun AppBottomNavigation(selected: AppDestination, onSelected: (AppDestination) -
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(destination.icon, destination.label, tint = if (isRooms && selected == destination) Color.White else if (selected == destination) Brand else Muted)
+                        if (isRooms && unreadRoomMessages > 0) {
+                            Badge(
+                                modifier = Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp),
+                            ) {
+                                Text(if (unreadRoomMessages > 99) "99+" else unreadRoomMessages.toString())
+                            }
+                        }
+                        if (isFriends && unreadFriendMessages > 0) {
+                            Badge(
+                                modifier = Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp),
+                            ) {
+                                Text(if (unreadFriendMessages > 99) "99+" else unreadFriendMessages.toString())
+                            }
+                        }
                     }
                 },
                 label = { Text(destination.label) },

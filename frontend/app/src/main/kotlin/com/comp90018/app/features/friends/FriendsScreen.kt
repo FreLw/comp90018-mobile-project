@@ -1,12 +1,14 @@
 package com.comp90018.app.features.friends
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,6 +16,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -33,9 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.Brand
+import com.comp90018.app.BrandSoft
 import com.comp90018.app.FriendSummary
 import com.comp90018.app.IncomingFriendRequest
 import com.comp90018.app.Ink
+import com.comp90018.app.RelicRed
 import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.features.profile.UserProfile
@@ -71,6 +76,7 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
                 firestore = firestore,
                 roomId = chatTarget.roomId,
                 currentUid = user.uid,
+                friendUid = chatTarget.friend.uid,
                 title = chatTarget.friend.username,
                 currentUsername = profile?.username.orEmpty(),
                 currentAvatarUrl = profile?.avatarUrl.orEmpty(),
@@ -107,10 +113,25 @@ private fun FriendsContent(state: FriendsUiState, onAddFriend: () -> Unit, onTog
         if (state.showRequests) RequestsList(state.requests, onAccept, onDecline)
         else if (state.friends.isEmpty()) EmptyState(Icons.Rounded.Group, "No friends yet", "Tap Add friend to search by username.")
         else state.friends.forEach { friend ->
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(friend.username, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
-                    TextButton(onClick = { onOpenChat(friend) }) { Text("Chat") }
+            val hasUnreadMessages = friend.unreadCount > 0
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = if (hasUnreadMessages) BrandSoft else Color.White),
+            ) {
+                Box(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(friend.username, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
+                        TextButton(onClick = { onOpenChat(friend) }) { Text("Chat") }
+                    }
+                    if (hasUnreadMessages) {
+                        Badge(
+                            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-6).dp, y = 6.dp),
+                            containerColor = RelicRed,
+                            contentColor = Color.White,
+                        ) {
+                            Text(if (friend.unreadCount > 99) "99+" else friend.unreadCount.toString())
+                        }
+                    }
                 }
             }
         }

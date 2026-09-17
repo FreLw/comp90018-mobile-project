@@ -21,14 +21,15 @@ import com.comp90018.app.*
 import com.comp90018.app.data.chat.FirebaseChatRepository
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.ui.components.ChatComposer
+import com.comp90018.app.ui.components.formatMessageTimestamp
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: String, title: String, currentUsername: String, currentAvatarUrl: String, onBack: () -> Unit, onViewFriend: (() -> Unit)? = null) {
+fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: String, friendUid: String, title: String, currentUsername: String, currentAvatarUrl: String, onBack: () -> Unit, onViewFriend: (() -> Unit)? = null) {
     val repository = remember(firestore) { FirebaseChatRepository(firestore) }
     val viewModel: DirectChatViewModel = viewModel(
         key = "direct_chat_${roomId}_$currentUid",
-        factory = DirectChatViewModel.factory(repository, roomId, currentUid, currentUsername, currentAvatarUrl),
+        factory = DirectChatViewModel.factory(repository, roomId, currentUid, friendUid, currentUsername, currentAvatarUrl),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(currentUsername, currentAvatarUrl) {
@@ -59,6 +60,9 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
             Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
                 Text(msg.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+            }
+            formatMessageTimestamp(msg.sentAtMillis)?.let { timestamp ->
+                Text(timestamp, color = Muted, style = MaterialTheme.typography.labelSmall)
             }
         }
         if (mine) { Spacer(Modifier.width(8.dp)); ProfileAvatar(msg.senderAvatarUrl.ifBlank { myAvatar }, name, 40.dp) }

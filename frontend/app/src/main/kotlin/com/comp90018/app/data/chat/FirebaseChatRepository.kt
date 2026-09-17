@@ -15,6 +15,9 @@ class FirebaseChatRepository(
         return Subscription { registration.remove() }
     }
 
+    override fun markMessagesRead(currentUid: String, friendUid: String) =
+        FirebaseSocialService.markDirectMessagesRead(firestore, currentUid, friendUid)
+
     override fun sendMessage(
         roomId: String,
         senderId: String,

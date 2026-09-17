@@ -41,6 +41,7 @@ class TeamRoomChatViewModel(
         }
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
             mutableUiState.value = mutableUiState.value.copy(messages = messages, error = error ?: mutableUiState.value.error)
+            repository.markMessagesRead(userId)
         }
     }
 
