@@ -204,7 +204,7 @@ service cloud.firestore {
             && userId in get(/databases/$(database)/documents/teamRooms/$(resource.data.roomId)).data.memberIds
             && ((!('unreadCount' in resource.data) && request.resource.data.unreadCount == 1)
               || (('unreadCount' in resource.data)
-                && request.resource.data.unreadCount == resource.data.unreadCount + 1)));
+                && request.resource.data.unreadCount == resource.data.unreadCount + 1))));
     }
 
     match /teamRooms/{roomId} {
