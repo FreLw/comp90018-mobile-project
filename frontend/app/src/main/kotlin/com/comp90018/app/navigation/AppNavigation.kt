@@ -51,13 +51,23 @@ fun AppBottomNavigation(
                 onClick = { onSelected(destination) },
                 icon = {
                     Box(
-                        modifier = if (isRooms) Modifier.size(44.dp).clip(CircleShape).background(if (selected == destination) Brand else BrandSoft) else Modifier.size(32.dp),
+                        modifier = if (isRooms) Modifier.size(44.dp) else Modifier.size(32.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(destination.icon, destination.label, tint = if (isRooms && selected == destination) Color.White else if (selected == destination) Brand else Muted)
+                        if (isRooms) {
+                            Box(
+                                modifier = Modifier.size(44.dp).clip(CircleShape)
+                                    .background(if (selected == destination) Brand else BrandSoft),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(destination.icon, destination.label, tint = if (selected == destination) Color.White else Muted)
+                            }
+                        } else {
+                            Icon(destination.icon, destination.label, tint = if (selected == destination) Brand else Muted)
+                        }
                         if (isRooms && unreadRoomMessages > 0) {
                             Badge(
-                                modifier = Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp),
+                                modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
                             ) {
                                 Text(if (unreadRoomMessages > 99) "99+" else unreadRoomMessages.toString())
                             }

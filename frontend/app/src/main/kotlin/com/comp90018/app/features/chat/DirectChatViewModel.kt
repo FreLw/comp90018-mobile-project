@@ -28,10 +28,19 @@ class DirectChatViewModel(
     private val mutableUiState = MutableStateFlow(DirectChatUiState())
     val uiState: StateFlow<DirectChatUiState> = mutableUiState.asStateFlow()
     private val messagesSubscription: Subscription
+    private var isScreenVisible = false
 
     init {
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
             mutableUiState.value = mutableUiState.value.copy(messages = messages, error = error)
+            if (isScreenVisible) repository.markMessagesRead(currentUid, friendUid)
+        }
+    }
+
+    /** Only clear the badge while this conversation is actually on screen. */
+    fun setScreenVisible(visible: Boolean) {
+        isScreenVisible = visible
+        if (visible && mutableUiState.value.messages.isNotEmpty()) {
             repository.markMessagesRead(currentUid, friendUid)
         }
     }

@@ -152,6 +152,7 @@ object FirebaseTeamRoomService {
         firestore: FirebaseFirestore,
         roomId: String,
         senderId: String,
+        recipientId: String?,
         senderName: String,
         senderAvatarUrl: String,
         text: String,
@@ -166,17 +167,17 @@ object FirebaseTeamRoomService {
             "text" to cleanText,
             "createdAt" to FieldValue.serverTimestamp(),
         )
-        sendTeamMessage(firestore, roomId, senderId, message, onComplete)
+        sendTeamMessage(firestore, roomId, recipientId, message, onComplete)
     }
 
-    fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
+    fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
         FirebaseSocialService.uploadChatImage("teamRooms", roomId, senderId, imageUri) { url, error ->
             if (url == null) return@uploadChatImage onComplete(error)
             val message = mapOf(
                 "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
                 "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp(),
             )
-            sendTeamMessage(firestore, roomId, senderId, message, onComplete)
+            sendTeamMessage(firestore, roomId, recipientId, message, onComplete)
         }
     }
 
@@ -187,27 +188,18 @@ object FirebaseTeamRoomService {
     private fun sendTeamMessage(
         firestore: FirebaseFirestore,
         roomId: String,
-        senderId: String,
+        recipientId: String?,
         message: Map<String, Any>,
         onComplete: (String?) -> Unit,
     ) {
         val room = firestore.collection("teamRooms").document(roomId)
-        room.get().addOnCompleteListener { roomTask ->
-            if (!roomTask.isSuccessful) {
-                onComplete(roomTask.exception?.localizedMessage ?: "Unable to send message")
-                return@addOnCompleteListener
+        firestore.batch().apply {
+            set(room.collection("messages").document(), message)
+            recipientId?.let { recipient ->
+                update(firestore.collection("teamMemberships").document(recipient), "unreadCount", FieldValue.increment(1))
             }
-            val recipientUid = (roomTask.result.get("memberIds") as? List<*>)
-                ?.filterIsInstance<String>()
-                ?.firstOrNull { it != senderId }
-            firestore.batch().apply {
-                set(room.collection("messages").document(), message)
-                recipientUid?.let { recipient ->
-                    update(firestore.collection("teamMemberships").document(recipient), "unreadCount", FieldValue.increment(1))
-                }
-            }.commit().addOnCompleteListener { task ->
-                onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
-            }
+        }.commit().addOnCompleteListener { task ->
+            onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
         }
     }
 

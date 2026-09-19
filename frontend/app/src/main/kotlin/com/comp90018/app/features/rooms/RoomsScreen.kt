@@ -74,6 +74,10 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
         factory = TeamRoomChatViewModel.factory(repository, roomId, user.uid),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    DisposableEffect(viewModel) {
+        viewModel.setScreenVisible(true)
+        onDispose { viewModel.setScreenVisible(false) }
+    }
     val room = state.room
     val messages = state.messages
     val members = state.members
