@@ -11,6 +11,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 class FirebaseSocialRepository(
     private val firestore: FirebaseFirestore,
 ) : SocialRepository {
+    override fun searchUsers(currentUid: String, usernamePrefix: String, onComplete: (List<SearchUser>, String?) -> Unit) =
+        FirebaseSocialService.searchUsers(firestore, currentUid, usernamePrefix, onComplete)
+
     override fun findUserByUsername(username: String, onComplete: (SearchUser?, String?) -> Unit) =
         FirebaseSocialService.findUserByUsername(firestore, username, onComplete)
 

@@ -7,6 +7,7 @@ import com.comp90018.app.SearchUser
 
 /** Data boundary for social features. UI and ViewModels do not depend on Firebase SDK types. */
 interface SocialRepository {
+    fun searchUsers(currentUid: String, usernamePrefix: String, onComplete: (List<SearchUser>, String?) -> Unit)
     fun findUserByUsername(username: String, onComplete: (SearchUser?, String?) -> Unit)
     fun getFriendshipStatus(currentUid: String, targetUid: String, onComplete: (FriendshipStatus?, String?) -> Unit)
     fun sendFriendRequest(fromUid: String, toUid: String, fromUsername: String, toUsername: String, onComplete: (String?) -> Unit)

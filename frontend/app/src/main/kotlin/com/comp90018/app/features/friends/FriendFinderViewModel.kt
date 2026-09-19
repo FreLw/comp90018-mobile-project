@@ -11,12 +11,15 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class FriendFinderUiState(
     val query: String = "",
+    val results: List<SearchUser> = emptyList(),
     val target: SearchUser? = null,
     val friendship: FriendshipStatus? = null,
     val message: String? = null,
     val searching: Boolean = false,
     val working: Boolean = false,
     val roomId: String? = null,
+    val sentUserIds: Set<String> = emptySet(),
+    val requestMode: Boolean = false,
 )
 
 class FriendFinderViewModel(
@@ -27,37 +30,88 @@ class FriendFinderViewModel(
     private val mutableUiState = MutableStateFlow(FriendFinderUiState())
     val uiState: StateFlow<FriendFinderUiState> = mutableUiState.asStateFlow()
 
-    fun updateQuery(query: String) { mutableUiState.value = mutableUiState.value.copy(query = query) }
+    fun updateQuery(query: String) {
+        mutableUiState.value = mutableUiState.value.copy(
+            query = query,
+            results = if (query.isBlank()) emptyList() else mutableUiState.value.results,
+            searching = false,
+            message = null,
+        )
+    }
 
     fun updateCurrentUsername(username: String) {
         if (username.isNotBlank()) currentUsername = username
     }
 
     fun search() {
+        val searchedQuery = mutableUiState.value.query.trim().lowercase()
+        if (searchedQuery.isBlank()) return
         mutableUiState.value = mutableUiState.value.copy(searching = true, message = null)
-        repository.findUserByUsername(mutableUiState.value.query) { found, error ->
+        repository.searchUsers(currentUid, searchedQuery) { found, error ->
+            if (mutableUiState.value.query.trim().lowercase() != searchedQuery) return@searchUsers
             if (error != null) {
                 mutableUiState.value = mutableUiState.value.copy(searching = false, message = error)
-            } else if (found == null || found.uid == currentUid) {
-                mutableUiState.value = mutableUiState.value.copy(searching = false, message = "Explorer not found")
             } else {
-                mutableUiState.value = mutableUiState.value.copy(searching = false, target = found)
-                repository.getFriendshipStatus(currentUid, found.uid) { status, statusError ->
-                    mutableUiState.value = mutableUiState.value.copy(friendship = status, message = statusError)
-                }
+                mutableUiState.value = mutableUiState.value.copy(
+                    searching = false,
+                    results = found,
+                )
             }
         }
     }
 
-    fun searchAgain() { mutableUiState.value = FriendFinderUiState(query = mutableUiState.value.query) }
+    fun selectUser(user: SearchUser, knownFriend: Boolean = false, requestMode: Boolean = false) {
+        val simulatedStatus = if (user.uid in mutableUiState.value.sentUserIds) FriendshipStatus.OutgoingPending else FriendshipStatus.None
+        mutableUiState.value = mutableUiState.value.copy(
+            target = user,
+            friendship = when {
+                knownFriend -> FriendshipStatus.Friends
+                user.uid.startsWith("mock_") -> simulatedStatus
+                else -> null
+            },
+            requestMode = requestMode,
+            message = null,
+        )
+        if (!knownFriend && !user.uid.startsWith("mock_")) {
+            repository.getFriendshipStatus(currentUid, user.uid) { status, statusError ->
+                mutableUiState.value = mutableUiState.value.copy(friendship = status, message = statusError)
+            }
+        }
+    }
 
-    fun sendFriendRequest() = withTarget { target ->
+    fun searchAgain() {
+        mutableUiState.value = mutableUiState.value.copy(target = null, friendship = null, message = null, roomId = null, requestMode = false)
+    }
+
+    fun sendFriendRequest(candidate: SearchUser? = null) {
+        val target = candidate ?: mutableUiState.value.target ?: return
+        if (target.uid.startsWith("mock_")) {
+            val sent = mutableUiState.value.sentUserIds + target.uid
+            mutableUiState.value = mutableUiState.value.copy(
+                target = mutableUiState.value.target,
+                friendship = if (mutableUiState.value.target?.uid == target.uid) FriendshipStatus.OutgoingPending else mutableUiState.value.friendship,
+                sentUserIds = sent,
+                working = false,
+                message = "Friend request sent",
+            )
+            return
+        }
+        mutableUiState.value = mutableUiState.value.copy(working = true, message = null)
         repository.sendFriendRequest(currentUid, target.uid, currentUsername, target.username) { error ->
-            mutableUiState.value = mutableUiState.value.copy(working = false, message = error ?: "Friend request sent", friendship = if (error == null) FriendshipStatus.OutgoingPending else mutableUiState.value.friendship)
+            mutableUiState.value = mutableUiState.value.copy(
+                working = false,
+                message = error ?: "Friend request sent",
+                friendship = if (error == null && mutableUiState.value.target?.uid == target.uid) FriendshipStatus.OutgoingPending else mutableUiState.value.friendship,
+                sentUserIds = if (error == null) mutableUiState.value.sentUserIds + target.uid else mutableUiState.value.sentUserIds,
+            )
         }
     }
 
     fun acceptFriendRequest() = withTarget { target ->
+        if (target.uid.startsWith("mock_")) {
+            mutableUiState.value = mutableUiState.value.copy(working = false, message = "Friend request accepted", friendship = FriendshipStatus.Friends)
+            return@withTarget
+        }
         repository.acceptFriendRequest(target.uid, currentUid, target.username, currentUsername) { error ->
             mutableUiState.value = mutableUiState.value.copy(working = false, message = error ?: "Friend request accepted", friendship = if (error == null) FriendshipStatus.Friends else mutableUiState.value.friendship)
         }

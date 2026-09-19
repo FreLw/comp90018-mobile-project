@@ -13,6 +13,11 @@ data class SearchUser(
     val displayName: String,
     val gender: String,
     val bio: String,
+    val email: String = "",
+    val avatarUrl: String = "",
+    val department: String = "",
+    val major: String = "",
+    val experience: Int = 0,
 )
 
 enum class FriendshipStatus {
@@ -63,7 +68,10 @@ object FirebaseSocialService {
         }
 
         firestore.collection("users")
-            .whereEqualTo("username", normalized)
+            .orderBy("username")
+            .startAt(normalized)
+            .endAt("$normalized\uf8ff")
+            .limit(10)
             .get()
             .addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
@@ -79,6 +87,11 @@ object FirebaseSocialService {
                         displayName = document.getString("displayName").orEmpty(),
                         gender = document.getString("gender") ?: "unspecified",
                         bio = document.getString("bio").orEmpty(),
+                        email = document.getString("email").orEmpty(),
+                        avatarUrl = document.getString("avatarUrl").orEmpty(),
+                        department = document.getString("department").orEmpty(),
+                        major = document.getString("major").orEmpty(),
+                        experience = (document.getLong("experience") ?: 0L).toInt(),
                     )
                 }
                 onComplete(users, null)
@@ -122,6 +135,11 @@ object FirebaseSocialService {
                         displayName = document.getString("displayName").orEmpty(),
                         gender = document.getString("gender") ?: "unspecified",
                         bio = document.getString("bio").orEmpty(),
+                        email = document.getString("email").orEmpty(),
+                        avatarUrl = document.getString("avatarUrl").orEmpty(),
+                        department = document.getString("department").orEmpty(),
+                        major = document.getString("major").orEmpty(),
+                        experience = (document.getLong("experience") ?: 0L).toInt(),
                     ),
                     null,
                 )

@@ -1,10 +1,8 @@
 package com.comp90018.app.navigation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Group
@@ -19,20 +17,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.comp90018.app.Brand
-import com.comp90018.app.BrandSoft
 import com.comp90018.app.Muted
 
 enum class AppDestination(val label: String, val icon: ImageVector) {
-    Treasure("treasure", Icons.Rounded.Star),
+    Friends("Friends", Icons.Rounded.Group),
     Rooms("Rooms", Icons.Rounded.Forum),
     Map("Map", Icons.Rounded.LocationOn),
-    Friends("friend", Icons.Rounded.Group),
-    Profile("profile", Icons.Rounded.Person),
+    Treasure("Treasure", Icons.Rounded.Star),
+    Profile("Profile", Icons.Rounded.Person),
 }
 
 @Composable
@@ -51,10 +47,15 @@ fun AppBottomNavigation(
                 onClick = { onSelected(destination) },
                 icon = {
                     Box(
-                        modifier = if (isRooms) Modifier.size(44.dp).clip(CircleShape).background(if (selected == destination) Brand else BrandSoft) else Modifier.size(32.dp),
+                        modifier = Modifier.size(32.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(destination.icon, destination.label, tint = if (isRooms && selected == destination) Color.White else if (selected == destination) Brand else Muted)
+                        Icon(
+                            destination.icon,
+                            destination.label,
+                            tint = if (selected == destination) Brand else Muted,
+                            modifier = Modifier.size(24.dp),
+                        )
                         if (isRooms && unreadRoomMessages > 0) {
                             Badge(
                                 modifier = Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp),
@@ -71,7 +72,7 @@ fun AppBottomNavigation(
                         }
                     }
                 },
-                label = { Text(destination.label) },
+                label = { Text(destination.label, maxLines = 1) },
                 alwaysShowLabel = true,
             )
         }

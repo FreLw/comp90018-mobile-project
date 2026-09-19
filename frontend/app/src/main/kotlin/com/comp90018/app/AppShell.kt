@@ -21,7 +21,9 @@ import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
+import com.comp90018.app.features.rooms.RoomsViewModel
 import com.comp90018.app.features.rooms.UnreadRoomMessagesViewModel
+import com.comp90018.app.features.treasure.TreasureScreen
 import com.comp90018.app.navigation.AppBottomNavigation
 import com.comp90018.app.navigation.AppDestination
 import com.google.firebase.auth.FirebaseUser
@@ -49,21 +51,32 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = UnreadRoomMessagesViewModel.factory(teamRoomRepository, user.uid),
     )
     val unreadRoomMessages by unreadRoomMessagesViewModel.unreadCount.collectAsStateWithLifecycle()
+    val roomsViewModel: RoomsViewModel = viewModel(
+        key = "rooms_${user.uid}",
+        factory = RoomsViewModel.factory(teamRoomRepository, user.uid),
+    )
+    val roomsState by roomsViewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(containerColor = Background, bottomBar = {
         AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
-                AppDestination.Treasure -> HomeScreen()
-                AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile)
+                AppDestination.Treasure -> TreasureScreen(roomsState.activeRoomId, teamRoomRepository)
+                AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
                 AppDestination.Map -> MapScreen()
-                AppDestination.Friends -> FriendsScreen(user, firestore, state.profile)
-                AppDestination.Profile -> ProfileScreen(user.uid, user.email.orEmpty(), repository, state.profile, state.profileError, onRetry = viewModel::retry, onLogout = onLogout)
+                AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
+                AppDestination.Profile -> ProfileScreen(
+                    userUid = user.uid,
+                    userEmail = user.email.orEmpty(),
+                    repository = repository,
+                    profile = state.profile,
+                    profileError = state.profileError,
+                    currentRoomId = roomsState.activeRoomId,
+                    onRetry = viewModel::retry,
+                    onLogout = onLogout,
+                )
             }
         }
     }
 }
-
-@Composable
-private fun HomeScreen() = Box(Modifier.fillMaxSize())

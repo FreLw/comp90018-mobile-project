@@ -13,8 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,12 +40,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?) {
-    val repository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
-    val viewModel: RoomsViewModel = viewModel(
-        key = "rooms_${user.uid}",
-        factory = RoomsViewModel.factory(repository, user.uid),
-    )
+fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, viewModel: RoomsViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     state.activeRoomId?.let { TeamRoomChatScreen(it, user, firestore, profile, onRoomExited = {}) }
         ?: RoomEntryScreen(state, viewModel)
@@ -54,15 +49,15 @@ fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserP
 @Composable
 private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel) {
     Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Box(Modifier.size(78.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Group, null, tint = Brand, modifier = Modifier.size(36.dp)) }
-        Text("You're not in a room yet.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
-        Text("Create a room or join one to team up and hunt for treasure together.", color = Muted, textAlign = TextAlign.Center)
+        Box(Modifier.size(78.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.PersonOff, null, tint = Brand, modifier = Modifier.size(36.dp)) }
+        Text("You haven't joined a room yet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
+        Text("Join an existing room or create a new one to hunt for treasure together.", color = Muted, textAlign = TextAlign.Center)
         if (state.joining) AppTextField("Enter room ID", state.roomIdInput, viewModel::updateRoomId)
         (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         Button(onClick = viewModel::createRoom, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
         OutlinedButton(onClick = {
             if (!state.joining) viewModel.beginJoin() else viewModel.joinRoom()
-        }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) { Text(if (state.working && state.joining) "Joining..." else "Join the room") }
+        }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) { Text(if (state.working && state.joining) "Joining..." else "Join a room") }
     }
 }
 
