@@ -32,6 +32,10 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
         factory = DirectChatViewModel.factory(repository, roomId, currentUid, friendUid, currentUsername, currentAvatarUrl),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    DisposableEffect(viewModel) {
+        viewModel.setScreenVisible(true)
+        onDispose { viewModel.setScreenVisible(false) }
+    }
     LaunchedEffect(currentUsername, currentAvatarUrl) {
         viewModel.updateCurrentUser(currentUsername, currentAvatarUrl)
     }
