@@ -17,7 +17,6 @@ data class SearchUser(
     val avatarUrl: String = "",
     val department: String = "",
     val major: String = "",
-    val experience: Int = 0,
 )
 
 enum class FriendshipStatus {
@@ -91,7 +90,6 @@ object FirebaseSocialService {
                         avatarUrl = document.getString("avatarUrl").orEmpty(),
                         department = document.getString("department").orEmpty(),
                         major = document.getString("major").orEmpty(),
-                        experience = (document.getLong("experience") ?: 0L).toInt(),
                     )
                 }
                 onComplete(users, null)
@@ -139,7 +137,6 @@ object FirebaseSocialService {
                         avatarUrl = document.getString("avatarUrl").orEmpty(),
                         department = document.getString("department").orEmpty(),
                         major = document.getString("major").orEmpty(),
-                        experience = (document.getLong("experience") ?: 0L).toInt(),
                     ),
                     null,
                 )

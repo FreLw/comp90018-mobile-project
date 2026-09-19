@@ -6,7 +6,6 @@ data class ProfileExtras(
     val phone: String = "",
     val department: String = "",
     val major: String = "",
-    val experience: Int = 720,
 )
 
 data class AppSettings(
@@ -23,11 +22,11 @@ object ProfilePreferences {
 
     fun loadExtras(context: Context, uid: String): ProfileExtras {
         val preferences = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+        preferences.edit().remove("${uid}_experience").apply()
         return ProfileExtras(
             phone = preferences.getString("${uid}_phone", "").orEmpty(),
             department = preferences.getString("${uid}_department", "").orEmpty(),
             major = preferences.getString("${uid}_major", "").orEmpty(),
-            experience = preferences.getInt("${uid}_experience", 720),
         )
     }
 
@@ -36,7 +35,7 @@ object ProfilePreferences {
             .putString("${uid}_phone", extras.phone.trim())
             .putString("${uid}_department", extras.department.trim())
             .putString("${uid}_major", extras.major.trim())
-            .putInt("${uid}_experience", extras.experience)
+            .remove("${uid}_experience")
             .apply()
     }
 
@@ -60,16 +59,4 @@ object ProfilePreferences {
             .putBoolean("${uid}_precise_location", settings.preciseLocation)
             .apply()
     }
-}
-
-fun levelForExperience(experience: Int): Int = (experience.coerceAtLeast(0) / 500) + 1
-
-fun experienceInCurrentLevel(experience: Int): Int = experience.coerceAtLeast(0) % 500
-
-fun titleForLevel(level: Int): String = when (level) {
-    1 -> "New Explorer"
-    2 -> "Trail Seeker"
-    3 -> "Relic Scout"
-    4 -> "Campus Pathfinder"
-    else -> "Treasure Master"
 }

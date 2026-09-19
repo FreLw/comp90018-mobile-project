@@ -1,34 +1,29 @@
 package com.comp90018.app.navigation
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Forum
-import androidx.compose.material.icons.rounded.Group
-import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Badge
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.comp90018.app.Brand
-import com.comp90018.app.Muted
+import com.comp90018.app.R
 
-enum class AppDestination(val label: String, val icon: ImageVector) {
-    Friends("Friends", Icons.Rounded.Group),
-    Rooms("Rooms", Icons.Rounded.Forum),
-    Map("Map", Icons.Rounded.LocationOn),
-    Treasure("Treasure", Icons.Rounded.Star),
-    Profile("Profile", Icons.Rounded.Person),
+enum class AppDestination(val label: String, @param:DrawableRes val iconRes: Int) {
+    Friends("Friends", R.drawable.nav_friends_game),
+    Rooms("Rooms", R.drawable.nav_rooms_game),
+    Map("Map", R.drawable.nav_map_game),
+    Treasure("Treasure", R.drawable.nav_treasure_game),
+    Profile("Profile", R.drawable.nav_profile_game),
 }
 
 @Composable
@@ -38,7 +33,7 @@ fun AppBottomNavigation(
     unreadRoomMessages: Int,
     onSelected: (AppDestination) -> Unit,
 ) {
-    NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 10.dp) {
         AppDestination.entries.forEach { destination ->
             val isRooms = destination == AppDestination.Rooms
             val isFriends = destination == AppDestination.Friends
@@ -47,14 +42,15 @@ fun AppBottomNavigation(
                 onClick = { onSelected(destination) },
                 icon = {
                     Box(
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(38.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            destination.icon,
-                            destination.label,
-                            tint = if (selected == destination) Brand else Muted,
-                            modifier = Modifier.size(24.dp),
+                        Image(
+                            painter = painterResource(destination.iconRes),
+                            contentDescription = destination.label,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .alpha(if (selected == destination) 1f else 0.88f),
                         )
                         if (isRooms && unreadRoomMessages > 0) {
                             Badge(

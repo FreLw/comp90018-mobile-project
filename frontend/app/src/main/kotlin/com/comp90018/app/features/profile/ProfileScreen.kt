@@ -119,7 +119,6 @@ private fun ProfileOverview(
                 ProfileAvatar(profile.avatarUrl, email, 112.dp)
                 Text(profile.username.ifBlank { email }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
                 Text(email, color = Muted, style = MaterialTheme.typography.bodyMedium)
-                ExperienceCard(extras.experience)
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         ProfileDetail("Current room ID", currentRoomId ?: "Not in a room")
@@ -149,27 +148,6 @@ private fun ProfileOverview(
         HorizontalDivider(color = BrandSoft)
         Text("About", color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
         Text("Lost Treasures · Version 1.0", color = Muted, style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-@Composable
-private fun ExperienceCard(experience: Int) {
-    val level = levelForExperience(experience)
-    val levelProgress = experienceInCurrentLevel(experience)
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = BrandSoft)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                Text("Level $level", color = Ink, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("$experience XP", color = Brand, fontWeight = FontWeight.Bold)
-            }
-            LinearProgressIndicator(
-                progress = { levelProgress / 500f },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
-                color = Brand,
-                trackColor = Color.White,
-            )
-            Text("${500 - levelProgress} XP to Level ${level + 1}", color = Muted, style = MaterialTheme.typography.labelMedium)
-        }
     }
 }
 
@@ -239,7 +217,7 @@ private fun EditProfileScreen(
             onClick = {
                 saving = true
                 message = null
-                val savedExtras = ProfileExtras(phone.trim(), department.trim(), major.trim(), extras.experience)
+                val savedExtras = ProfileExtras(phone.trim(), department.trim(), major.trim())
                 val finishSave: (String?) -> Unit = { error ->
                     saving = false
                     if (error == null) {

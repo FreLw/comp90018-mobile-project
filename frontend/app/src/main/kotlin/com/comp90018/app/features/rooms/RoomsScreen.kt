@@ -2,6 +2,7 @@ package com.comp90018.app.features.rooms
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,12 +15,12 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
+import com.comp90018.app.R
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
 import com.comp90018.app.data.social.FirebaseSocialRepository
@@ -49,7 +51,9 @@ fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserP
 @Composable
 private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel) {
     Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Box(Modifier.size(78.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.PersonOff, null, tint = Brand, modifier = Modifier.size(36.dp)) }
+        Box(Modifier.size(86.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) {
+            Image(painterResource(R.drawable.nav_rooms_game), null, modifier = Modifier.size(76.dp))
+        }
         Text("You haven't joined a room yet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
         Text("Join an existing room or create a new one to hunt for treasure together.", color = Muted, textAlign = TextAlign.Center)
         if (state.joining) AppTextField("Enter room ID", state.roomIdInput, viewModel::updateRoomId)

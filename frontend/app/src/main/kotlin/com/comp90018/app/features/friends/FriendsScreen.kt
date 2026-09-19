@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,19 +16,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Group
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material3.Button
@@ -36,7 +32,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,7 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,19 +57,18 @@ import com.comp90018.app.IncomingFriendRequest
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicRed
+import com.comp90018.app.R
 import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.profile.ProfileAvatar
-import com.comp90018.app.features.profile.ProfilePreferences
-import com.comp90018.app.features.profile.levelForExperience
-import com.comp90018.app.features.profile.experienceInCurrentLevel
-import com.comp90018.app.features.profile.titleForLevel
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.ui.components.ChatComposer
 import com.comp90018.app.ui.components.EmptyState
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
+
+private enum class FriendsPage { Main, Requests, Finder }
 
 /** Renders friend state and delegates social actions to [FriendsViewModel]. */
 @Composable
@@ -148,51 +142,51 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
         }
         return
     }
-    if (addFriendMode) {
-        FriendFinder(
-            user = user,
-            firestore = firestore,
-            currentUsername = profile?.username.orEmpty(),
-            currentAvatarUrl = profile?.avatarUrl.orEmpty(),
-            knownFriendIds = (state.friends + simulatedFriends).map { it.uid }.toSet(),
-            onClose = { addFriendMode = false },
-        )
-        return
-    }
-
     val mergedState = state.copy(friends = (state.friends + simulatedFriends).distinctBy { it.uid })
     val mergedRequests = state.requests + simulatedRequests
+    val page = when {
+        addFriendMode -> FriendsPage.Finder
+        state.showRequests -> FriendsPage.Requests
+        else -> FriendsPage.Main
+    }
     AnimatedContent(
-        targetState = state.showRequests,
+        targetState = page,
         transitionSpec = {
-            if (targetState) {
+            if (targetState != FriendsPage.Main) {
                 (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it / 3 } + fadeOut())
             } else {
                 (slideInHorizontally { it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
             }
         },
-        label = "friend_requests_page",
-    ) { showingRequests ->
-        if (showingRequests) {
-            FriendRequestsScreen(
-                requests = mergedRequests,
-                onBack = viewModel::toggleRequests,
-                onAccept = acceptRequest,
-                onDecline = declineRequest,
-                onOpenRequest = { viewingRequest = it },
+        label = "friends_pages",
+    ) { visiblePage ->
+        when (visiblePage) {
+            FriendsPage.Finder -> FriendFinder(
+                user = user,
+                firestore = firestore,
+                currentUsername = profile?.username.orEmpty(),
+                currentAvatarUrl = profile?.avatarUrl.orEmpty(),
+                knownFriendIds = mergedState.friends.map { it.uid }.toSet(),
+                onClose = { addFriendMode = false },
             )
-        } else {
-            FriendsContent(
-                state = mergedState,
-                profile = profile,
-                requestCount = mergedRequests.size,
-                onAddFriend = { addFriendMode = true },
-                onOpenOwnProfile = onOpenOwnProfile,
-                onToggleRequests = viewModel::toggleRequests,
-                onOpenChat = { friend ->
-                    if (friend.uid.startsWith("mock_")) mockChatFriend = friend else viewModel.openChat(friend)
-                },
-            )
+            FriendsPage.Requests -> FriendRequestsScreen(
+                    requests = mergedRequests,
+                    onBack = viewModel::toggleRequests,
+                    onAccept = acceptRequest,
+                    onDecline = declineRequest,
+                    onOpenRequest = { viewingRequest = it },
+                )
+            FriendsPage.Main -> FriendsContent(
+                    state = mergedState,
+                    profile = profile,
+                    requestCount = mergedRequests.size,
+                    onAddFriend = { addFriendMode = true },
+                    onOpenOwnProfile = onOpenOwnProfile,
+                    onToggleRequests = viewModel::toggleRequests,
+                    onOpenChat = { friend ->
+                        if (friend.uid.startsWith("mock_")) mockChatFriend = friend else viewModel.openChat(friend)
+                    },
+                )
         }
     }
 }
@@ -207,10 +201,6 @@ private fun FriendsContent(
     onToggleRequests: () -> Unit,
     onOpenChat: (FriendSummary) -> Unit,
 ) {
-    val context = LocalContext.current
-    val experience = profile?.uid?.let { ProfilePreferences.loadExtras(context, it).experience } ?: 0
-    val level = levelForExperience(experience)
-    val levelProgress = experienceInCurrentLevel(experience)
     Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -220,18 +210,11 @@ private fun FriendsContent(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(profile?.username.orEmpty().ifBlank { "Explorer" }, fontWeight = FontWeight.Bold, color = Ink, style = MaterialTheme.typography.titleMedium)
-                Text("L$level · ${titleForLevel(level)}", color = Brand, style = MaterialTheme.typography.labelLarge)
-                LinearProgressIndicator(
-                    progress = { levelProgress / 500f },
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(5.dp).clip(CircleShape),
-                    color = Brand,
-                    trackColor = BrandSoft,
-                )
-                Text("$experience XP", color = Muted, style = MaterialTheme.typography.labelSmall)
+                Text("Ready for the next adventure", color = Muted, style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onAddFriend) { androidx.compose.material3.Icon(Icons.Rounded.Add, "Add friend", tint = Brand) }
             Box {
-                IconButton(onClick = onToggleRequests) { androidx.compose.material3.Icon(Icons.Rounded.Notifications, "Friend requests", tint = Ink) }
+                IconButton(onClick = onToggleRequests) { androidx.compose.material3.Icon(Icons.Rounded.Notifications, "Notifications", tint = Ink) }
                 if (requestCount > 0) Badge(Modifier.align(Alignment.TopEnd), containerColor = RelicRed) { Text(requestCount.toString()) }
             }
         }
@@ -270,7 +253,7 @@ private fun NoFriendsCard(onAddFriend: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(Modifier.size(72.dp).background(BrandSoft, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.Icon(Icons.Rounded.Group, null, tint = Brand, modifier = Modifier.size(34.dp))
+                Image(painterResource(R.drawable.nav_friends_game), null, modifier = Modifier.size(64.dp))
             }
             Text("No friends yet", fontWeight = FontWeight.Bold, color = Ink)
             Text("Find an explorer and start hunting together.", color = com.comp90018.app.Muted)
@@ -294,9 +277,6 @@ private fun FriendRequestsScreen(
     Column(Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { androidx.compose.material3.Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-            Text("Friend requests", color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.weight(1f))
-            if (requests.isNotEmpty()) Badge(containerColor = RelicRed) { Text(requests.size.toString()) }
         }
         RequestsList(requests, onAccept, onDecline, onOpenRequest)
     }
@@ -315,9 +295,12 @@ private fun RequestsList(
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 ProfileAvatar("", request.fromUsername, 44.dp)
                 Spacer(Modifier.width(12.dp))
-                Text(request.fromUsername, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Ink)
-                IconButton(onClick = { onDecline(request) }) { androidx.compose.material3.Icon(Icons.Rounded.Close, "Decline", tint = RelicRed) }
-                IconButton(onClick = { onAccept(request) }) { androidx.compose.material3.Icon(Icons.Rounded.Check, "Accept", tint = Brand) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("${request.fromUsername} sent you a friend request", fontWeight = FontWeight.SemiBold, color = Ink)
+                    Text("Hi, would you like to team up?", color = Muted, style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = { onDecline(request) }) { Text("Decline", color = RelicRed) }
+                TextButton(onClick = { onAccept(request) }) { Text("Accept", color = Brand) }
             }
         }
     }
@@ -353,20 +336,17 @@ private fun FriendRequestProfileScreen(
         if (email.isNotBlank()) Text(email, color = Muted)
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Friend request", color = Brand, fontWeight = FontWeight.Bold)
-                Text(if (bio.isBlank()) "$username would like to be your friend." else bio, color = Ink)
+                Text("$username sent you a friend request", color = Ink, fontWeight = FontWeight.Bold)
+                Text("Hi, would you like to team up?", color = Muted)
+                if (bio.isNotBlank()) Text(bio, color = Ink)
             }
         }
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             androidx.compose.material3.OutlinedButton(onClick = onDecline, modifier = Modifier.weight(1f)) {
-                androidx.compose.material3.Icon(Icons.Rounded.Close, null)
-                Spacer(Modifier.width(6.dp))
                 Text("Decline")
             }
             Button(onClick = onAccept, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
-                androidx.compose.material3.Icon(Icons.Rounded.Check, null)
-                Spacer(Modifier.width(6.dp))
                 Text("Accept")
             }
         }

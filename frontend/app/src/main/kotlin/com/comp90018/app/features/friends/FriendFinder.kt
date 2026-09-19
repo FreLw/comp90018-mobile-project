@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
@@ -26,9 +24,6 @@ import com.comp90018.app.*
 import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.features.profile.ProfileAvatar
-import com.comp90018.app.features.profile.levelForExperience
-import com.comp90018.app.features.profile.experienceInCurrentLevel
-import com.comp90018.app.features.profile.titleForLevel
 import com.comp90018.app.ui.components.AppTextField
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -112,7 +107,9 @@ private fun CandidateRow(candidate: SearchUser, isFriend: Boolean, requestSent: 
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(candidate.username, color = Ink, fontWeight = FontWeight.Bold)
-                ExperienceSummary(candidate.experience)
+                candidate.displayName.takeIf { it.isNotBlank() }?.let {
+                    Text(it, color = Muted, style = MaterialTheme.typography.bodySmall)
+                }
             }
             if (isFriend) {
                 Text("Added", color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
@@ -141,10 +138,8 @@ private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiStat
         IconButton(onClick = viewModel::searchAgain, modifier = Modifier.align(Alignment.Start)) {
             Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
         }
-        if (state.requestMode) Text("Friend request", color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
         ProfileAvatar(target.avatarUrl, target.username, 96.dp)
         Text(target.username, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
-        ExperienceSummary(target.experience, Modifier.fillMaxWidth(0.72f))
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 target.displayName.takeIf { it.isNotBlank() }?.let { CandidateDetail("Name", it) }
@@ -163,21 +158,6 @@ private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiStat
             FriendshipStatus.None -> FriendAction(if (state.requestMode) "Send friend request" else "Add friend", state.working) { viewModel.sendFriendRequest() }
             null -> CircularProgressIndicator(color = Brand)
         }
-    }
-}
-
-@Composable
-private fun ExperienceSummary(experience: Int, modifier: Modifier = Modifier) {
-    val level = levelForExperience(experience)
-    val progress = experienceInCurrentLevel(experience)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("L$level · ${titleForLevel(level)} · $experience XP", color = Brand, style = MaterialTheme.typography.labelMedium)
-        LinearProgressIndicator(
-            progress = { progress / 500f },
-            modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
-            color = Brand,
-            trackColor = BrandSoft,
-        )
     }
 }
 

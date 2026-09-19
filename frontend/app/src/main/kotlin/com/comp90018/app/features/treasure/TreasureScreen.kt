@@ -1,6 +1,7 @@
 package com.comp90018.app.features.treasure
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Groups
@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.comp90018.app.Brand
@@ -53,6 +54,7 @@ import com.comp90018.app.BrandSoft
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicGold
+import com.comp90018.app.R
 import com.comp90018.app.TeamRoom
 import com.comp90018.app.data.rooms.TeamRoomRepository
 import com.comp90018.app.features.map.sampleMapRelics
@@ -68,7 +70,6 @@ private enum class CollectionFilter(val label: String) {
 private data class TreasureTask(
     val title: String,
     val detail: String,
-    val reward: String,
     val progress: Float,
     val icon: ImageVector,
 )
@@ -161,9 +162,9 @@ private fun TreasureTab(
 @Composable
 private fun TasksContent(room: TeamRoom?, activeRoomId: String?, roomError: String?) {
     val tasks = listOf(
-        TreasureTask("Visit a treasure", "Open the map and reach any marked location.", "+120 XP", 0.65f, Icons.Rounded.Explore),
-        TreasureTask("Hunt together", "Explore with both members of your room.", "+180 XP", if (room?.memberIds?.size == 2) 1f else 0.5f, Icons.Rounded.Groups),
-        TreasureTask("Recover a fragment", "Finish a location search to unlock a collection piece.", "+250 XP", 0f, Icons.Rounded.Stars),
+        TreasureTask("Visit a treasure", "Open the map and reach any marked location.", 0.65f, Icons.Rounded.Explore),
+        TreasureTask("Hunt together", "Explore with both members of your room.", if (room?.memberIds?.size == 2) 1f else 0.5f, Icons.Rounded.Groups),
+        TreasureTask("Recover a fragment", "Finish a location search to unlock a collection piece.", 0f, Icons.Rounded.Stars),
     )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -259,10 +260,7 @@ private fun TaskCard(task: TreasureTask) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Row(Modifier.fillMaxWidth()) {
-                    Text(task.title, Modifier.weight(1f), color = Ink, fontWeight = FontWeight.Bold)
-                    Text(task.reward, color = RelicGold, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                }
+                Text(task.title, color = Ink, fontWeight = FontWeight.Bold)
                 Text(task.detail, color = Muted, style = MaterialTheme.typography.bodySmall)
                 LinearProgressIndicator(
                     progress = { task.progress },
@@ -317,12 +315,11 @@ private fun CollectionContent(filter: CollectionFilter, onFilterChanged: (Collec
                         Modifier.size(58.dp).background(if (found) BrandSoft else Color(0xFFF0F2F1), RoundedCornerShape(18.dp)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            if (found) Icons.Rounded.AutoAwesome else Icons.Rounded.Lock,
-                            null,
-                            tint = if (found) Brand else Muted.copy(alpha = 0.55f),
-                            modifier = Modifier.size(30.dp),
-                        )
+                        if (found) {
+                            Image(painterResource(R.drawable.nav_treasure_game), null, modifier = Modifier.size(48.dp))
+                        } else {
+                            Icon(Icons.Rounded.Lock, null, tint = Muted.copy(alpha = 0.55f), modifier = Modifier.size(30.dp))
+                        }
                     }
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -356,7 +353,7 @@ private fun CollectionSummary(found: Int, total: Int) {
     ) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(58.dp).background(RelicGold.copy(alpha = 0.16f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Inventory2, null, tint = RelicGold, modifier = Modifier.size(30.dp))
+                Image(painterResource(R.drawable.nav_treasure_game), null, modifier = Modifier.size(52.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
