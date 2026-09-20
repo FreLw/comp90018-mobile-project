@@ -31,6 +31,7 @@ class TeamRoomChatViewModel(
     val uiState: StateFlow<TeamRoomChatUiState> = mutableUiState.asStateFlow()
     private val roomSubscription: Subscription
     private val messagesSubscription: Subscription
+    private var isScreenVisible = false
 
     init {
         roomSubscription = repository.observeRoom(roomId) { room, error ->
@@ -41,6 +42,14 @@ class TeamRoomChatViewModel(
         }
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
             mutableUiState.value = mutableUiState.value.copy(messages = messages, error = error ?: mutableUiState.value.error)
+            if (isScreenVisible) repository.markMessagesRead(userId)
+        }
+    }
+
+    /** Only clear the badge while this conversation is actually on screen. */
+    fun setScreenVisible(visible: Boolean) {
+        isScreenVisible = visible
+        if (visible && mutableUiState.value.messages.isNotEmpty()) {
             repository.markMessagesRead(userId)
         }
     }
@@ -51,14 +60,16 @@ class TeamRoomChatViewModel(
         val text = mutableUiState.value.input.trim()
         if (text.isBlank() || mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(input = "", error = null, sending = true)
-        repository.sendMessage(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, text) { error ->
+        val recipientId = mutableUiState.value.room?.memberIds?.firstOrNull { it != userId }
+        repository.sendMessage(roomId, userId, recipientId, senderName.ifBlank { "You" }, senderAvatarUrl, text) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
         }
     }
     fun sendImage(uri: Uri, senderName: String, senderAvatarUrl: String) {
         if (mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
-        repository.sendImage(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, uri) { error ->
+        val recipientId = mutableUiState.value.room?.memberIds?.firstOrNull { it != userId }
+        repository.sendImage(roomId, userId, recipientId, senderName.ifBlank { "You" }, senderAvatarUrl, uri) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
         }
     }

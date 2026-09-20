@@ -43,10 +43,10 @@ class FirebaseTeamRoomRepository(
     override fun loadMembers(memberIds: List<String>, onComplete: (List<TeamRoomMember>) -> Unit) =
         FirebaseTeamRoomService.loadMembers(firestore, memberIds, onComplete)
 
-    override fun sendMessage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
-        FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, senderName, senderAvatarUrl, text, onComplete)
-    override fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
-        FirebaseTeamRoomService.sendImage(firestore, roomId, senderId, senderName, senderAvatarUrl, imageUri, onComplete)
+    override fun sendMessage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, recipientId, senderName, senderAvatarUrl, text, onComplete)
+    override fun sendImage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.sendImage(firestore, roomId, senderId, recipientId, senderName, senderAvatarUrl, imageUri, onComplete)
 
     override fun leaveRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.leaveRoom(firestore, roomId, userId, onComplete)
