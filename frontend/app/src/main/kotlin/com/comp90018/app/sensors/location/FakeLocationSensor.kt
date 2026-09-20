@@ -5,12 +5,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class FakeLocationSensor(
-    private val config: LocationConfig = LocationConfig(),
+    config: LocationConfig = LocationConfig(),
 ) : LocationSensor {
     private val _output = MutableStateFlow(LocationOutput())
     override val output: StateFlow<LocationOutput> = _output.asStateFlow()
 
     private var currentLocation: GeoCoordinate? = null
+    private var activeConfig = config
     private var targetLocation: GeoCoordinate? = null
     private var timestampNanos: Long? = null
     private var accuracyMeters: Double? = null
@@ -19,6 +20,18 @@ class FakeLocationSensor(
     override fun setTargetLocation(targetLocation: GeoCoordinate?) {
         this.targetLocation = targetLocation
         refreshOutput()
+    }
+
+    override fun setTargetLocation(
+        targetLocation: GeoCoordinate?,
+        insideRadiusMeters: Double,
+        nearbyRadiusMeters: Double,
+    ) {
+        activeConfig = activeConfig.copy(
+            insideRadiusMeters = insideRadiusMeters,
+            nearbyRadiusMeters = nearbyRadiusMeters,
+        )
+        setTargetLocation(targetLocation)
     }
 
     override fun start() {
@@ -48,7 +61,7 @@ class FakeLocationSensor(
                 currentLocation = currentLocation,
                 targetLocation = targetLocation,
                 timestampNanos = timestampNanos,
-                config = config,
+                config = activeConfig,
                 permission = LocationPermissionState.GRANTED,
                 availability = LocationAvailabilityState.AVAILABLE,
                 accuracyMeters = accuracyMeters,

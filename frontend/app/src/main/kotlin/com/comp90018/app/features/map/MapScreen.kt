@@ -79,7 +79,11 @@ fun MapScreen() {
     }
 
     LaunchedEffect(selectedRelic) {
-        locationSensor.setTargetLocation(selectedRelic.coordinate)
+        locationSensor.setTargetLocation(
+            targetLocation = selectedRelic.coordinate,
+            insideRadiusMeters = selectedRelic.insideRadiusMeters,
+            nearbyRadiusMeters = selectedRelic.nearbyRadiusMeters,
+        )
     }
 
     LaunchedEffect(hasLocationPermission) {
@@ -253,7 +257,10 @@ private fun renderCurrentLocation(
     currentLocationMarker: Marker?,
     currentLocation: GeoCoordinate?,
 ): Marker? {
-    if (currentLocation == null) return currentLocationMarker
+    if (currentLocation == null) {
+        currentLocationMarker?.remove()
+        return null
+    }
     val position = currentLocation.toLatLng()
     if (currentLocationMarker != null) {
         currentLocationMarker.position = position

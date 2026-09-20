@@ -24,7 +24,8 @@ not directly invoke Firebase services or Firestore/Storage APIs.
 2. Open this `frontend` directory in Android Studio.
 3. Configure Android Studio to use JDK 21 and install Android SDK Platform 37.
 4. Add a Google Maps API key to your local Gradle user properties file. Do not
-   commit the key to this repository.
+   commit the key to this repository. Alternatively, copy
+   `local.properties.sample` to `local.properties` and set the key there.
 
    ```properties
    # ~/.gradle/gradle.properties
