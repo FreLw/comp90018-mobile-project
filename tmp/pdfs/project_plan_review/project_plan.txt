@@ -1,0 +1,426 @@
+
+===== PAGE 1 =====
+Project Plan - Lost Treasures of UniMelb
+GitHub Repository: https://github.com/FreLw/comp90018-mobile-project
+Member Identification (T01/01 - 01)
+Name
+Student ID
+GitHub Username
+Email Address
+Ruoning Ren
+1690503
+renruoning
+ruoningr@student.unimelb.edu.au
+Zhuoer Liang
+1700596
+ZhuoerLiang
+zhuoerliang@student.unimelb.edu.au
+Fan Li
+1597821
+FreLw
+fanli@student.unimelb.edu.au
+Yunxiao Lu
+1672276
+YUNXIAOLUOO
+yunxiaolu@student.unimelb.edu.au
+Jiayi Yang
+1711645
+lrisYang624
+jyang4898@student.unimelb.edu.au
+Yunzhe Wang
+1908918
+LukeYzw
+yunzhewang@student.unimelb.edu.au
+1
+Project Overview
+1.1
+Problem and Motivation
+Most navigation apps are designed to get users from one place to another as quickly as possible.
+For our project, we wanted to use the University of Melbourne campus in a different way: not
+simply as a map, but as part of the interaction itself.
+Our idea is a campus treasure-hunting app where users search for fictional relics around selected
+university landmarks. Reaching the correct location is only the first step. Depending on the
+treasure, the user may also need to stop moving, keep the phone steady, or face a particular
+direction before the relic can be found. We also wanted the project to involve interaction between
+users rather than making every treasure a single-player task. For this reason, some relics will
+be collaborative. Players can join the same team using a team code, communicate through the
+in-app chat, and complete different parts of the same challenge.
+The main idea is therefore to make movement, orientation, location and teamwork part of the
+treasure-hunting process rather than using GPS as the only trigger.
+1.2
+Proposed Application
+Lost Treasures of UniMelb is an exploration game for Android set on the University of Melbourne
+campus. Users can view the artefacts available on a map of the campus, choose one to explore,
+and then head to the corresponding search area.
+While the user is exploring, the app reads various types of data from the phone. Location
+services are used to estimate the user’s position and their distance from the target. Accelerometer
+readings are used to detect movement and determine whether the phone is being held steadily.
+Orientation data is used to estimate the direction in which the device is facing.
+Once the user is close enough to a relic, the app switches from normal exploration mode to a
+‘relic scanner’ interface. At this stage, the user may be asked to stop, stabilise their phone and
+rotate it whilst following the on-screen instructions. The contextual engine uses the processed
+sensor data to determine when the required conditions are met. The relic can then be revealed
+and added to the user’s collection.
+Some treasures are designed as ‘collaborative relics’. A player creates a team and shares the
+generated code with other players. Team members can use the chat function to discuss clues
+1
+
+===== PAGE 2 =====
+and coordinate their actions. A collaborative task might, for example, require different players
+to reach designated areas or satisfy different orientation and stability conditions. Each phone
+checks the status of its own sensors, whilst key information on progress is shared via the cloud
+so that the team can tackle the challenge together.
+The cloud will also be used to host treasure content, team information, chat messages and
+collaborative progress. Notifications will be sent when appropriate to inform players of events
+relating to the treasures or their team.
+1.3
+Core Features
+The MVP will include the following major features:
+• Campus Treasure Map: shows Solo and Collaborative Relics around the University of
+Melbourne campus.
+• Location-Based Exploration: tracks the user’s position, distance from the selected relic
+and nearby search area.
+• Motion and Stability Detection: identifies movement and whether the phone is steady
+enough for scanning.
+• Direction Detection: estimates device heading and provides feedback when the user needs
+to change direction.
+• Relic Scanner: combines sensor feedback during the final search stage.
+• Context-Based Unlocking: uses several sensor conditions together before revealing a relic.
+• Treasure Collection: stores previously discovered relics.
+• Team Code and Team Room: supports creating and joining multiplayer exploration
+sessions.
+• Team Chat: allows players to share clues and coordinate tasks.
+• Collaborative Relics: requires multiple players to complete parts of the same treasure
+challenge.
+• Cloud Services: stores or synchronises treasure, team, chat and challenge information.
+• Notifications: provides relevant treasure and team updates.
+2
+System Architecture
+2.1
+Module Architecture
+The application is divided into six main areas: motion and stability detection, positioning/GPS,
+compass and orientation, contextual engine, user interface, and internet services/notifications/collaboration.
+Sensor data is processed primarily on the phone. Each detection module produces information
+that can be utilised by the contextual engine without the latter having to process the raw sensor
+data directly. This allows the responsibilities of the modules to be separated and facilitates the
+independent development of their various parts by group members.
+The contextual engine aggregates this data and determines which stage of the exploration the
+user is currently at. For collaborative challenges, the phone sends only the necessary information
+regarding the players’ progress or readiness to the cloud. The cloud is then responsible for
+maintaining consistency in the team’s status across the various devices.
+The user interface links these components via the campus map, the relic scanner, treasure
+collection, the team room and the chat screens.
+2
+
+===== PAGE 3 =====
+2.2
+Sensor and Data Flow
+The sensor data is first processed locally on the Android device. Accelerometer readings are
+converted into movement and stability information, location data is used to determine proximity
+to a relic, and orientation detection is used to estimate the direction in which the user is facing.
+These processed values are transmitted to the context engine, which uses them to control the
+current exploration phase and the scanner’s feedback. In the case of a solo relic, the result can
+remain on the local device and directly influence the treasure-unlocking process.
+In the case of a collaborative relic, the progress of the players involved is also sent to the cloud.
+The team status on the server side combines the progress of the participating players and sends
+updates back to their devices once the shared challenge is complete.
+Figure 1: Sensor and Data Flow
+.
+3
+
+===== PAGE 4 =====
+3
+Contribution Breakdown
+1) Jiayi Yang — Motion, Stability and Orientation Sensing action Module
+• Implement motion and stability detection with filtering and threshold tuning.
+• Develop orientation sensing to calculate device heading and directional alignment.
+• Apply smoothing and angular normalization to improve directional stability.
+• Generate structured Motion, Stability and Direction State outputs for the Context Engine.
+• Integrate and test sensor behavior within the Relic Scanner workflow on Android devices.
+2) Fan Li – GPS/Location Module
+• Implement the GPS/location sensing module using Android location services.
+• Handle location permissions, availability states, and basic fallback behavior.
+• Calculate current position, distance, proximity state, and target bearing for other modules.
+• Filter clearly inaccurate or stale location readings before they are used.
+• Test location-based checkpoint detection and prepare related demo evidence.
+3) Yunxiao Lu — User, Social and Multiplayer Module
+• Implement the user end database structure and store the account information.
+• Implement the user registration and login system and the communication system.
+• Implement the cooperative treasure-hunting system, including adding participants by entering
+the room code, managing the system generated tasks and assign to the room.
+4). Ruoning Ren—Code Integration and Context Engine Development
+• Responsible for integrating the different modules into one mobile app and writing integration
+tests to make sure the whole process can work correctly.
+• Help with version control and solve merge conflicts.
+• Design and build a simple rule-based context engine that combines data from gyroscope,
+GPS, and motion detection to check what situation the user is currently in.
+5) Zhuoer Liang – UI design and development
+• Design the interaction scenarios and methods, story plot and style, and main interface
+framework.
+• Implement navigation interface and logical relationships among screens, ensuring a clear
+interaction flow.
+• Vsualize information from sensors and the context engine, such as movement status and
+orientation.
+6) Yunzhe Wang — Historical Treasure System and Content Integration
+• Research and verify historical objects, photographs and events , and define their connections
+with locations. Define the treasure content structure.
+• Design the historical treasure experience, including the process from sensor-based unlocking
+to viewing the stylized 2D treasure and story.
+• Support the integration of treasure data with the cloud database and UI.
+• Test the complete treasure-unlocking workflow on Android devices and prepare related visual
+materials and evidence for the final report and demonstration video.
+4
+
+===== PAGE 5 =====
+4
+Justification & Feasibility of Plan
+4.1
+Material
+4.1.1
+Report and Video
+Our group will prepare a final report and a demonstration video based on the marking rubric.
+The report will explain how our application meets each criterion and provides evidence for the
+main features.
+The video will demonstrate the complete user experience on a real Android phone. The user
+will select a treasure location on the University of Melbourne campus, travel to the check-in
+area, and complete the required location, phone stability and direction conditions. After these
+conditions are met, the user can unlock a special digital treasure related to the building and
+learn about its history or a story that happened at that location. The video will also show that
+the sensor functions, cloud information, and user interface can work together as expected.
+4.1.2
+Compilation Screenshot
+Before the final submission, we will build the completed application in Android Studio. A
+screenshot of the Android Studio Console will be included in the final report to clearly show that
+the submitted version is completed successfully.
+4.1.3
+Commit Log
+Our group will use Git during the whole development process. Each member will use their own
+account to commit their work, and the commit messages will clearly describe the features, fixes or
+changes made. For Assignment 2, we will export the complete commit history with the authors,
+dates, and commit messages.
+4.1.4
+Itemized Contributions
+The final submission will include a one-page itemized contribution list for all group members.
+It will describe the actual tasks completed by each person, including implementation, module
+integration, interface design, and testing. The final contribution list will be based on completed
+work and Git records.
+4.2
+Implementation
+4.2.1
+Quality
+To make sure our code meets these standards, our group will follow the same coding conventions
+throughout the project. This includes naming conventions for variables, functions, and files, so
+the code stays consistent no matter who writes it. We will also use the same code formatting
+style. Before merging a new feature into the main branch, we will also review each other’s code.
+During the review, we will check whether the code follows our naming and formatting conventions
+and whether it is easy for other team members to understand.
+To keep the code readable and easy to understand, we will use clear and meaningful names for
+variables and functions instead of unclear names such as “data1” or “temp”. For each part of the
+project, we will add comments to explain the main logic and why we implemented it in a certain
+way. This will help other team members understand the code without having to ask the original
+author.
+5
+
+===== PAGE 6 =====
+We believe these practices will help us keep the code organized and consistent throughout the
+project. They will also make it easier for all six team members to work on the same codebase
+and reduce confusion when combining different parts of the project.
+4.2.2
+Sensors
+We are planning to use multiple sensors, including gyroscope, GPS and motion sensor, to support
+our landmark-based app. Instead of using each sensor separately, we want to combine the data
+from different sensors to get a better understanding of user’s location, direction and movement.
+GPS will give the user’s real-time location so the app can detect when they arrive at a landmark,
+and trigger a cultural pop-up, such as information about unimelb. Gyroscopes will help detect
+the direction the user is facing, which can be used to guide the user towards the next landmark.
+Motion detection will track user’s movement, which can be used for navigation and for tracking
+whether the user completes the exercise.
+We won’t simply use one sensor API and read its raw values. Instead, we will combine information
+from different sensors to make the result more reliable. For example, different sensors can help
+reduce the limitations of using only one sensor. We will also do simple data smoothing to reduce
+noise from sensor readings, so the location detection and arrival trigger feel more accurate and
+reliable for the user. Also, these three sensors are commonly available on most mobile devices, so
+we don’t need extra hardware.
+In addition, we play to add a social feature that allows users to connect with other users and
+participate in activities together. GPS can also be used to identify nearby users who choose to
+make themselves visible, allowing users to discover potential friends in the same area. Friends
+can also invite each other to complete landmark-based challenges and compare their progress,
+connecting the social feature with existing navigation and exercise features.
+4.2.3
+Connectivity
+Our mobile app will use Internet data and cloud-based databases to support the treasure finding
+experience. For the users’ location part, we plan to use Google Maps API to display the map, the
+users’ location, and nearby landmarks at the University of Melbourne. The landmarks data will
+be stored in an online database to provide description, cultural information and images. When
+the users approach a treasured landmark, the app will display the corresponding landmarks’
+content.
+In addition, we plan to design a social friend-participant system. A user can create a treasure-
+hunting session and get a room ID which can be used for sharing with their friends. After a
+friend joins the room, the tressure progress will be stored in the cloud database. Two users can
+share the same treasure target and cooperate with each other by completing the tasks to get the
+treasure.
+Every time the users request Google Maps, it will be handled asynchronously in order not to
+block users’ interfaces. For error handling, when the network is not stable, we will provide
+basic information to the users. Meanwhile, previously loaded landmark information can still be
+accessed because it is cached locally in the application.
+We believe that this design meets the connectivity requirement because we will apply Google
+Maps API in our main functions including displaying the map, showing the location with the
+usage of GPS. And the cloud-based database is used for extensibility and scalability.
+6
+
+===== PAGE 7 =====
+4.2.4
+Responsiveness
+Our mobile app will show the users’ location, movement, movement stage, and sensor without
+substantial delay. For the sensor usage, the GPS will continuously update the user’s position on
+Google Maps, while the motion and accelerometer will show the direction and movement state of
+the users. When the user is close to the treasure target, the GPS will quickly give the signal and
+update the progress to show the target landmarks’ information.
+For the social treasure-hunting room feature, when a friend joins a shared room, they will receive
+different tasks for the same target treasure. The app will update the room status and task
+progress quickly so that all players can see the latest information. Network requests will run in
+the background to keep the interface responsive.
+To reduce lag, sensor processing will be lightweight and easy to calculate. When designing the
+structure of the app, we should avoid unnecessary UI and request updates, what’s more, Network
+request should be handled asynchronously to prevent blocking and heavy delay. To keep the
+performance-delay balance, we will set a reasonable hyperparameter for the update frequency
+after tests.
+To meet the responsiveness requirement, the design can use the sensors to get the user’s location,
+movement, and direction and reflect them in the interface with minimal delay.
+4.2.5
+Technical depth
+We want the app to use some algorithms for localization and sensor data. First, we plan to build
+a context engine that combines GPS, gyroscope, and accelerometer data using sensor fusion.
+This should give us a better idea of the user’s location and movement, instead of relying on GPS
+alone.
+For localization, we plan to use geofencing algorithm. Each landmark will have a certain radius
+on the map, and the app will check the user’s real-time GPS location to see if they entered this
+area. When the user reaches a landmark, the app will show a culture pop-up and an exercise
+task. We will also look at the motion sensor data when triggering these events. This can help
+us check whether the user is actually moving towards the landmark, rather than triggering the
+event based only on a GPS update.
+We also plan to use location information for our social features. For example, the app can find
+other users nearby and allow users to add them as friends. Friends can then interact with each
+other and participate in the same landmark or exercise challenges.
+Our team believes using several sensors together can give us a more reliable result. We think the
+plan is realistic and practical because Android already provides APIs for GPS and the sensors we
+need. Geofencing and sensor fusion are also commonly used approaches, so we can use existing
+Android functionality instead of having to adding other hardware. We will also keep the different
+parts of the app relatively modular, so team members can work on them separately and it should
+be easier to manage the development.
+4.3
+UI
+4.3.1
+Appeal
+We will choose a modern but interesting 2D illustration style, including the map, information
+visualization, icons, and fonts. The map will use a minimalist style and will mainly mark places
+with treasures, missions, and other users. The information on the map and from the sensors will
+be visualized properly. For icon, each treasure image will also keep the main visual features of
+its historical prototype. The fonts will maintain a consistent style while more interesting but
+7
+
+===== PAGE 8 =====
+easy to read.
+4.3.2
+Guidelines
+We will design the Android interaction guidelines by combining the characteristics of traditional
+mobile games and functional apps, and consider the design from 2 aspects: user habits and
+ergonomics.
+In terms of user habits, we will use the Android bottom navigation bar and
+back navigation behaviours that Android users are familiar with. We will also provide visual
+feedback for states such as errors and success in ways that are consistent with Android conventions.
+Components will generally follow common Android design patterns, while more playful interactions
+will be added to special interfaces, such as treasure-related pages. In terms of ergonomics, we
+will ensure that buttons have sufficiently large touch targets for easy interaction. We will also
+maintain reasonable spacing, alignment, and visual hierarchy to make information easier to
+understand.
+4.3.3
+Flow
+For solo mode, after completing the required location and sensor conditions, the user will enter
+the treasure reveal page. The user will see the treasure and can view its historical prototype
+photograph and related story. The user can return to the map and continue exploring. For
+team mode, users can join an existing team using a team code or create their own team. Shared
+tasks within the team should be clearly presented, while the style and process should remain
+consistent with the solo mode. In addition, users can use public chat rooms easily.
+4.3.4
+Language
+We aim to ensure that all textual and visual information presented through buttons and labels is
+concise, clear, and easy to understand. For pop-up messages and instructional labels, we will
+use short and commonly understood expressions. Complex technical concepts will be translated
+into language that fits the game context. For game-related interfaces, the language will remain
+consistent with the overall narrative setting, while still providing users with clear instructions
+on how to play correctly. Prompt messages and state labels will also correspond closely to the
+current state of both the user and the device.
+4.3.5
+Reactiveness
+The interface will continuously reflect changes in internal sensors, the external environment,
+and user information. For internal sensors, the main information, including the user’s location
+(GPS), movement status (accelerometer), device stability (context engine), and facing direction
+(orientation sensor), will be updated in real time while users are hunting for treasures. The
+interface will also provide users with prompts. For external data, the interface will be updated
+when the user’s status changes, including task completion, permission updates, etc. If an error
+occurs, the interface should also display a notification.
+4.4
+Innovation
+4.4.1
+Innovation Overview
+Our project’s innovation lies in turning the University of Melbourne campus into an interactive
+treasure-hunt environment rather than building a conventional map, quiz, or event information
+app. Lost Treasures of UniMelb connects real campus locations with fictional digital relics,
+8
+
+===== PAGE 9 =====
+historical references, clues, and organizer-designed tasks. Motion, direction, and location sensing
+support the interaction by making relic discovery depend on the user’s real-world context, while
+team codes and chat allow users to complete collaborative relic hunts together.
+4.4.2
+Novelty
+The app provides a novel campus exploration model by combining location-based treasure hunting,
+historical storytelling, multi-sensor interaction, and team-based event participation. Unlike a
+normal campus map or check-in app, users do not simply reach a location and receive static
+information. Instead, selected campus landmarks become interactive checkpoints where users
+follow clues, satisfy physical-context conditions, and unlock stylized digital relics connected to
+university history.
+4.4.3
+Surprise
+The app is a surprising extension of existing campus and event apps because it changes how
+users experience familiar university spaces. Ordinary places such as lawns, libraries, museums,
+or historical buildings can become part of a game route. The user may need to face a certain
+direction, hold the phone steady, or complete a scanner-style interaction before a relic is revealed.
+Collaborative relics add another unexpected layer by requiring teammates to coordinate across
+locations or conditions.
+4.4.4
+Tech Knowledge
+The project demonstrates technical knowledge by integrating mobile sensing, contextual state
+detection, cloud-based content, and responsive UI behaviors. Location sensing detects proximity
+to checkpoints; direction sensing supports orientation-aware clues, and motion or stability sensing
+helps verify scanner interactions. These signals are interpreted by a Context Engine that decides
+whether the user is navigating, searching, scanning, or ready to unlock a relic. For team hunts,
+the cloud synchronizes team membership, chat messages, player readiness states, and shared
+completion events.
+4.4.5
+Cross-Disciplinary
+The project combines mobile computing with game design, HCI, campus navigation, public
+history, education, and event management. Game design contributes to clues, progression,
+discovery, collection, and rewards. HCI helps make sensor-driven interaction understandable
+while users move through a real environment. Public history and education are reflected in the
+use of campus stories and historical references, while event management is supported through
+reusable organizer-designed routes and tasks.
+4.4.6
+Impact
+The app can improve campus activities by making exploration more engaging, structured, and
+memorable. For new students, it can reduce the uncertainty of navigating an unfamiliar campus
+and turn orientation into an active discovery experience. For visitors and current students, it
+can reveal historical or cultural details that are easy to miss. For event organizers, it provides
+a flexible tool for guiding participants, encouraging attendance, and creating interactive group
+activities across campus.
+9
+
+===== PAGE 10 =====
+5
+AI Usage Statement
+Generative AI (ChatGPT and CodeX) was used to support brainstorming, searching and
+evaluating the feasibility of the idea. However, all proposals and responses to the assessment
+rubrics were developed and reviewed through team discussion, and all AI-assisted suggestions
+were reviewed, evaluated, and revised by the team before being included.
+10

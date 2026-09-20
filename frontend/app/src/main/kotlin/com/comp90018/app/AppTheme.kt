@@ -3,9 +3,9 @@ package com.comp90018.app
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 
 /** Shared visual tokens for every feature screen. */
 val Brand = Color(0xFF7A4B2A)
@@ -31,24 +31,37 @@ val RelicColorScheme = lightColorScheme(
     outline = Color(0xFF9A7D67),
 )
 
-/** Prefer Android's friendly rounded system face and fall back gracefully on other devices. */
-private val RoundedFontFamily = FontFamily(Font(DeviceFontFamilyName("sans-serif-rounded")))
+/** Bundled fonts keep the friendly visual identity consistent on every Android device. */
+val RoundedBodyFontFamily = FontFamily(
+    Font(R.font.nunito_bold, weight = FontWeight.Bold),
+)
+
+val RoundedTitleFontFamily = FontFamily(
+    Font(R.font.fredoka_variable, weight = FontWeight.Medium),
+    Font(R.font.fredoka_variable, weight = FontWeight.SemiBold),
+    Font(R.font.fredoka_variable, weight = FontWeight.Bold),
+)
+
+val GothicTreasureFontFamily = FontFamily(
+    Font(R.font.unifraktur_cook_bold, weight = FontWeight.Bold),
+)
+
 private val DefaultTypography = Typography()
 
 val RelicTypography = Typography(
-    displayLarge = DefaultTypography.displayLarge.copy(fontFamily = RoundedFontFamily),
-    displayMedium = DefaultTypography.displayMedium.copy(fontFamily = RoundedFontFamily),
-    displaySmall = DefaultTypography.displaySmall.copy(fontFamily = RoundedFontFamily),
-    headlineLarge = DefaultTypography.headlineLarge.copy(fontFamily = RoundedFontFamily),
-    headlineMedium = DefaultTypography.headlineMedium.copy(fontFamily = RoundedFontFamily),
-    headlineSmall = DefaultTypography.headlineSmall.copy(fontFamily = RoundedFontFamily),
-    titleLarge = DefaultTypography.titleLarge.copy(fontFamily = RoundedFontFamily),
-    titleMedium = DefaultTypography.titleMedium.copy(fontFamily = RoundedFontFamily),
-    titleSmall = DefaultTypography.titleSmall.copy(fontFamily = RoundedFontFamily),
-    bodyLarge = DefaultTypography.bodyLarge.copy(fontFamily = RoundedFontFamily),
-    bodyMedium = DefaultTypography.bodyMedium.copy(fontFamily = RoundedFontFamily),
-    bodySmall = DefaultTypography.bodySmall.copy(fontFamily = RoundedFontFamily),
-    labelLarge = DefaultTypography.labelLarge.copy(fontFamily = RoundedFontFamily),
-    labelMedium = DefaultTypography.labelMedium.copy(fontFamily = RoundedFontFamily),
-    labelSmall = DefaultTypography.labelSmall.copy(fontFamily = RoundedFontFamily),
+    displayLarge = DefaultTypography.displayLarge.copy(fontFamily = RoundedTitleFontFamily),
+    displayMedium = DefaultTypography.displayMedium.copy(fontFamily = RoundedTitleFontFamily),
+    displaySmall = DefaultTypography.displaySmall.copy(fontFamily = RoundedTitleFontFamily),
+    headlineLarge = DefaultTypography.headlineLarge.copy(fontFamily = RoundedTitleFontFamily),
+    headlineMedium = DefaultTypography.headlineMedium.copy(fontFamily = RoundedTitleFontFamily),
+    headlineSmall = DefaultTypography.headlineSmall.copy(fontFamily = RoundedTitleFontFamily),
+    titleLarge = DefaultTypography.titleLarge.copy(fontFamily = RoundedTitleFontFamily),
+    titleMedium = DefaultTypography.titleMedium.copy(fontFamily = RoundedTitleFontFamily),
+    titleSmall = DefaultTypography.titleSmall.copy(fontFamily = RoundedTitleFontFamily),
+    bodyLarge = DefaultTypography.bodyLarge.copy(fontFamily = RoundedBodyFontFamily, fontWeight = FontWeight.Bold),
+    bodyMedium = DefaultTypography.bodyMedium.copy(fontFamily = RoundedBodyFontFamily, fontWeight = FontWeight.Bold),
+    bodySmall = DefaultTypography.bodySmall.copy(fontFamily = RoundedBodyFontFamily, fontWeight = FontWeight.Bold),
+    labelLarge = DefaultTypography.labelLarge.copy(fontFamily = RoundedBodyFontFamily, fontWeight = FontWeight.Bold),
+    labelMedium = DefaultTypography.labelMedium.copy(fontFamily = RoundedBodyFontFamily, fontWeight = FontWeight.Bold),
+    labelSmall = DefaultTypography.labelSmall.copy(fontFamily = RoundedBodyFontFamily, fontWeight = FontWeight.Bold),
 )

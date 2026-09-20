@@ -83,6 +83,10 @@ class FriendFinderViewModel(
         mutableUiState.value = mutableUiState.value.copy(target = null, friendship = null, message = null, roomId = null, requestMode = false)
     }
 
+    fun startRequest() {
+        mutableUiState.value = mutableUiState.value.copy(requestMode = true, message = null)
+    }
+
     fun sendFriendRequest(candidate: SearchUser? = null) {
         val target = candidate ?: mutableUiState.value.target ?: return
         if (target.uid.startsWith("mock_")) {

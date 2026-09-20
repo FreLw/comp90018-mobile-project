@@ -12,8 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.Chat
-import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,26 +43,57 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, viewModel: RoomsViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    state.activeRoomId?.let { TeamRoomChatScreen(it, user, firestore, profile, onRoomExited = {}) }
-        ?: RoomEntryScreen(state, viewModel)
+    var mockActiveRoomId by remember { mutableStateOf<String?>(null) }
+    when {
+        mockActiveRoomId != null -> MockTeamRoomScreen(
+            roomId = requireNotNull(mockActiveRoomId),
+            profile = profile,
+            onDismiss = { mockActiveRoomId = null },
+        )
+        state.activeRoomId != null -> TeamRoomChatScreen(
+            requireNotNull(state.activeRoomId),
+            user,
+            firestore,
+            profile,
+            onRoomExited = viewModel::clearErrors,
+        )
+        else -> RoomEntryScreen(
+            state = state,
+            viewModel = viewModel,
+            onJoin = {
+                if (state.roomIdInput.trim().equals(DEMO_ROOM_ID, ignoreCase = true)) {
+                    mockActiveRoomId = DEMO_ROOM_ID
+                } else {
+                    viewModel.joinRoom()
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel) {
+private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJoin: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.size(86.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) {
-            Image(painterResource(R.drawable.nav_rooms_game), null, modifier = Modifier.size(76.dp))
+            Image(painterResource(R.drawable.nav_rooms_symbol), null, modifier = Modifier.size(76.dp))
         }
         Text("You haven't joined a room yet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
         Text("Join an existing room or create a new one to hunt for treasure together.", color = Muted, textAlign = TextAlign.Center)
-        if (state.joining) AppTextField("Enter room ID", state.roomIdInput, viewModel::updateRoomId)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onJoin, enabled = state.roomIdInput.isNotBlank() && !state.working) {
+                Icon(Icons.Rounded.ChevronRight, "Find room", tint = Brand, modifier = Modifier.size(30.dp))
+            }
+            Box(Modifier.weight(1f)) {
+                AppTextField("Enter room ID", state.roomIdInput, viewModel::updateRoomId)
+            }
+        }
+        Text("Demo room ID: $DEMO_ROOM_ID", color = Muted, style = MaterialTheme.typography.bodySmall)
         (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         Button(onClick = viewModel::createRoom, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
-        OutlinedButton(onClick = {
-            if (!state.joining) viewModel.beginJoin() else viewModel.joinRoom()
-        }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) { Text(if (state.working && state.joining) "Joining..." else "Join a room") }
     }
 }
+
+private const val DEMO_ROOM_ID = "CAMPUS-2026"
 
 @Composable
 private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, onRoomExited: () -> Unit) {
@@ -101,9 +131,13 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             Modifier.fillMaxWidth().clickable { showDetails = true }.padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text("Treasure Room", fontWeight = FontWeight.Bold, color = Ink, style = MaterialTheme.typography.titleLarge)
-                Text("${room?.memberIds?.size ?: 1} of 2 explorers", color = Muted, style = MaterialTheme.typography.labelMedium)
+            if (members.isEmpty()) {
+                ProfileAvatar(profile?.avatarUrl.orEmpty(), profile?.username.orEmpty().ifBlank { "You" }, 46.dp)
+            } else {
+                members.take(4).forEachIndexed { index, member ->
+                    if (index > 0) Spacer(Modifier.width(8.dp))
+                    ProfileAvatar(member.avatarUrl, member.name, 46.dp)
+                }
             }
             Spacer(Modifier.weight(1f))
             Icon(Icons.Rounded.Info, "Room details", tint = Brand, modifier = Modifier.padding(12.dp).size(24.dp))
@@ -114,13 +148,17 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             else LazyColumn(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(messages, key = { it.id }) { TeamMessageRow(it, user.uid, profile) } }
         }
         Spacer(Modifier.height(10.dp))
-        ChatComposer(state.input, viewModel::updateInput)
-        Button(onClick = {
-            val name = profile?.username.orEmpty().ifBlank { profile?.displayName.orEmpty().ifBlank { "You" } }.take(30)
-            viewModel.send(name, profile?.avatarUrl.orEmpty())
-        }, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending, colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
-            Icon(Icons.AutoMirrored.Rounded.Send, null); Spacer(Modifier.width(8.dp)); Text("Send")
-        }
+        ChatComposer(
+            value = state.input,
+            onValueChange = viewModel::updateInput,
+            onSend = {
+                val name = profile?.username.orEmpty().ifBlank { profile?.displayName.orEmpty().ifBlank { "You" } }.take(30)
+                viewModel.send(name, profile?.avatarUrl.orEmpty())
+            },
+            sendEnabled = state.input.isNotBlank(),
+            sending = state.sending,
+            showTreasureAction = true,
+        )
     }
     if (showDetails) RoomDetailsDialog(
         roomId = roomId,
@@ -128,9 +166,66 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
         isOwner = room?.creatorId == user.uid,
         onMemberClick = { viewingMember = it; showDetails = false },
         onLeave = { viewModel.leave(onRoomExited) },
-        onDismissRoom = { viewModel.dismiss(onRoomExited) },
+        onDismissRoom = {
+            showDetails = false
+            viewModel.dismiss(onRoomExited)
+        },
         onDismiss = { showDetails = false },
     )
+}
+
+@Composable
+private fun MockTeamRoomScreen(roomId: String, profile: UserProfile?, onDismiss: () -> Unit) {
+    var input by remember(roomId) { mutableStateOf("") }
+    var messages by remember(roomId) { mutableStateOf(listOf("ava: Welcome! I found our first clue.")) }
+    var showDetails by remember(roomId) { mutableStateOf(false) }
+    val ownName = profile?.username.orEmpty().ifBlank { "You" }
+    Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { showDetails = true }.padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ProfileAvatar(profile?.avatarUrl.orEmpty(), ownName, 46.dp)
+            Spacer(Modifier.width(8.dp))
+            ProfileAvatar("", "ava", 46.dp)
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Rounded.Info, "Room details", tint = Brand, modifier = Modifier.padding(12.dp).size(24.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Card(Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(messages) { message -> Text(message, color = Ink) }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        ChatComposer(
+            value = input,
+            onValueChange = { input = it },
+            onSend = {
+                val message = input.trim()
+                if (message.isNotBlank()) {
+                    messages = messages + "$ownName: $message"
+                    input = ""
+                }
+            },
+            sendEnabled = input.isNotBlank(),
+            showTreasureAction = true,
+        )
+    }
+    if (showDetails) {
+        AlertDialog(
+            onDismissRequest = { showDetails = false },
+            title = { Text("Room details", color = Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Room ID: $roomId", color = Ink)
+                    Text("This is a local demo room. No backend data was changed.", color = Muted)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showDetails = false }) { Text("Done", color = Brand) } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Dismiss room", color = RelicRed) } },
+        )
+    }
 }
 
 @Composable
@@ -188,9 +283,9 @@ private fun RoomMemberProfileScreen(
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ProfileAvatar(memberProfile?.avatarUrl.orEmpty().ifBlank { member.avatarUrl }, displayName, 88.dp)
                 Text(displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
+                memberProfile?.bio?.takeIf { it.isNotBlank() }?.let { Text(it, color = Ink, textAlign = TextAlign.Center) }
                 if (username != displayName) Text("@$username", color = Muted)
                 memberProfile?.gender?.takeIf { it != "unspecified" }?.let { Text(it.replaceFirstChar { char -> char.uppercase() }, color = Muted) }
-                memberProfile?.bio?.takeIf { it.isNotBlank() }?.let { Text(it, color = Ink, textAlign = TextAlign.Center) }
             }
         }
         Spacer(Modifier.weight(1f))

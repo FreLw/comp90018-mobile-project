@@ -62,7 +62,11 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
-                AppDestination.Treasure -> TreasureScreen(roomsState.activeRoomId, teamRoomRepository)
+                AppDestination.Treasure -> TreasureScreen(
+                    activeRoomId = roomsState.activeRoomId,
+                    repository = teamRoomRepository,
+                    onOpenMap = { destination = AppDestination.Map },
+                )
                 AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
                 AppDestination.Map -> MapScreen()
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })

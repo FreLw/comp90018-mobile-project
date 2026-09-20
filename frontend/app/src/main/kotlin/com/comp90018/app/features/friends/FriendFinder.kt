@@ -1,5 +1,13 @@
 package com.comp90018.app.features.friends
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,6 +45,7 @@ fun FriendFinder(
     currentUsername: String,
     currentAvatarUrl: String,
     knownFriendIds: Set<String>,
+    onRequestSent: (SearchUser, String) -> Unit,
     onClose: () -> Unit,
 ) {
     val repository = remember(firestore) { FirebaseSocialRepository(firestore) }
@@ -58,12 +68,6 @@ fun FriendFinder(
         DirectChatScreen(firestore, roomId, user.uid, chatTarget.uid, chatTarget.username, currentUsername, currentAvatarUrl, onBack = viewModel::closeChat)
         return
     }
-    val target = state.target
-    if (target != null) {
-        FriendCandidateProfile(target, state, viewModel)
-        return
-    }
-
     val normalizedQuery = state.query.trim().lowercase()
     val mockResults = remember(normalizedQuery) {
         if (normalizedQuery.isBlank()) emptyList()
@@ -75,29 +79,54 @@ fun FriendFinder(
         .distinctBy { it.uid }
         .filter { it.uid != user.uid }
 
-    Column(Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-        AppTextField("Search by username", state.query, viewModel::updateQuery, leadingIcon = Icons.Rounded.Search)
-        Text("Suggestions appear as you type", color = Muted, style = MaterialTheme.typography.bodySmall)
-        state.message?.let { Text(it, color = if (it == "Friend request sent") Brand else MaterialTheme.colorScheme.error) }
-        when {
-            state.searching && candidates.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = Brand)
-            normalizedQuery.isBlank() -> Spacer(Modifier.height(1.dp))
-            candidates.isEmpty() -> Text("No matching explorers yet.", color = Muted)
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                items(candidates, key = { it.uid }) { candidate ->
-                    CandidateRow(
-                        candidate = candidate,
-                        isFriend = candidate.uid in knownFriendIds,
-                        requestSent = candidate.uid in state.sentUserIds,
-                        onViewProfile = { viewModel.selectUser(candidate, knownFriend = candidate.uid in knownFriendIds) },
-                        onAdd = { viewModel.selectUser(candidate, knownFriend = false, requestMode = true) },
-                    )
+    val page = when {
+        state.target == null -> FinderPage.Search
+        state.requestMode -> FinderPage.Request
+        else -> FinderPage.Profile
+    }
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            if (targetState == FinderPage.Search) {
+                (slideInHorizontally { -it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+            } else {
+                (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it / 3 } + fadeOut())
+            }
+        },
+        label = "friend_finder_pages",
+    ) { visiblePage ->
+        when (visiblePage) {
+            FinderPage.Search -> Column(Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                AppTextField("Search by username", state.query, viewModel::updateQuery, leadingIcon = Icons.Rounded.Search)
+                Text("Suggestions appear as you type", color = Muted, style = MaterialTheme.typography.bodySmall)
+                state.message?.let { Text(it, color = if (it == "Friend request sent") Brand else MaterialTheme.colorScheme.error) }
+                when {
+                    state.searching && candidates.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = Brand)
+                    normalizedQuery.isBlank() -> Spacer(Modifier.height(1.dp))
+                    candidates.isEmpty() -> Text("No matching explorers yet.", color = Muted)
+                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                        items(candidates, key = { it.uid }) { candidate ->
+                            CandidateRow(
+                                candidate = candidate,
+                                isFriend = candidate.uid in knownFriendIds,
+                                requestSent = candidate.uid in state.sentUserIds,
+                                onViewProfile = { viewModel.selectUser(candidate, knownFriend = candidate.uid in knownFriendIds) },
+                                onAdd = { viewModel.selectUser(candidate, knownFriend = false, requestMode = true) },
+                            )
+                        }
+                    }
                 }
+            }
+            FinderPage.Profile -> state.target?.let { FriendCandidateProfile(it, state, viewModel) }
+            FinderPage.Request -> state.target?.let {
+                FriendRequestComposer(it, state, viewModel, onRequestSent)
             }
         }
     }
 }
+
+private enum class FinderPage { Search, Profile, Request }
 
 @Composable
 private fun CandidateRow(candidate: SearchUser, isFriend: Boolean, requestSent: Boolean, onViewProfile: () -> Unit, onAdd: () -> Unit) {
@@ -130,6 +159,9 @@ private fun CandidateRow(candidate: SearchUser, isFriend: Boolean, requestSent: 
 
 @Composable
 private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiState, viewModel: FriendFinderViewModel) {
+    val context = LocalContext.current
+    val roomId = target.mockRoomId()
+    var copied by remember(target.uid) { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().padding(top = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -141,24 +173,94 @@ private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiStat
         ProfileAvatar(target.avatarUrl, target.username, 96.dp)
         Text(target.username, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                target.displayName.takeIf { it.isNotBlank() }?.let { CandidateDetail("Name", it) }
-                CandidateDetail("Gender", genderLabel(target.gender))
-                target.department.takeIf { it.isNotBlank() }?.let { CandidateDetail("Department", it) }
-                target.major.takeIf { it.isNotBlank() }?.let { CandidateDetail("Major", it) }
-                target.bio.takeIf { it.isNotBlank() }?.let { Text(it, color = Ink, textAlign = TextAlign.Start) }
-            }
+            Text(
+                target.bio.ifBlank { "This explorer has not added an introduction yet." },
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                color = Ink,
+                textAlign = TextAlign.Start,
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
-        Spacer(Modifier.weight(1f))
         state.message?.let { Text(it, color = if (it.startsWith("Friend request")) Brand else MaterialTheme.colorScheme.error) }
         when (state.friendship) {
             FriendshipStatus.Friends -> FriendAction("Chat", state.working, viewModel::openChat)
             FriendshipStatus.IncomingPending -> FriendAction("Accept request", state.working, viewModel::acceptFriendRequest)
             FriendshipStatus.OutgoingPending -> Button(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = false) { Text("Friend request sent") }
-            FriendshipStatus.None -> FriendAction(if (state.requestMode) "Send friend request" else "Add friend", state.working) { viewModel.sendFriendRequest() }
+            FriendshipStatus.None -> FriendAction("Add friend", state.working, viewModel::startRequest)
             null -> CircularProgressIndicator(color = Brand)
         }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                CandidateDetail("Gender", genderLabel(target.gender))
+                target.department.takeIf { it.isNotBlank() }?.let { CandidateDetail("Department", it) }
+                target.major.takeIf { it.isNotBlank() }?.let { CandidateDetail("Major", it) }
+                CandidateDetail("Room", if (roomId == null) "Not in a room" else "Exploring in room $roomId")
+                roomId?.let {
+                    TextButton(
+                        onClick = {
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("Room ID", roomId))
+                            copied = true
+                        },
+                        contentPadding = PaddingValues(0.dp),
+                    ) { Text(if (copied) "Room ID copied" else "Copy room ID", color = Brand) }
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
     }
+}
+
+@Composable
+private fun FriendRequestComposer(
+    target: SearchUser,
+    state: FriendFinderUiState,
+    viewModel: FriendFinderViewModel,
+    onRequestSent: (SearchUser, String) -> Unit,
+) {
+    var requestMessage by remember(target.uid) { mutableStateOf("Hi, would you like to team up?") }
+    Column(
+        Modifier.fillMaxSize().padding(top = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        IconButton(onClick = viewModel::searchAgain) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
+        }
+        Text(
+            "Send a friend request to ${target.username}",
+            color = Ink,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        AppTextField("Add a message", requestMessage, { requestMessage = it.take(120) })
+        Text("${requestMessage.length}/120", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Button(
+            onClick = {
+                viewModel.sendFriendRequest(target)
+                onRequestSent(target, requestMessage.trim())
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = requestMessage.isNotBlank() && !state.working && state.friendship != FriendshipStatus.OutgoingPending,
+            colors = ButtonDefaults.buttonColors(containerColor = Brand),
+        ) {
+            Text(
+                when {
+                    state.working -> "Sending…"
+                    state.friendship == FriendshipStatus.OutgoingPending -> "Request sent"
+                    else -> "Send request"
+                },
+            )
+        }
+        state.message?.let { Text(it, color = if (it == "Friend request sent") Brand else MaterialTheme.colorScheme.error) }
+    }
+}
+
+private fun SearchUser.mockRoomId(): String? = when (uid) {
+    "mock_ava" -> "AVA-4821"
+    "mock_zhuoer" -> "ZHUOER-18"
+    "mock_mia" -> "MIA-310"
+    "mock_liang" -> "LIANG-27"
+    else -> null
 }
 
 @Composable

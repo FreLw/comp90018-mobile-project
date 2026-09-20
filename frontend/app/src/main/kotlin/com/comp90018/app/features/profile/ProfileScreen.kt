@@ -118,6 +118,15 @@ private fun ProfileOverview(
             else -> {
                 ProfileAvatar(profile.avatarUrl, email, 112.dp)
                 Text(profile.username.ifBlank { email }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink)
+                profile.bio.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                        color = Ink,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
                 Text(email, color = Muted, style = MaterialTheme.typography.bodyMedium)
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -125,7 +134,6 @@ private fun ProfileOverview(
                         extras.department.takeIf { it.isNotBlank() }?.let { ProfileDetail("Department", it) }
                         extras.major.takeIf { it.isNotBlank() }?.let { ProfileDetail("Major", it) }
                         extras.phone.takeIf { it.isNotBlank() }?.let { ProfileDetail("Phone", it) }
-                        profile.bio.takeIf { it.isNotBlank() }?.let { ProfileDetail("About", it) }
                     }
                 }
                 Button(onClick = onEdit, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand)) {

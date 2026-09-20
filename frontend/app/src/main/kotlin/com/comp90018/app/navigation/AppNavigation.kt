@@ -19,11 +19,11 @@ import androidx.compose.ui.unit.dp
 import com.comp90018.app.R
 
 enum class AppDestination(val label: String, @param:DrawableRes val iconRes: Int) {
-    Friends("Friends", R.drawable.nav_friends_game),
-    Rooms("Rooms", R.drawable.nav_rooms_game),
-    Map("Map", R.drawable.nav_map_game),
-    Treasure("Treasure", R.drawable.nav_treasure_game),
-    Profile("Profile", R.drawable.nav_profile_game),
+    Friends("Friends", R.drawable.nav_friends_symbol),
+    Rooms("Rooms", R.drawable.nav_rooms_symbol),
+    Map("Map", R.drawable.nav_map_symbol),
+    Treasure("Treasure", R.drawable.nav_treasure_symbol),
+    Profile("Profile", R.drawable.nav_profile_symbol),
 }
 
 @Composable
