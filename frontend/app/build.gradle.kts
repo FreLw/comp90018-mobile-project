@@ -13,6 +13,9 @@ val localProperties = Properties().apply {
 	}
 }
 
+val mapsApiKey = providers.gradleProperty("MAPS_API_KEY")
+	.orElse(localProperties.getProperty("MAPS_API_KEY", ""))
+
 android {
 	namespace = "com.comp90018.app"
 	compileSdk = 37
@@ -23,7 +26,7 @@ android {
 		targetSdk = 37
 		versionCode = 1
 		versionName = "1.0"
-		manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
+		manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey.get()
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 	}

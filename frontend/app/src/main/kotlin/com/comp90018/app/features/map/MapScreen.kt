@@ -993,7 +993,10 @@ private fun renderCurrentLocation(
     currentLocation: GeoCoordinate?,
     headingDegrees: Float,
 ): Marker? {
-    if (currentLocation == null) return currentLocationMarker
+    if (currentLocation == null) {
+        currentLocationMarker?.remove()
+        return null
+    }
     val position = currentLocation.toLatLng()
     if (currentLocationMarker != null) {
         currentLocationMarker.position = position

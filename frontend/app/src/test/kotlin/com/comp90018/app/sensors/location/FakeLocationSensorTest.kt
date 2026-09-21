@@ -65,4 +65,19 @@ class FakeLocationSensorTest {
         assertEquals(ProximityState.UNKNOWN, output.proximity)
         assertEquals(SensorValidity.UNKNOWN, output.validity)
     }
+
+    @Test
+    fun relicSpecificRadiiControlProximityClassification() {
+        val sensor = FakeLocationSensor()
+
+        sensor.setTargetLocation(
+            targetLocation = target,
+            insideRadiusMeters = 2.0,
+            nearbyRadiusMeters = 3.0,
+        )
+        sensor.start()
+        sensor.updateCurrentLocation(nearbyUserLocation)
+
+        assertEquals(ProximityState.OUTSIDE, sensor.output.value.proximity)
+    }
 }

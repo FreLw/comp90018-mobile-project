@@ -7,6 +7,14 @@ interface LocationSensor {
 
     fun setTargetLocation(targetLocation: GeoCoordinate?)
 
+    fun setTargetLocation(
+        targetLocation: GeoCoordinate?,
+        insideRadiusMeters: Double,
+        nearbyRadiusMeters: Double,
+    ) {
+        setTargetLocation(targetLocation)
+    }
+
     fun start()
 
     fun stop()
