@@ -106,6 +106,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.MapStyleOptions
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -215,6 +216,7 @@ private fun GoogleMapView(
     var currentLocationMarker by remember { mutableStateOf<Marker?>(null) }
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
+    var mapStyleConfigured by remember { mutableStateOf(false) }
     MapLifecycle(mapView)
 
     AndroidView(
@@ -222,6 +224,12 @@ private fun GoogleMapView(
         modifier = modifier,
         update = { view ->
             view.getMapAsync { map ->
+                if (!mapStyleConfigured) {
+                    map.setMapStyle(
+                        MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style_retro),
+                    )
+                    mapStyleConfigured = true
+                }
                 map.uiSettings.isZoomControlsEnabled = false
                 map.uiSettings.isCompassEnabled = true
                 map.isBuildingsEnabled = true
