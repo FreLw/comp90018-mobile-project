@@ -1,6 +1,5 @@
 package com.comp90018.app.features.treasure
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,34 +26,30 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,11 +59,7 @@ import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicGold
 import com.comp90018.app.RelicRed
-import com.comp90018.app.TeamRoom
-import com.comp90018.app.data.rooms.TeamRoomRepository
-import com.comp90018.app.features.map.LocalTreasureCollection
 import com.comp90018.app.features.map.MapRelic
-import com.comp90018.app.features.map.sampleMapRelics
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import java.util.Locale
@@ -83,39 +74,67 @@ private enum class CollectionFilter(val label: String) {
 
 private val stopOne = GeoCoordinate(-37.7986, 144.9602)
 
-/** Treasure-focused frontend hub. Live room data remains read-only. */
+/** Treasure-focused frontend hub backed by the shared Firebase catalogue. */
 @Composable
 fun TreasureScreen(
-    activeRoomId: String?,
-    repository: TeamRoomRepository,
+    treasures: List<MapRelic>,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     onOpenMap: () -> Unit,
+    discoveredTreasureIds: Set<String>,
+    collectionLoading: Boolean,
+    collectionError: String?,
+    onRetryCollection: () -> Unit,
 ) {
-    var room by remember(activeRoomId) { mutableStateOf<TeamRoom?>(null) }
-    var roomError by remember(activeRoomId) { mutableStateOf<String?>(null) }
     var section by remember { mutableStateOf(TreasureSection.Tasks) }
     var collectionFilter by remember { mutableStateOf(CollectionFilter.All) }
-
-    DisposableEffect(activeRoomId, repository) {
-        if (activeRoomId.isNullOrBlank()) {
-            room = null
-            roomError = null
-            return@DisposableEffect onDispose { }
-        }
-        val subscription = repository.observeRoom(activeRoomId) { updatedRoom, error ->
-            room = updatedRoom
-            roomError = error
-        }
-        onDispose { subscription.cancel() }
-    }
 
     Column(
         Modifier.fillMaxSize().padding(top = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TreasureTabs(selected = section, onSelected = { section = it })
-        when (section) {
-            TreasureSection.Tasks -> TasksContent(room, activeRoomId, roomError, onOpenMap)
-            TreasureSection.Collection -> CollectionContent(collectionFilter) { collectionFilter = it }
+        when {
+            loading && treasures.isEmpty() -> CatalogStateCard("Loading treasures from Firebase…", loading = true)
+            error != null && treasures.isEmpty() -> CatalogStateCard(error, actionLabel = "Try again", onAction = onRetry)
+            treasures.isEmpty() -> CatalogStateCard("No enabled treasures are available right now.")
+            else -> when (section) {
+                TreasureSection.Tasks -> TasksContent(treasures, discoveredTreasureIds, error, onOpenMap)
+                TreasureSection.Collection -> CollectionContent(
+                    treasures = treasures,
+                    foundIds = discoveredTreasureIds,
+                    loading = collectionLoading,
+                    error = collectionError,
+                    filter = collectionFilter,
+                    onRetry = onRetryCollection,
+                    onFilterChanged = { collectionFilter = it },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CatalogStateCard(
+    message: String,
+    loading: Boolean = false,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (loading) CircularProgressIndicator(color = Brand)
+            Text(message, color = if (actionLabel == null) Muted else MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+            actionLabel?.let { label -> Button(onClick = onAction) { Text(label) } }
         }
     }
 }
@@ -151,29 +170,21 @@ private fun TreasureTab(label: String, icon: ImageVector, selected: Boolean, onC
 }
 
 @Composable
-private fun TasksContent(room: TeamRoom?, activeRoomId: String?, roomError: String?, onOpenMap: () -> Unit) {
-    val foundIds = LocalTreasureCollection.foundIds
-    val activeRelic = remember(foundIds, activeRoomId) {
-        if (activeRoomId.isNullOrBlank()) {
-            sampleMapRelics.firstOrNull { it.id !in foundIds }
-        } else {
-            sampleMapRelics.firstOrNull { it.huntType == "Collaborative" && it.id !in foundIds }
-                ?: sampleMapRelics.firstOrNull { it.id !in foundIds }
-        }
-    }
-    val otherRelics = sampleMapRelics.filter { it.id != activeRelic?.id }
+private fun TasksContent(treasures: List<MapRelic>, foundIds: Set<String>, catalogError: String?, onOpenMap: () -> Unit) {
+    val activeRelic = remember(treasures, foundIds) { treasures.firstOrNull { it.id !in foundIds } }
+    val otherRelics = treasures.filter { it.id != activeRelic?.id }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        catalogError?.let { warning -> item { Text(warning, color = MaterialTheme.colorScheme.error) } }
         if (activeRelic != null) {
-            item { CurrentHuntCard(activeRelic, room, activeRoomId, onOpenMap) }
+            item { CurrentHuntCard(activeRelic, onOpenMap) }
         } else {
             item { CollectionCompleteCard() }
         }
-        roomError?.let { error -> item { Text(error, color = MaterialTheme.colorScheme.error) } }
         item { Text("Hunt route", color = Ink, style = MaterialTheme.typography.titleLarge) }
         lazyItems(otherRelics, key = { it.id }) { relic ->
             AvailableHuntCard(relic, relic.id in foundIds, onOpenMap)
@@ -182,8 +193,7 @@ private fun TasksContent(room: TeamRoom?, activeRoomId: String?, roomError: Stri
 }
 
 @Composable
-private fun CurrentHuntCard(relic: MapRelic, room: TeamRoom?, activeRoomId: String?, onResume: () -> Unit) {
-    val teamSize = room?.memberIds?.size ?: 1
+private fun CurrentHuntCard(relic: MapRelic, onResume: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -213,9 +223,9 @@ private fun CurrentHuntCard(relic: MapRelic, room: TeamRoom?, activeRoomId: Stri
                         Text(relic.locationName, color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodySmall)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (relic.requiredPlayers == 1) Icons.Rounded.Person else Icons.Rounded.Groups, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Inventory2, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("${relic.huntType} · ${relic.requiredPlayers} ${if (relic.requiredPlayers == 1) "explorer" else "explorers"}", color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
+                        Text(relic.treasureTypeLabel, color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -224,14 +234,6 @@ private fun CurrentHuntCard(relic: MapRelic, room: TeamRoom?, activeRoomId: Stri
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("NEXT CLUE", color = Color(0xFFFFC65A), style = MaterialTheme.typography.labelSmall)
                     Text(relic.clue, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            if (relic.requiredPlayers > 1) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Groups, null, tint = Color(0xFFFFC65A))
-                    Spacer(Modifier.width(8.dp))
-                    Text("${teamSize.coerceAtMost(relic.requiredPlayers)}/${relic.requiredPlayers} explorers ready", color = Color.White)
-                    if (activeRoomId.isNullOrBlank()) Text(" · Join a room", color = Color.White.copy(alpha = 0.72f))
                 }
             }
             Button(
@@ -303,7 +305,9 @@ private fun AvailableHuntCard(relic: MapRelic, discovered: Boolean, onClick: () 
                     Text(status, color = statusColor, style = MaterialTheme.typography.labelSmall)
                 }
                 Text("${relic.locationName} · ${distance.formatDistance()}", color = Muted, style = MaterialTheme.typography.bodySmall)
-                Text("${relic.huntType} · ${relic.difficulty}", color = Brand, style = MaterialTheme.typography.labelMedium)
+                relic.treasureTypeLabel.takeIf { it.isNotBlank() }?.let { type ->
+                    Text(type, color = Brand, style = MaterialTheme.typography.labelMedium)
+                }
                 Text(relic.clue, color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Icon(Icons.Rounded.ChevronRight, "View on map", tint = Brand)
@@ -312,9 +316,16 @@ private fun AvailableHuntCard(relic: MapRelic, discovered: Boolean, onClick: () 
 }
 
 @Composable
-private fun CollectionContent(filter: CollectionFilter, onFilterChanged: (CollectionFilter) -> Unit) {
-    val foundIds = LocalTreasureCollection.foundIds
-    val visibleRelics = sampleMapRelics.filter { relic ->
+private fun CollectionContent(
+    treasures: List<MapRelic>,
+    foundIds: Set<String>,
+    loading: Boolean,
+    error: String?,
+    filter: CollectionFilter,
+    onRetry: () -> Unit,
+    onFilterChanged: (CollectionFilter) -> Unit,
+) {
+    val visibleRelics = treasures.filter { relic ->
         when (filter) {
             CollectionFilter.All -> true
             CollectionFilter.Discovered -> relic.id in foundIds
@@ -328,7 +339,17 @@ private fun CollectionContent(filter: CollectionFilter, onFilterChanged: (Collec
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { CollectionSummary(foundIds.size, sampleMapRelics.size) }
+        if (loading) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                CatalogStateCard("Loading your collection…", loading = true)
+            }
+        }
+        error?.let { message ->
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                CatalogStateCard(message, actionLabel = "Try again", onAction = onRetry)
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) { CollectionSummary(foundIds.count { id -> treasures.any { it.id == id } }, treasures.size) }
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CollectionFilter.entries.forEach { option ->
@@ -361,19 +382,16 @@ private fun CollectionRelicCard(relic: MapRelic, discovered: Boolean) {
             }
             Text(if (discovered) relic.name else "Unknown relic", color = Ink, style = MaterialTheme.typography.titleSmall, maxLines = 2)
             Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${relic.huntType} · ${relic.difficulty}", color = if (discovered) Brand else Muted, style = MaterialTheme.typography.labelSmall)
+            relic.treasureTypeLabel.takeIf { it.isNotBlank() }?.let { type ->
+                Text(type, color = if (discovered) Brand else Muted, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
 
 @Composable
 private fun RelicImage(relic: MapRelic, discovered: Boolean, modifier: Modifier = Modifier) {
-    Image(
-        painter = painterResource(relic.imageRes),
-        contentDescription = if (discovered) relic.name else "${relic.name} silhouette",
-        modifier = modifier,
-        colorFilter = if (discovered) null else ColorFilter.tint(Color(0xFF563B2D)),
-    )
+    TreasurePrototypeImage(relic = relic, discovered = discovered, modifier = modifier)
 }
 
 @Composable

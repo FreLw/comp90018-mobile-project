@@ -1,6 +1,7 @@
 package com.comp90018.app.features.map
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Path
@@ -11,6 +12,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -50,6 +52,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,12 +74,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -97,6 +100,8 @@ import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.R
 import com.comp90018.app.RelicRed
+import com.comp90018.app.features.treasure.RemoteTreasureImage
+import com.comp90018.app.features.treasure.TreasurePrototypeImage
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
@@ -112,10 +117,18 @@ import java.util.Locale
 
 /** Dedicated map feature boundary; location rendering belongs here. */
 @Composable
-fun MapScreen() {
+fun MapScreen(
+    treasures: List<MapRelic>,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    discoveredTreasureIds: Set<String>,
+    savingTreasureId: String?,
+    onCollectTreasure: (String, (String?) -> Unit) -> Unit,
+) {
     var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
     var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
-    val foundRelicIds = LocalTreasureCollection.foundIds
+    val foundRelicIds = discoveredTreasureIds
     val deviceHeading = rememberDeviceHeading()
     val activeRelic = detailRelic ?: selectedRelic
     val locationOutput = remember(activeRelic) { stopOneLocationOutput(activeRelic) }
@@ -127,13 +140,19 @@ fun MapScreen() {
         label = "map_quest_marker_pulse",
     )
 
+    LaunchedEffect(treasures) {
+        selectedRelic = selectedRelic?.let { selected -> treasures.firstOrNull { it.id == selected.id } }
+        detailRelic = detailRelic?.let { detail -> treasures.firstOrNull { it.id == detail.id } }
+    }
+
     detailRelic?.let { relic ->
         TreasureDetailScreen(
             relic = relic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
             isFound = relic.id in foundRelicIds,
-            onCollected = { LocalTreasureCollection.add(relic.id) },
+            collecting = savingTreasureId == relic.id,
+            onCollected = { onComplete -> onCollectTreasure(relic.id, onComplete) },
             onBack = {
                 detailRelic = null
             },
@@ -143,7 +162,7 @@ fun MapScreen() {
 
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
-            relics = sampleMapRelics,
+            relics = treasures,
             selectedRelic = selectedRelic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
@@ -157,7 +176,15 @@ fun MapScreen() {
 
         if (selectedRelic == null) {
             FindTreasurePrompt(
-                Modifier
+                message = when {
+                    loading -> "Loading treasures from Firebase…"
+                    error != null -> error
+                    treasures.isEmpty() -> "No enabled treasures are available right now."
+                    else -> "Psst… tap a treasure and see what’s hiding nearby!"
+                },
+                loading = loading,
+                onRetry = onRetry.takeIf { error != null },
+                modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 16.dp),
@@ -210,9 +237,10 @@ private fun GoogleMapView(
     val mapView = remember {
         MapView(context).apply { onCreate(Bundle()) }
     }
-    var renderedSelectedRelicId by remember { mutableStateOf("__unrendered__") }
+    var renderedMapKey by remember { mutableStateOf("__unrendered__") }
     var cameraInitialised by remember { mutableStateOf(false) }
     var cameraSelectedRelicId by remember { mutableStateOf<String?>(null) }
+    var cameraRelicSignature by remember { mutableStateOf("") }
     var currentLocationMarker by remember { mutableStateOf<Marker?>(null) }
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
@@ -241,11 +269,15 @@ private fun GoogleMapView(
                 }
                 map.isMyLocationEnabled = false
                 val selectedRelicId = selectedRelic?.id ?: "__none__"
-                if (renderedSelectedRelicId != selectedRelicId) {
+                val relicSignature = relics.joinToString("|") { relic ->
+                    "${relic.id}:${relic.coordinate.latitude}:${relic.coordinate.longitude}"
+                }
+                val mapKey = "$selectedRelicId|$relicSignature"
+                if (renderedMapKey != mapKey) {
                     map.clear()
                     currentLocationMarker = null
                     renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, markerPulse)
-                    renderedSelectedRelicId = selectedRelicId
+                    renderedMapKey = mapKey
                 }
                 val pulseBucket = (markerPulse * 20).toInt()
                 if (renderedPulseBucket != pulseBucket) {
@@ -270,9 +302,18 @@ private fun GoogleMapView(
                     }
                     cameraInitialised = true
                     cameraSelectedRelicId = if (focusSelectedRelic) selectedRelic?.id else null
-                } else if (focusSelectedRelic && selectedRelic != null && cameraSelectedRelicId != selectedRelic.id) {
+                    cameraRelicSignature = relicSignature
+                } else if (!focusSelectedRelic && relics.isNotEmpty() && cameraRelicSignature != relicSignature) {
+                    moveCameraToCampus(map, relics, locationOutput.currentLocation)
+                    cameraRelicSignature = relicSignature
+                } else if (
+                    focusSelectedRelic &&
+                    selectedRelic != null &&
+                    (cameraSelectedRelicId != selectedRelic.id || cameraRelicSignature != relicSignature)
+                ) {
                     moveCameraToRelic(map, selectedRelic)
                     cameraSelectedRelicId = selectedRelic.id
+                    cameraRelicSignature = relicSignature
                 }
             }
         },
@@ -280,14 +321,22 @@ private fun GoogleMapView(
 }
 
 @Composable
-private fun FindTreasurePrompt(modifier: Modifier = Modifier) {
+private fun FindTreasurePrompt(
+    message: String,
+    loading: Boolean,
+    onRetry: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     ElevatedCard(modifier = modifier, shape = RoundedCornerShape(20.dp), colors = CardDefaults.elevatedCardColors(containerColor = Color.White.copy(alpha = 0.96f))) {
-        Text(
-            "Psst… tap a treasure and see what’s hiding nearby!",
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-            color = Ink,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 3.dp, color = Brand)
+            Text(message, modifier = Modifier.weight(1f), color = if (onRetry == null) Ink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            onRetry?.let { retry -> Button(onClick = retry) { Text("Retry") } }
+        }
     }
 }
 
@@ -297,13 +346,15 @@ private fun TreasureDetailScreen(
     locationOutput: LocationOutput,
     deviceHeading: Float,
     isFound: Boolean,
-    onCollected: () -> Unit,
+    collecting: Boolean,
+    onCollected: ((String?) -> Unit) -> Unit,
     onBack: () -> Unit,
 ) {
     var navigating by remember(relic.id) { mutableStateOf(false) }
     var stage by remember(relic.id) { mutableStateOf(TreasureHuntStage.DETAILS) }
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }
+    var collectionActionError by remember(relic.id) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(relic.id) {
         detailsVisible = true
@@ -328,9 +379,14 @@ private fun TreasureDetailScreen(
     if (stage == TreasureHuntStage.STORY) {
         TreasureStoryPanel(
             relic = relic,
+            collecting = collecting,
+            collectionError = collectionActionError,
             onPutInBackpack = {
-                onCollected()
-                stage = TreasureHuntStage.DETAILS
+                collectionActionError = null
+                onCollected { error ->
+                    collectionActionError = error
+                    if (error == null) stage = TreasureHuntStage.DETAILS
+                }
             },
         )
         return
@@ -515,8 +571,8 @@ private fun TreasureInformationPanel(
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         HuntFactCard(
-                            title = "Hunt type",
-                            value = "${relic.huntType} · ${relic.requiredPlayers} ${if (relic.requiredPlayers == 1) "explorer" else "explorers"}",
+                            title = "Treasure type",
+                            value = relic.treasureTypeLabel.ifBlank { "Treasure" },
                             color = Brand,
                             modifier = Modifier.weight(1f),
                         )
@@ -542,8 +598,15 @@ private fun TreasureInformationPanel(
                         }
                     }
                 }
-                item { DetailTextRow("Challenge level", relic.difficulty) }
-                item { DetailTextRow("Quest condition", relic.taskHint) }
+                relic.buildingStory.takeIf { it.isNotBlank() }?.let { story ->
+                    item { DetailTextRow("Landmark story", story) }
+                }
+                relic.prototypeDesign.takeIf { it.isNotBlank() }?.let { design ->
+                    item { DetailTextRow("Relic design", design) }
+                }
+                relic.coordinateSource.takeIf { it.isNotBlank() }?.let { source ->
+                    item { DetailTextRow("Location source", source) }
+                }
                 if (navigating) item {
                     Card(
                         Modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -811,25 +874,12 @@ private fun RadarAnimation(modifier: Modifier = Modifier) {
 
 @Composable
 private fun TreasureArtwork(relic: MapRelic, discovered: Boolean, modifier: Modifier = Modifier) {
-    Image(
-        painter = painterResource(if (discovered) relic.imageRes else R.drawable.treasure_unknown),
-        contentDescription = if (discovered) relic.name else "Unknown treasure",
-        modifier = modifier,
-    )
+    TreasurePrototypeImage(relic = relic, discovered = discovered, modifier = modifier)
 }
 
 @Composable
 private fun TreasureSilhouette(relic: MapRelic, discovered: Boolean, modifier: Modifier = Modifier) {
-    if (discovered) {
-        TreasureArtwork(relic, discovered = true, modifier = modifier)
-    } else {
-        Image(
-            painter = painterResource(relic.imageRes),
-            contentDescription = "Locked ${relic.name} silhouette",
-            modifier = modifier,
-            colorFilter = ColorFilter.tint(Color(0xFF5A4032)),
-        )
-    }
+    TreasurePrototypeImage(relic = relic, discovered = discovered, modifier = modifier)
 }
 
 @Composable
@@ -861,7 +911,13 @@ private fun TreasureFoundPanel(relic: MapRelic, onViewStory: () -> Unit) {
 }
 
 @Composable
-private fun TreasureStoryPanel(relic: MapRelic, onPutInBackpack: () -> Unit) {
+private fun TreasureStoryPanel(
+    relic: MapRelic,
+    collecting: Boolean,
+    collectionError: String?,
+    onPutInBackpack: () -> Unit,
+) {
+    val context = LocalContext.current
     LazyColumn(
         Modifier.fillMaxSize().background(Color(0xFFF8F0E4)),
         contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
@@ -877,29 +933,84 @@ private fun TreasureStoryPanel(relic: MapRelic, onPutInBackpack: () -> Unit) {
                 }
             }
         }
-        item {
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = BrandSoft),
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("The story", color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    Text(relic.story, color = Ink, style = MaterialTheme.typography.bodyLarge)
+        if (relic.story.isNotBlank()) {
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = BrandSoft),
+                ) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("The story", color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text(relic.story, color = Ink, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        }
+        if (relic.historicalImageUrl.isNotBlank()) {
+            item {
+                Card(
+                    Modifier.fillMaxWidth().height(220.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = BrandSoft),
+                ) {
+                    RemoteTreasureImage(
+                        imageUrl = relic.historicalImageUrl,
+                        contentDescription = "Historical reference for ${relic.name}",
+                        modifier = Modifier.fillMaxSize().padding(10.dp),
+                    )
+                }
+            }
+        }
+        relic.historicalImageCredit.takeIf { it.isNotBlank() }?.let { credit ->
+            item { DetailTextRow("Image credit", credit) }
+        }
+        relic.sourceTitle.takeIf { it.isNotBlank() }?.let { source ->
+            item { DetailTextRow("Source", source) }
+        }
+        relic.sourceUrl.takeIf { it.startsWith("https://") }?.let { sourceUrl ->
+            item {
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl)))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Text("Open historical source")
                 }
             }
         }
         item { DetailTextRow("Found at", relic.locationName) }
-        item { DetailTextRow("Discovery", relic.description) }
+        relic.buildingStory.takeIf { it.isNotBlank() }?.let { buildingStory ->
+            item { DetailTextRow("About the landmark", buildingStory) }
+        }
         item {
             Button(
                 onClick = onPutInBackpack,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(18.dp),
+                enabled = !collecting,
             ) {
-                Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(28.dp))
+                if (collecting) {
+                    CircularProgressIndicator(Modifier.size(23.dp), strokeWidth = 3.dp, color = Color.White)
+                } else {
+                    Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(28.dp))
+                }
                 Spacer(Modifier.width(8.dp))
-                Text("Put in backpack", fontWeight = FontWeight.Bold)
+                Text(if (collecting) "Saving…" else "Put in backpack", fontWeight = FontWeight.Bold)
+            }
+        }
+        collectionError?.let { message ->
+            item {
+                Text(
+                    message,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }

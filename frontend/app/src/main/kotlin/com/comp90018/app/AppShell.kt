@@ -16,6 +16,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
 import com.comp90018.app.data.social.FirebaseSocialRepository
+import com.comp90018.app.data.treasure.FirebaseTreasureCollectionRepository
+import com.comp90018.app.data.treasure.FirebaseTreasureRepository
 import com.comp90018.app.features.friends.FriendsScreen
 import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
@@ -24,6 +26,8 @@ import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.RoomsViewModel
 import com.comp90018.app.features.rooms.UnreadRoomMessagesViewModel
 import com.comp90018.app.features.treasure.TreasureScreen
+import com.comp90018.app.features.treasure.TreasureCatalogViewModel
+import com.comp90018.app.features.treasure.TreasureCollectionViewModel
 import com.comp90018.app.navigation.AppBottomNavigation
 import com.comp90018.app.navigation.AppDestination
 import com.google.firebase.auth.FirebaseUser
@@ -56,6 +60,18 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = RoomsViewModel.factory(teamRoomRepository, user.uid),
     )
     val roomsState by roomsViewModel.uiState.collectAsStateWithLifecycle()
+    val treasureRepository = remember(firestore) { FirebaseTreasureRepository(firestore) }
+    val treasureCatalogViewModel: TreasureCatalogViewModel = viewModel(
+        key = "treasure_catalog",
+        factory = TreasureCatalogViewModel.factory(treasureRepository),
+    )
+    val treasureCatalogState by treasureCatalogViewModel.uiState.collectAsStateWithLifecycle()
+    val treasureCollectionRepository = remember(firestore) { FirebaseTreasureCollectionRepository(firestore) }
+    val treasureCollectionViewModel: TreasureCollectionViewModel = viewModel(
+        key = "treasure_collection_${user.uid}",
+        factory = TreasureCollectionViewModel.factory(treasureCollectionRepository, user.uid),
+    )
+    val treasureCollectionState by treasureCollectionViewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(containerColor = Background, bottomBar = {
         AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
@@ -63,12 +79,26 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
                 AppDestination.Treasure -> TreasureScreen(
-                    activeRoomId = roomsState.activeRoomId,
-                    repository = teamRoomRepository,
+                    treasures = treasureCatalogState.treasures,
+                    loading = treasureCatalogState.loading,
+                    error = treasureCatalogState.error,
+                    onRetry = treasureCatalogViewModel::retry,
                     onOpenMap = { destination = AppDestination.Map },
+                    discoveredTreasureIds = treasureCollectionState.discoveredIds,
+                    collectionLoading = treasureCollectionState.loading,
+                    collectionError = treasureCollectionState.error,
+                    onRetryCollection = treasureCollectionViewModel::retry,
                 )
                 AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
-                AppDestination.Map -> MapScreen()
+                AppDestination.Map -> MapScreen(
+                    treasures = treasureCatalogState.treasures,
+                    loading = treasureCatalogState.loading,
+                    error = treasureCatalogState.error,
+                    onRetry = treasureCatalogViewModel::retry,
+                    discoveredTreasureIds = treasureCollectionState.discoveredIds,
+                    savingTreasureId = treasureCollectionState.savingTreasureId,
+                    onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
+                )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
                 AppDestination.Profile -> ProfileScreen(
                     userUid = user.uid,

@@ -66,6 +66,30 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
+    // Signed-in explorers can read the shared catalogue. Catalogue writes remain
+    // administrative and must be made through the Firebase Console/Admin SDK.
+    match /treasures/{treasureId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // A discovery belongs only to the signed-in user whose profile contains it.
+    // The treasure document ID doubles as the collection item ID, preventing
+    // duplicate discoveries for the same user.
+    match /users/{userId}/treasureCollection/{treasureId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'treasureId', 'status', 'discoveredAt'
+        ])
+        && request.resource.data.ownerUid == userId
+        && request.resource.data.treasureId == treasureId
+        && request.resource.data.status == 'discovered'
+        && request.resource.data.discoveredAt == request.time
+        && exists(/databases/$(database)/documents/treasures/$(treasureId));
+      allow update, delete: if false;
+    }
+
     match /friendRequests/{requestId} {
       allow read: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
