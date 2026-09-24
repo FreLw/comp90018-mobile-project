@@ -43,6 +43,10 @@ class AndroidDeviceContextEngine(
         locationSensor.setTargetLocation(target)
     }
 
+    override fun setChallengeTargetHeading(requiredHeadingDegrees: Double?) {
+        orientationSensor.setTargetBearing(requiredHeadingDegrees)
+    }
+
     override fun start() {
         locationSensor.start()
         orientationSensor.start()
@@ -69,8 +73,11 @@ class AndroidDeviceContextEngine(
     override fun stop() {
         sensorJob?.cancel()
         geocodeJob?.cancel()
+        sensorJob = null
+        geocodeJob = null
         locationSensor.stop()
         orientationSensor.stop()
         motionSensor.stop()
+        _output.value = DeviceContextSnapshot()
     }
 }

@@ -42,6 +42,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.comp90018.app.features.treasurechallenge.TreasureChallengeRoute
 import com.comp90018.app.sensors.location.AndroidLocationSensor
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationAvailabilityState
@@ -60,6 +61,19 @@ import java.util.Locale
 /** Dedicated map feature boundary; location rendering belongs here. */
 @Composable
 fun MapScreen() {
+    var activeChallengeRelic by remember { mutableStateOf<MapRelic?>(null) }
+    activeChallengeRelic?.let { relic ->
+        val config = relic.challengeConfig
+        if (config != null) {
+            TreasureChallengeRoute(
+                config = config,
+                historicalImageResId = relic.historicalImageResId,
+                onBack = { activeChallengeRelic = null },
+            )
+            return
+        }
+    }
+
     val context = LocalContext.current
     val locationSensor = remember(context) { AndroidLocationSensor(context) }
     val locationOutput by locationSensor.output.collectAsState()
@@ -111,7 +125,12 @@ fun MapScreen() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            MapStatusCard(selectedRelic, locationOutput)
+            MapStatusCard(
+                selectedRelic = selectedRelic,
+                output = locationOutput,
+                canStartChallenge = hasLocationPermission,
+                onStartChallenge = { activeChallengeRelic = selectedRelic },
+            )
             if (!hasLocationPermission) {
                 Button(
                     onClick = {
@@ -187,7 +206,12 @@ private fun GoogleMapView(
 }
 
 @Composable
-private fun MapStatusCard(selectedRelic: MapRelic, output: LocationOutput) {
+private fun MapStatusCard(
+    selectedRelic: MapRelic,
+    output: LocationOutput,
+    canStartChallenge: Boolean,
+    onStartChallenge: () -> Unit,
+) {
     ElevatedCard(shape = RoundedCornerShape(10.dp)) {
         Column(
             modifier = Modifier
@@ -209,6 +233,15 @@ private fun MapStatusCard(selectedRelic: MapRelic, output: LocationOutput) {
                 text = "Permission: ${output.permission.name.lowercase()} | GPS: ${output.availability.label()}",
                 style = MaterialTheme.typography.bodySmall,
             )
+            if (selectedRelic.challengeConfig != null) {
+                Button(
+                    onClick = onStartChallenge,
+                    enabled = canStartChallenge,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (canStartChallenge) "Start challenge" else "Enable location to start")
+                }
+            }
         }
     }
 }
