@@ -9,6 +9,9 @@ interface DeviceContextEngine {
 
     fun setTargetLocation(target: GeoCoordinate?)
 
+    /** Sets the fixed treasure viewing heading; this is not the location navigation bearing. */
+    fun setChallengeTargetHeading(requiredHeadingDegrees: Double?)
+
     fun start()
 
     fun stop()

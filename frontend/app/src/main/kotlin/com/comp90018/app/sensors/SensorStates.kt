@@ -5,6 +5,7 @@ enum class StabilityState { UNKNOWN, STABLE, UNSTABLE }
 enum class DirectionAlignment { UNKNOWN, ALIGNED, MISALIGNED }
 enum class TurnDirection { UNKNOWN, NONE, TURN_LEFT, TURN_RIGHT }
 enum class RotationState { UNKNOWN, STILL, ROTATING }
+enum class HorizontalState { UNKNOWN, HORIZONTAL, NOT_HORIZONTAL }
 
 /** UNKNOWN includes absent input; UNRELIABLE means rejected input. */
 enum class SensorValidity { UNKNOWN, WARMING_UP, VALID, UNRELIABLE }
@@ -46,5 +47,13 @@ data class RotationOutput(
     val validity: SensorValidity = SensorValidity.UNKNOWN,
     /** Smoothed magnitude of the gyroscope's angular velocity vector, in rad/s. */
     val angularVelocityMagnitude: Double? = null,
+    val timestampNanos: Long? = null,
+)
+
+data class AttitudeOutput(
+    val pitchDegrees: Double? = null,
+    val rollDegrees: Double? = null,
+    val horizontalState: HorizontalState = HorizontalState.UNKNOWN,
+    val validity: SensorValidity = SensorValidity.UNKNOWN,
     val timestampNanos: Long? = null,
 )

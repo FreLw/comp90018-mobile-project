@@ -11,7 +11,9 @@ class FakeMotionSensor : MotionSensor {
 
     override fun start() = Unit
 
-    override fun stop() = Unit
+    override fun stop() {
+        _output.value = MotionStabilityOutput()
+    }
 
     fun emit(output: MotionStabilityOutput) {
         _output.value = output

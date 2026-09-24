@@ -43,5 +43,6 @@ class AndroidMotionSensor(
     override fun stop() {
         sensorManager.unregisterListener(listener)
         processor.reset()
+        _output.value = MotionStabilityOutput()
     }
 }

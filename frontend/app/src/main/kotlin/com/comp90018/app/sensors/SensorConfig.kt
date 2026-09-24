@@ -14,6 +14,7 @@ data class SensorConfig(
     val stabilityEnterThreshold: Double = 0.12,
     val stabilityExitThreshold: Double = 0.25,
     val headingTimeConstantNanos: Long = 200_000_000L,
+    val horizontalToleranceDegrees: Double = 12.0,
     val sampleGapTimeoutNanos: Long = 2_000_000_000L,
     /** Angular velocity magnitude is rad/s (raw gyroscope units). */
     val rotationTimeConstantNanos: Long = 150_000_000L,
@@ -32,6 +33,7 @@ data class SensorConfig(
         require(motionExitThreshold >= 0 && motionEnterThreshold > motionExitThreshold)
         require(stabilityEnterThreshold.isFinite() && stabilityExitThreshold.isFinite())
         require(stabilityEnterThreshold >= 0 && stabilityExitThreshold > stabilityEnterThreshold)
+        require(horizontalToleranceDegrees.isFinite() && horizontalToleranceDegrees in 0.0..90.0)
         require(rotationTimeConstantNanos > 0 && rotationWarmUpNanos > 0 && rotationMinSamples >= 2)
         require(rotationExitThreshold.isFinite() && rotationEnterThreshold.isFinite())
         require(rotationExitThreshold >= 0 && rotationEnterThreshold > rotationExitThreshold)
