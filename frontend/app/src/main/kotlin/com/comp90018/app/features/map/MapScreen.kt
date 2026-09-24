@@ -102,6 +102,7 @@ import com.comp90018.app.R
 import com.comp90018.app.RelicRed
 import com.comp90018.app.features.treasure.RemoteTreasureImage
 import com.comp90018.app.features.treasure.TreasurePrototypeImage
+import com.comp90018.app.features.treasurechallenge.TreasureChallengeRoute
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
@@ -126,8 +127,12 @@ fun MapScreen(
     savingTreasureId: String?,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
 ) {
+    val resolvedTreasures = remember(treasures) {
+        treasures.map(NonFinalChallengeCatalog::attachChallenge)
+    }
     var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
     var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
     val foundRelicIds = discoveredTreasureIds
     val deviceHeading = rememberDeviceHeading()
     val activeRelic = detailRelic ?: selectedRelic
@@ -140,9 +145,21 @@ fun MapScreen(
         label = "map_quest_marker_pulse",
     )
 
-    LaunchedEffect(treasures) {
-        selectedRelic = selectedRelic?.let { selected -> treasures.firstOrNull { it.id == selected.id } }
-        detailRelic = detailRelic?.let { detail -> treasures.firstOrNull { it.id == detail.id } }
+    LaunchedEffect(resolvedTreasures) {
+        selectedRelic = selectedRelic?.let { selected -> resolvedTreasures.firstOrNull { it.id == selected.id } }
+        detailRelic = detailRelic?.let { detail -> resolvedTreasures.firstOrNull { it.id == detail.id } }
+        challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
+    }
+
+    challengeRelic?.let { relic ->
+        relic.challengeConfig?.let { config ->
+            TreasureChallengeRoute(
+                config = config,
+                historicalImageResId = relic.historicalImageResId,
+                onBack = { challengeRelic = null },
+            )
+            return
+        }
     }
 
     detailRelic?.let { relic ->
@@ -153,6 +170,7 @@ fun MapScreen(
             isFound = relic.id in foundRelicIds,
             collecting = savingTreasureId == relic.id,
             onCollected = { onComplete -> onCollectTreasure(relic.id, onComplete) },
+            onStartChallenge = relic.challengeConfig?.let { { challengeRelic = relic } },
             onBack = {
                 detailRelic = null
             },
@@ -162,7 +180,7 @@ fun MapScreen(
 
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
-            relics = treasures,
+            relics = resolvedTreasures,
             selectedRelic = selectedRelic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
@@ -179,7 +197,7 @@ fun MapScreen(
                 message = when {
                     loading -> "Loading treasures from Firebase…"
                     error != null -> error
-                    treasures.isEmpty() -> "No enabled treasures are available right now."
+                    resolvedTreasures.isEmpty() -> "No enabled treasures are available right now."
                     else -> "Psst… tap a treasure and see what’s hiding nearby!"
                 },
                 loading = loading,
@@ -348,6 +366,7 @@ private fun TreasureDetailScreen(
     isFound: Boolean,
     collecting: Boolean,
     onCollected: ((String?) -> Unit) -> Unit,
+    onStartChallenge: (() -> Unit)?,
     onBack: () -> Unit,
 ) {
     var navigating by remember(relic.id) { mutableStateOf(false) }
@@ -440,7 +459,7 @@ private fun TreasureDetailScreen(
                                 isFound = isFound,
                                 navigating = navigating,
                                 onNavigate = { navigating = true },
-                                onArrived = { stage = TreasureHuntStage.SEARCHING },
+                                onArrived = onStartChallenge ?: { stage = TreasureHuntStage.SEARCHING },
                                 modifier = Modifier.weight(1f),
                             )
                         }

@@ -9,11 +9,35 @@ class FakeDeviceContextEngine : DeviceContextEngine {
     private val _output = MutableStateFlow(DeviceContextSnapshot())
     override val output: StateFlow<DeviceContextSnapshot> = _output.asStateFlow()
 
-    override fun setTargetLocation(target: GeoCoordinate?) = Unit
+    var targetLocation: GeoCoordinate? = null
+        private set
+    var challengeTargetHeadingDegrees: Double? = null
+        private set
+    var isStarted: Boolean = false
+        private set
+    var startCount: Int = 0
+        private set
+    var stopCount: Int = 0
+        private set
 
-    override fun start() = Unit
+    override fun setTargetLocation(target: GeoCoordinate?) {
+        targetLocation = target
+    }
 
-    override fun stop() = Unit
+    override fun setChallengeTargetHeading(requiredHeadingDegrees: Double?) {
+        challengeTargetHeadingDegrees = requiredHeadingDegrees
+    }
+
+    override fun start() {
+        isStarted = true
+        startCount++
+    }
+
+    override fun stop() {
+        isStarted = false
+        stopCount++
+        _output.value = DeviceContextSnapshot()
+    }
 
     fun emit(snapshot: DeviceContextSnapshot) {
         _output.value = snapshot
