@@ -18,6 +18,9 @@ object NonFinalChallengeCatalog {
     private val oldQuad = GeoCoordinate(-37.798156, 144.960481)
     private val southLawn = GeoCoordinate(-37.79856, 144.96050)
 
+    private val systemGarden = GeoCoordinate(-37.79669, 144.95924)
+    private val graingerMuseum = GeoCoordinate(-37.79730, 144.95845)
+
     val relics = listOf(
         MapRelic(
             id = "union-lawn",
@@ -71,6 +74,28 @@ object NonFinalChallengeCatalog {
             name = "Baillieu Lantern",
             locationName = "Baillieu Library",
             coordinate = GeoCoordinate(-37.7986, 144.9602),
+        ),
+        MapRelic(
+            id = "system-garden",
+            name = "System Garden Glasshouse",
+            locationName = "System Garden",
+            coordinate = systemGarden,
+            challengeConfig = RelicChallengeConfigs.systemGardenGlasshouse(
+                challengeId = "system-garden-glasshouse",
+                targetLocation = systemGarden,
+                insideRadiusMeters = INSIDE_RADIUS_METERS,
+            ),
+        ),
+        MapRelic(
+            id = "grainger-museum",
+            name = "Grainger Museum Tone-Tool",
+            locationName = "Grainger Museum",
+            coordinate = graingerMuseum,
+            challengeConfig = RelicChallengeConfigs.graingerMuseumToneTool(
+                challengeId = "grainger-museum-tone-tool",
+                targetLocation = graingerMuseum,
+                insideRadiusMeters = INSIDE_RADIUS_METERS,
+            ),
         ),
     )
 

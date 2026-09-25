@@ -12,6 +12,7 @@ import com.comp90018.app.sensors.RotationState
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.StabilityOutput
 import com.comp90018.app.sensors.StabilityState
+import com.comp90018.app.sensors.audio.SoundLevelOutput
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationOutput
 import com.comp90018.app.sensors.orientation.OrientationOutput
@@ -191,6 +192,88 @@ class ChallengeRuleEvaluatorTest {
         assertEquals(ChallengeInstruction.COMPLETED, completed.instruction)
     }
 
+    @Test fun systemGardenUsesTheSameRuleSetAsOldQuad() {
+        val systemGarden = systemGardenConfig()
+        assertEquals(null, systemGarden.requiredHeadingDegrees)
+        assertTrue(
+            systemGarden.requiresStationary && systemGarden.requiresStability &&
+                systemGarden.requiresRotationStill && systemGarden.requiresHorizontal,
+        )
+        assertEquals(3_000_000_000L, systemGarden.holdDurationNanos)
+        assertFalse(systemGarden.requiresSound)
+    }
+
+    @Test fun systemGardenNonHorizontalCannotProgress() {
+        val result = ChallengeRuleEvaluator(systemGardenConfig()).evaluate(snapshot(horizontal = false), 0L)
+
+        assertEquals(ChallengeInstruction.KEEP_PHONE_LEVEL, result.instruction)
+        assertEquals(0.0, result.holdProgress, 0.0)
+    }
+
+    @Test fun systemGardenAllConditionsHeldForThreeSecondsCompletes() {
+        val evaluator = ChallengeRuleEvaluator(systemGardenConfig())
+        evaluator.evaluate(snapshot(), 0L)
+
+        val completed = evaluator.evaluate(snapshot(), 3_000_000_000L)
+        assertTrue(completed.completed)
+        assertEquals(1.0, completed.holdProgress, 0.0)
+    }
+
+    @Test fun graingerConfigRequiresASoundThreshold() {
+        val grainger = graingerConfig()
+        assertTrue(grainger.requiresSound)
+        assertEquals(-30.0, grainger.soundThresholdDecibels!!, 0.0)
+        assertEquals(1_000_000_000L, grainger.holdDurationNanos)
+    }
+
+    @Test fun graingerOutsideCannotActivate() {
+        val result = ChallengeRuleEvaluator(graingerConfig()).evaluate(snapshot(inside = false), 0L)
+
+        assertEquals(ChallengeInstruction.MOVE_CLOSER, result.instruction)
+        assertFalse(result.condition(ChallengeCondition.LOCATION_INSIDE))
+        assertFalse(result.completed)
+    }
+
+    @Test fun graingerSilenceAsksForSound() {
+        val result = ChallengeRuleEvaluator(graingerConfig()).evaluate(snapshot(soundDecibels = -60.0), 0L)
+
+        assertEquals(ChallengeInstruction.MAKE_SOUND, result.instruction)
+        assertFalse(result.condition(ChallengeCondition.SOUND_DETECTED))
+        assertFalse(result.completed)
+    }
+
+    @Test fun graingerBriefLoudSoundDoesNotCompleteYet() {
+        val result = ChallengeRuleEvaluator(graingerConfig()).evaluate(snapshot(soundDecibels = -10.0), 0L)
+
+        assertTrue(result.condition(ChallengeCondition.SOUND_DETECTED))
+        assertFalse(result.completed)
+        assertEquals(0.0, result.holdProgress, 0.0)
+        assertEquals(ChallengeInstruction.HOLD_TONE, result.instruction)
+    }
+
+    @Test fun graingerLoudSoundHeldForOneSecondCompletes() {
+        val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
+
+        val completed = evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_000_000_000L)
+        assertTrue(completed.completed)
+        assertEquals(ChallengeInstruction.COMPLETED, completed.instruction)
+    }
+
+    @Test fun graingerSoundDroppingBelowThresholdResetsTheHoldTimer() {
+        val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
+        assertTrue(evaluator.evaluate(snapshot(soundDecibels = -10.0), 500_000_000L).holdProgress > 0.0)
+
+        val silence = evaluator.evaluate(snapshot(soundDecibels = -60.0), 600_000_000L)
+        assertEquals(ChallengeInstruction.MAKE_SOUND, silence.instruction)
+        assertEquals(0.0, silence.holdProgress, 0.0)
+
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 700_000_000L)
+        assertFalse(evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_699_999_999L).completed)
+        assertTrue(evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_700_000_000L).completed)
+    }
+
     private fun unionConfig() = RelicChallengeConfigs.unionLawnPhoto(
         challengeId = "union-test",
         targetLocation = target,
@@ -218,6 +301,18 @@ class ChallengeRuleEvaluatorTest {
         requiredHeadingDegrees = 0.0,
     )
 
+    private fun systemGardenConfig() = RelicChallengeConfigs.systemGardenGlasshouse(
+        challengeId = "system-garden-test",
+        targetLocation = target,
+        insideRadiusMeters = radiusMeters,
+    )
+
+    private fun graingerConfig() = RelicChallengeConfigs.graingerMuseumToneTool(
+        challengeId = "grainger-test",
+        targetLocation = target,
+        insideRadiusMeters = radiusMeters,
+    )
+
     private fun snapshot(
         inside: Boolean = true,
         headingDegrees: Double = 0.0,
@@ -225,6 +320,7 @@ class ChallengeRuleEvaluatorTest {
         stationary: Boolean = true,
         stable: Boolean = true,
         rotationStill: Boolean = true,
+        soundDecibels: Double? = null,
     ) = DeviceContextSnapshot(
         location = LocationOutput(
             currentLocation = if (inside) target else GeoCoordinate(0.0, 0.001),
@@ -254,6 +350,11 @@ class ChallengeRuleEvaluatorTest {
                 validity = SensorValidity.VALID,
             ),
         ),
+        sound = if (soundDecibels == null) {
+            SoundLevelOutput()
+        } else {
+            SoundLevelOutput(decibels = soundDecibels, validity = SensorValidity.VALID)
+        },
     )
 
     private fun ChallengeProgress.condition(condition: ChallengeCondition): Boolean =

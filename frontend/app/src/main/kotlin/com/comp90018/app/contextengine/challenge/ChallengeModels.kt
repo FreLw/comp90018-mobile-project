@@ -7,6 +7,8 @@ enum class RelicChallengeType {
     WILSON_HALL_OBSERVATION,
     OLD_QUAD_EXCAVATION,
     SOUTH_LAWN_VIEWING_ANGLE,
+    SYSTEM_GARDEN_GLASSHOUSE,
+    GRAINGER_MUSEUM_TONE_TOOL,
 }
 
 data class RelicChallengeConfig(
@@ -22,6 +24,8 @@ data class RelicChallengeConfig(
     val requiresHorizontal: Boolean,
     val holdDurationNanos: Long,
     val photoActionRequired: Boolean,
+    val requiresSound: Boolean = false,
+    val soundThresholdDecibels: Double? = null,
 ) {
     init {
         require(challengeId.isNotBlank())
@@ -31,6 +35,10 @@ data class RelicChallengeConfig(
         require(requiredHeadingDegrees == null || requiredHeadingDegrees.isFinite())
         require(headingToleranceDegrees.isFinite() && headingToleranceDegrees in 0.0..180.0)
         require(holdDurationNanos >= 0L)
+        require(!requiresSound || soundThresholdDecibels != null) {
+            "soundThresholdDecibels is required when requiresSound is true"
+        }
+        require(soundThresholdDecibels == null || soundThresholdDecibels.isFinite())
     }
 }
 
@@ -41,6 +49,7 @@ enum class ChallengeCondition {
     STATIONARY,
     STABLE,
     ROTATION_STILL,
+    SOUND_DETECTED,
 }
 
 data class ChallengeConditionState(
@@ -60,6 +69,9 @@ enum class ChallengeInstruction {
     HOLD_OBSERVATION,
     HOLD_EXCAVATION_POSITION,
     HOLD_VIEWING_ANGLE,
+    HOLD_GLASSHOUSE_POSITION,
+    MAKE_SOUND,
+    HOLD_TONE,
     TAKE_PHOTO,
     COMPLETED,
 }

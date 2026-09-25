@@ -30,6 +30,7 @@ import com.comp90018.app.features.treasure.TreasureCatalogViewModel
 import com.comp90018.app.features.treasure.TreasureCollectionViewModel
 import com.comp90018.app.navigation.AppBottomNavigation
 import com.comp90018.app.navigation.AppDestination
+import com.comp90018.app.ui.components.SensorErrorHost
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -73,9 +74,13 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     )
     val treasureCollectionState by treasureCollectionViewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(containerColor = Background, bottomBar = {
-        AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
-    }) { padding ->
+    Scaffold(
+        containerColor = Background,
+        bottomBar = {
+            AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
+        },
+        snackbarHost = { SensorErrorHost() },
+    ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
                 AppDestination.Treasure -> TreasureScreen(
