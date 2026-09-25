@@ -24,11 +24,11 @@ import com.comp90018.app.Brand
 import com.comp90018.app.Muted
 
 enum class AppDestination(val label: String, val icon: ImageVector) {
-    Treasure("treasure", Icons.Rounded.Star),
+    Treasure("Treasure", Icons.Rounded.Star),
     Rooms("Rooms", Icons.Rounded.Forum),
     Map("Map", Icons.Rounded.LocationOn),
-    Friends("friend", Icons.Rounded.Group),
-    Profile("profile", Icons.Rounded.Person),
+    Friends("Friend", Icons.Rounded.Group),
+    Profile("Profile", Icons.Rounded.Person),
 }
 
 @Composable
