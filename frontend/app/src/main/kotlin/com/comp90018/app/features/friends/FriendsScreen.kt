@@ -27,7 +27,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Badge
@@ -55,37 +54,23 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.Brand
 import com.comp90018.app.BrandSoft
 import com.comp90018.app.FriendSummary
+import com.comp90018.app.FriendRequestStatus
 import com.comp90018.app.IncomingFriendRequest
+import com.comp90018.app.OutgoingFriendRequest
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicRed
 import com.comp90018.app.R
-import com.comp90018.app.SearchUser
 import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.data.profile.FirebaseProfileRepository
-import com.comp90018.app.ui.components.ChatComposer
 import com.comp90018.app.ui.components.EmptyState
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
 private enum class FriendsPage { Main, Requests, RequestDetail, Finder }
-
-private enum class FriendNoticeStatus { Accepted, Declined, Pending }
-
-private data class FriendNotice(
-    val user: SearchUser,
-    val status: FriendNoticeStatus,
-    val requestMessage: String,
-)
-
-private val initialFriendNotices = listOf(
-    FriendNotice(mockFriendDirectory.first { it.uid == "mock_ava" }, FriendNoticeStatus.Accepted, "Hi, would you like to team up?"),
-    FriendNotice(mockFriendDirectory.first { it.uid == "mock_noah" }, FriendNoticeStatus.Declined, "Let's explore the campus together."),
-    FriendNotice(mockFriendDirectory.first { it.uid == "mock_emma" }, FriendNoticeStatus.Pending, "Want to hunt for the Old Quad treasure?"),
-)
 
 /** Renders friend state and delegates social actions to [FriendsViewModel]. */
 @Composable
@@ -100,32 +85,10 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
     val chatTarget = state.chatTarget
     var addFriendMode by remember { mutableStateOf(false) }
     var viewingProfile by remember(chatTarget) { mutableStateOf(false) }
-    var simulatedRequests by remember { mutableStateOf(mockIncomingRequests) }
-    var simulatedFriends by remember {
-        mutableStateOf(listOf(FriendSummary("mock_ava", "ava")))
-    }
-    var friendNotices by remember { mutableStateOf(initialFriendNotices) }
-    var mockChatFriend by remember { mutableStateOf<FriendSummary?>(null) }
     var viewingRequest by remember { mutableStateOf<IncomingFriendRequest?>(null) }
 
-    val acceptRequest: (IncomingFriendRequest) -> Unit = { request ->
-        if (request.fromUid.startsWith("mock_")) {
-            val candidate = mockFriendDirectory.firstOrNull { it.uid == request.fromUid }
-            if (candidate != null && simulatedFriends.none { it.uid == candidate.uid }) {
-                simulatedFriends = simulatedFriends + FriendSummary(candidate.uid, candidate.username)
-            }
-            simulatedRequests = simulatedRequests - request
-        } else viewModel.accept(request)
-    }
-    val declineRequest: (IncomingFriendRequest) -> Unit = { request ->
-        if (request.fromUid.startsWith("mock_")) simulatedRequests = simulatedRequests - request
-        else viewModel.decline(request)
-    }
-
-    mockChatFriend?.let { friend ->
-        MockDirectChatScreen(friend, onBack = { mockChatFriend = null })
-        return
-    }
+    val acceptRequest: (IncomingFriendRequest) -> Unit = viewModel::accept
+    val declineRequest: (IncomingFriendRequest) -> Unit = viewModel::decline
 
     if (chatTarget != null) {
         if (viewingProfile) {
@@ -151,8 +114,6 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
         }
         return
     }
-    val mergedState = state.copy(friends = (state.friends + simulatedFriends).distinctBy { it.uid })
-    val mergedRequests = state.requests + simulatedRequests
     val page = when {
         viewingRequest != null -> FriendsPage.RequestDetail
         addFriendMode -> FriendsPage.Finder
@@ -178,23 +139,22 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
                 firestore = firestore,
                 currentUsername = profile?.username.orEmpty(),
                 currentAvatarUrl = profile?.avatarUrl.orEmpty(),
-                knownFriendIds = mergedState.friends.map { it.uid }.toSet(),
-                onRequestSent = { candidate, message ->
-                    friendNotices = friendNotices
-                        .filterNot { it.user.uid == candidate.uid } +
-                        FriendNotice(candidate, FriendNoticeStatus.Pending, message)
-                },
+                knownFriendIds = state.friends.map { it.uid }.toSet(),
+                outgoingRequestIds = state.outgoingRequests
+                    .filter { it.status == FriendRequestStatus.Pending }
+                    .map { it.toUid }
+                    .toSet(),
                 onClose = { addFriendMode = false },
             )
             FriendsPage.Requests -> FriendRequestsScreen(
-                    requests = mergedRequests,
-                    notices = friendNotices,
+                    requests = state.requests,
+                    outgoingRequests = state.outgoingRequests,
                     onBack = viewModel::toggleRequests,
                     onAccept = acceptRequest,
                     onDecline = declineRequest,
                     onOpenRequest = { viewingRequest = it },
-                    onSendMessage = { notice ->
-                        mockChatFriend = FriendSummary(notice.user.uid, notice.user.username)
+                    onSendMessage = { request ->
+                        viewModel.openChat(FriendSummary(request.toUid, request.toUsername))
                     },
                 )
             FriendsPage.RequestDetail -> viewingRequest?.let { request ->
@@ -205,15 +165,17 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
                 )
             }
             FriendsPage.Main -> FriendsContent(
-                    state = mergedState,
+                    state = state,
                     profile = profile,
-                    requestCount = mergedRequests.size + friendNotices.size,
+                    requestCount = if (profile?.settings?.notifications == false) {
+                        0
+                    } else {
+                        state.requests.size
+                    },
                     onAddFriend = { addFriendMode = true },
                     onOpenOwnProfile = onOpenOwnProfile,
                     onToggleRequests = viewModel::toggleRequests,
-                    onOpenChat = { friend ->
-                        if (friend.uid.startsWith("mock_")) mockChatFriend = friend else viewModel.openChat(friend)
-                    },
+                    onOpenChat = viewModel::openChat,
                 )
         }
     }
@@ -296,18 +258,18 @@ private fun NoFriendsCard(onAddFriend: () -> Unit) {
 @Composable
 private fun FriendRequestsScreen(
     requests: List<IncomingFriendRequest>,
-    notices: List<FriendNotice>,
+    outgoingRequests: List<OutgoingFriendRequest>,
     onBack: () -> Unit,
     onAccept: (IncomingFriendRequest) -> Unit,
     onDecline: (IncomingFriendRequest) -> Unit,
     onOpenRequest: (IncomingFriendRequest) -> Unit,
-    onSendMessage: (FriendNotice) -> Unit,
+    onSendMessage: (OutgoingFriendRequest) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { androidx.compose.material3.Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
         }
-        if (requests.isEmpty() && notices.isEmpty()) {
+        if (requests.isEmpty() && outgoingRequests.isEmpty()) {
             EmptyState(Icons.Rounded.Group, "No notifications", "Friend activity will appear here.")
         } else {
             LazyColumn(
@@ -321,15 +283,19 @@ private fun FriendRequestsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("${request.fromUsername} sent you a friend request", fontWeight = FontWeight.SemiBold, color = Ink)
-                                Text("Hi, would you like to team up?", color = Muted, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    request.message.ifBlank { "Friend request" },
+                                    color = Muted,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                             TextButton(onClick = { onDecline(request) }) { Text("Decline", color = RelicRed) }
                             TextButton(onClick = { onAccept(request) }) { Text("Accept", color = Brand) }
                         }
                     }
                 }
-                items(notices, key = { "notice_${it.user.uid}" }) { notice ->
-                    FriendNoticeCard(notice, onSendMessage)
+                items(outgoingRequests, key = { "outgoing_${it.toUid}" }) { request ->
+                    OutgoingFriendRequestCard(request, onSendMessage)
                 }
             }
         }
@@ -337,36 +303,39 @@ private fun FriendRequestsScreen(
 }
 
 @Composable
-private fun FriendNoticeCard(notice: FriendNotice, onSendMessage: (FriendNotice) -> Unit) {
+private fun OutgoingFriendRequestCard(
+    request: OutgoingFriendRequest,
+    onSendMessage: (OutgoingFriendRequest) -> Unit,
+) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            ProfileAvatar(notice.user.avatarUrl, notice.user.username, 44.dp)
+            ProfileAvatar("", request.toUsername, 44.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    when (notice.status) {
-                        FriendNoticeStatus.Accepted -> "${notice.user.username} accepted your friend request"
-                        FriendNoticeStatus.Declined -> "${notice.user.username} declined your friend request"
-                        FriendNoticeStatus.Pending -> "Request sent to ${notice.user.username}"
+                    when (request.status) {
+                        FriendRequestStatus.Accepted -> "${request.toUsername} accepted your friend request"
+                        FriendRequestStatus.Declined -> "${request.toUsername} declined your friend request"
+                        FriendRequestStatus.Pending -> "Request sent to ${request.toUsername}"
                     },
                     color = Ink,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    when (notice.status) {
-                        FriendNoticeStatus.Accepted -> "You are now friends."
-                        FriendNoticeStatus.Declined -> "This request was not accepted."
-                        FriendNoticeStatus.Pending -> "Awaiting approval"
+                    when (request.status) {
+                        FriendRequestStatus.Accepted -> "You are now friends."
+                        FriendRequestStatus.Declined -> "This request was not accepted."
+                        FriendRequestStatus.Pending -> "Awaiting approval"
                     },
                     color = Muted,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (notice.status == FriendNoticeStatus.Pending && notice.requestMessage.isNotBlank()) {
-                    Text("“${notice.requestMessage}”", color = Muted, style = MaterialTheme.typography.bodySmall)
+                if (request.message.isNotBlank()) {
+                    Text("“${request.message}”", color = Muted, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (notice.status == FriendNoticeStatus.Accepted) {
-                TextButton(onClick = { onSendMessage(notice) }) { Text("Send message", color = Brand) }
+            if (request.status == FriendRequestStatus.Accepted) {
+                TextButton(onClick = { onSendMessage(request) }) { Text("Send message", color = Brand) }
             }
         }
     }
@@ -380,14 +349,12 @@ private fun FriendRequestProfileScreen(
 ) {
     val repository = remember(firestore) { FirebaseProfileRepository(firestore) }
     var loadedProfile by remember(request.fromUid) { mutableStateOf<UserProfile?>(null) }
-    val mockProfile = remember(request.fromUid) { mockFriendDirectory.firstOrNull { it.uid == request.fromUid } }
     DisposableEffect(repository, request.fromUid) {
-        if (request.fromUid.startsWith("mock_")) return@DisposableEffect onDispose { }
         val subscription = repository.observeProfile(request.fromUid) { profile, _ -> loadedProfile = profile }
         onDispose { subscription.cancel() }
     }
-    val username = loadedProfile?.username.orEmpty().ifBlank { mockProfile?.username ?: request.fromUsername }
-    val avatarUrl = loadedProfile?.avatarUrl.orEmpty().ifBlank { mockProfile?.avatarUrl.orEmpty() }
+    val username = loadedProfile?.username.orEmpty().ifBlank { request.fromUsername }
+    val avatarUrl = loadedProfile?.avatarUrl.orEmpty()
 
     Column(Modifier.fillMaxSize().padding(top = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.Start)) {
@@ -397,44 +364,8 @@ private fun FriendRequestProfileScreen(
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("$username sent you a friend request", color = Ink, fontWeight = FontWeight.Bold)
-                Text("Hi, would you like to team up?", color = Muted)
+                Text(request.message.ifBlank { "Friend request" }, color = Muted)
             }
-        }
-    }
-}
-
-@Composable
-private fun MockDirectChatScreen(friend: FriendSummary, onBack: () -> Unit) {
-    var input by remember(friend.uid) { mutableStateOf("") }
-    var messages by remember(friend.uid) { mutableStateOf(listOf("${friend.username}: Hi! Ready for a treasure hunt?")) }
-    Column(Modifier.fillMaxSize().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { androidx.compose.material3.Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-            ProfileAvatar("", friend.username, 42.dp)
-            Spacer(Modifier.width(10.dp))
-            Text(friend.username, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-        }
-        Card(Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                messages.forEach { message -> Text(message, color = Ink) }
-            }
-        }
-        ChatComposer(input, { input = it })
-        Button(
-            onClick = {
-                val text = input.trim()
-                if (text.isNotBlank()) {
-                    messages = messages + "You: $text"
-                    input = ""
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = input.isNotBlank(),
-            colors = ButtonDefaults.buttonColors(containerColor = Brand),
-        ) {
-            androidx.compose.material3.Icon(Icons.AutoMirrored.Rounded.Send, null)
-            Spacer(Modifier.width(8.dp))
-            Text("Send")
         }
     }
 }

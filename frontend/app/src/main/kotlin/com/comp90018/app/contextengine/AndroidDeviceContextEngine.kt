@@ -30,7 +30,11 @@ import kotlinx.coroutines.flow.onEach
 class AndroidDeviceContextEngine(
     context: Context,
     private val scope: CoroutineScope,
-    private val locationSensor: LocationSensor = AndroidLocationSensor(context),
+    preciseLocationEnabled: Boolean = true,
+    private val locationSensor: LocationSensor = AndroidLocationSensor(
+        context = context,
+        preciseLocationEnabled = preciseLocationEnabled,
+    ),
     private val orientationSensor: OrientationSensor = AndroidOrientationSensor(context),
     private val motionSensor: MotionSensor = AndroidMotionSensor(context),
     private val soundLevelSensor: SoundLevelSensor = AndroidSoundLevelSensor(context),

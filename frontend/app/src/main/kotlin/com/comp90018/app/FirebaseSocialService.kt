@@ -45,6 +45,16 @@ data class ChatRoomSummary(
 data class IncomingFriendRequest(
     val fromUid: String,
     val fromUsername: String,
+    val message: String = "",
+)
+
+enum class FriendRequestStatus { Pending, Accepted, Declined }
+
+data class OutgoingFriendRequest(
+    val toUid: String,
+    val toUsername: String,
+    val status: FriendRequestStatus,
+    val message: String = "",
 )
 
 data class FriendSummary(
@@ -70,7 +80,7 @@ object FirebaseSocialService {
             .orderBy("username")
             .startAt(normalized)
             .endAt("$normalized\uf8ff")
-            .limit(10)
+            .limit(30)
             .get()
             .addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
@@ -78,6 +88,7 @@ object FirebaseSocialService {
                     return@addOnCompleteListener
                 }
                 val users = task.result.documents.mapNotNull { document ->
+                    if (document.getBoolean("searchable") == false) return@mapNotNull null
                     val uid = document.getString("uid") ?: return@mapNotNull null
                     if (uid == currentUid) return@mapNotNull null
                     SearchUser(
@@ -91,7 +102,7 @@ object FirebaseSocialService {
                         department = document.getString("department").orEmpty(),
                         major = document.getString("major").orEmpty(),
                     )
-                }
+                }.take(10)
                 onComplete(users, null)
             }
     }
@@ -118,6 +129,10 @@ object FirebaseSocialService {
                 }
                 val document = task.result.documents.firstOrNull()
                 if (document == null) {
+                    onComplete(null, null)
+                    return@addOnCompleteListener
+                }
+                if (document.getBoolean("searchable") == false) {
                     onComplete(null, null)
                     return@addOnCompleteListener
                 }
@@ -149,6 +164,7 @@ object FirebaseSocialService {
         toUid: String,
         fromUsername: String,
         toUsername: String,
+        message: String,
         onComplete: (String?) -> Unit,
     ) {
         val requestId = "${fromUid}_$toUid"
@@ -158,6 +174,7 @@ object FirebaseSocialService {
             "fromUsername" to fromUsername.trim().lowercase(),
             "toUsername" to toUsername.trim().lowercase(),
             "status" to "pending",
+            "message" to message.trim().take(120),
             "createdAt" to FieldValue.serverTimestamp(),
         )
         firestore.collection("friendRequests").document(requestId).set(request)
@@ -255,8 +272,38 @@ object FirebaseSocialService {
                     IncomingFriendRequest(
                         fromUid = fromUid,
                         fromUsername = document.getString("fromUsername").orEmpty().ifBlank { fromUid.take(8) },
+                        message = document.getString("message").orEmpty(),
                     )
                 }
+            onChange(requests, null)
+        }
+
+    fun observeOutgoingFriendRequests(
+        firestore: FirebaseFirestore,
+        currentUid: String,
+        onChange: (List<OutgoingFriendRequest>, String?) -> Unit,
+    ): ListenerRegistration = firestore.collection("friendRequests")
+        .whereEqualTo("fromUid", currentUid)
+        .addSnapshotListener { snapshot, exception ->
+            if (exception != null) {
+                onChange(emptyList(), exception.localizedMessage ?: "Unable to load sent friend requests")
+                return@addSnapshotListener
+            }
+            val requests = snapshot?.documents.orEmpty().mapNotNull { document ->
+                val toUid = document.getString("toUid") ?: return@mapNotNull null
+                val status = when (document.getString("status")) {
+                    "accepted" -> FriendRequestStatus.Accepted
+                    "declined" -> FriendRequestStatus.Declined
+                    "pending" -> FriendRequestStatus.Pending
+                    else -> return@mapNotNull null
+                }
+                OutgoingFriendRequest(
+                    toUid = toUid,
+                    toUsername = document.getString("toUsername").orEmpty().ifBlank { toUid.take(8) },
+                    status = status,
+                    message = document.getString("message").orEmpty(),
+                )
+            }
             onChange(requests, null)
         }
 

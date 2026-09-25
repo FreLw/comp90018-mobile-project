@@ -61,18 +61,17 @@ class FriendFinderViewModel(
     }
 
     fun selectUser(user: SearchUser, knownFriend: Boolean = false, requestMode: Boolean = false) {
-        val simulatedStatus = if (user.uid in mutableUiState.value.sentUserIds) FriendshipStatus.OutgoingPending else FriendshipStatus.None
         mutableUiState.value = mutableUiState.value.copy(
             target = user,
             friendship = when {
                 knownFriend -> FriendshipStatus.Friends
-                user.uid.startsWith("mock_") -> simulatedStatus
+                user.uid in mutableUiState.value.sentUserIds -> FriendshipStatus.OutgoingPending
                 else -> null
             },
             requestMode = requestMode,
             message = null,
         )
-        if (!knownFriend && !user.uid.startsWith("mock_")) {
+        if (!knownFriend) {
             repository.getFriendshipStatus(currentUid, user.uid) { status, statusError ->
                 mutableUiState.value = mutableUiState.value.copy(friendship = status, message = statusError)
             }
@@ -87,21 +86,10 @@ class FriendFinderViewModel(
         mutableUiState.value = mutableUiState.value.copy(requestMode = true, message = null)
     }
 
-    fun sendFriendRequest(candidate: SearchUser? = null) {
+    fun sendFriendRequest(message: String, candidate: SearchUser? = null) {
         val target = candidate ?: mutableUiState.value.target ?: return
-        if (target.uid.startsWith("mock_")) {
-            val sent = mutableUiState.value.sentUserIds + target.uid
-            mutableUiState.value = mutableUiState.value.copy(
-                target = mutableUiState.value.target,
-                friendship = if (mutableUiState.value.target?.uid == target.uid) FriendshipStatus.OutgoingPending else mutableUiState.value.friendship,
-                sentUserIds = sent,
-                working = false,
-                message = "Friend request sent",
-            )
-            return
-        }
         mutableUiState.value = mutableUiState.value.copy(working = true, message = null)
-        repository.sendFriendRequest(currentUid, target.uid, currentUsername, target.username) { error ->
+        repository.sendFriendRequest(currentUid, target.uid, currentUsername, target.username, message) { error ->
             mutableUiState.value = mutableUiState.value.copy(
                 working = false,
                 message = error ?: "Friend request sent",
@@ -112,10 +100,6 @@ class FriendFinderViewModel(
     }
 
     fun acceptFriendRequest() = withTarget { target ->
-        if (target.uid.startsWith("mock_")) {
-            mutableUiState.value = mutableUiState.value.copy(working = false, message = "Friend request accepted", friendship = FriendshipStatus.Friends)
-            return@withTarget
-        }
         repository.acceptFriendRequest(target.uid, currentUid, target.username, currentUsername) { error ->
             mutableUiState.value = mutableUiState.value.copy(working = false, message = error ?: "Friend request accepted", friendship = if (error == null) FriendshipStatus.Friends else mutableUiState.value.friendship)
         }

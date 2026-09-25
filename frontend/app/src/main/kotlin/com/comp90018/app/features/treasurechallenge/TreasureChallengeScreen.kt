@@ -66,13 +66,14 @@ import kotlin.math.abs
 fun TreasureChallengeRoute(
     config: RelicChallengeConfig,
     @DrawableRes historicalImageResId: Int? = null,
+    preciseLocationEnabled: Boolean = true,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val viewModel: TreasureChallengeViewModel = viewModel(
-        key = "treasure_challenge_${config.challengeId}",
-        factory = TreasureChallengeViewModel.factory(context, config),
+        key = "treasure_challenge_${config.challengeId}_$preciseLocationEnabled",
+        factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 

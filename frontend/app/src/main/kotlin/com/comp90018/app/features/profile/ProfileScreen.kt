@@ -56,29 +56,29 @@ fun ProfileScreen(
     onRetry: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    val context = LocalContext.current
     var page by remember { mutableStateOf(ProfilePage.Overview) }
-    var extras by remember(userUid) { mutableStateOf(ProfilePreferences.loadExtras(context, userUid)) }
 
     when {
         page == ProfilePage.Edit && profile != null -> EditProfileScreen(
             userUid = userUid,
             repository = repository,
             profile = profile,
-            extras = extras,
+            extras = profile.extras,
             onBack = { page = ProfilePage.Overview },
-            onSaved = { savedExtras ->
-                extras = savedExtras
-                page = ProfilePage.Overview
-            },
+            onSaved = { page = ProfilePage.Overview },
         )
-        page == ProfilePage.Settings -> SettingsScreen(userUid, onBack = { page = ProfilePage.Overview })
+        page == ProfilePage.Settings && profile != null -> SettingsScreen(
+            userUid = userUid,
+            repository = repository,
+            initialSettings = profile.settings,
+            onBack = { page = ProfilePage.Overview },
+        )
         else -> ProfileOverview(
             userEmail = userEmail,
             profile = profile,
             profileError = profileError,
             currentRoomId = currentRoomId,
-            extras = extras,
+            extras = profile?.extras ?: ProfileExtras(),
             onRetry = onRetry,
             onEdit = { page = ProfilePage.Edit },
             onSettings = { page = ProfilePage.Settings },
@@ -166,9 +166,8 @@ private fun EditProfileScreen(
     profile: UserProfile,
     extras: ProfileExtras,
     onBack: () -> Unit,
-    onSaved: (ProfileExtras) -> Unit,
+    onSaved: () -> Unit,
 ) {
-    val context = LocalContext.current
     var username by remember(profile.uid) { mutableStateOf(profile.username) }
     var gender by remember(profile.uid) { mutableStateOf(profile.gender) }
     var phone by remember(profile.uid) { mutableStateOf(extras.phone) }
@@ -229,12 +228,11 @@ private fun EditProfileScreen(
                 val finishSave: (String?) -> Unit = { error ->
                     saving = false
                     if (error == null) {
-                        ProfilePreferences.saveExtras(context, userUid, savedExtras)
-                        onSaved(savedExtras)
+                        onSaved()
                     } else message = error
                 }
                 val saveDetails: (String?) -> Unit = { avatarUrl ->
-                    repository.updateProfile(userUid, normalizedUsername, gender, bio, avatarUrl, finishSave)
+                    repository.updateProfile(userUid, normalizedUsername, gender, bio, savedExtras, avatarUrl, finishSave)
                 }
                 selectedAvatar?.let { uri ->
                     repository.uploadAvatar(userUid, uri) { url, error ->
@@ -315,34 +313,50 @@ private fun GenderDropdown(gender: String, onGenderChanged: (String) -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(userUid: String, onBack: () -> Unit) {
-    val context = LocalContext.current
-    var settings by remember(userUid) { mutableStateOf(ProfilePreferences.loadSettings(context, userUid)) }
+private fun SettingsScreen(
+    userUid: String,
+    repository: ProfileRepository,
+    initialSettings: AppSettings,
+    onBack: () -> Unit,
+) {
+    var settings by remember(userUid, initialSettings) { mutableStateOf(initialSettings) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     fun update(next: AppSettings) {
+        val previous = settings
         settings = next
-        ProfilePreferences.saveSettings(context, userUid, next)
+        saving = true
+        error = null
+        repository.updateSettings(userUid, next) { updateError ->
+            saving = false
+            if (updateError != null) {
+                settings = previous
+                error = updateError
+            }
+        }
     }
     Column(Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
             Text("Settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Ink)
         }
-        SettingsToggle("Notifications", "Friend, room, and treasure updates", settings.notifications) { update(settings.copy(notifications = it)) }
-        SettingsToggle("Discoverable profile", "Allow other explorers to find you in search", settings.searchable) { update(settings.copy(searchable = it)) }
-        SettingsToggle("Sound effects", "Play sounds for actions and discoveries", settings.soundEffects) { update(settings.copy(soundEffects = it)) }
-        SettingsToggle("Haptic feedback", "Use vibration for important actions", settings.haptics) { update(settings.copy(haptics = it)) }
-        SettingsToggle("Precise location", "Improve nearby treasure accuracy", settings.preciseLocation) { update(settings.copy(preciseLocation = it)) }
+        error?.let { Text(it, modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
+        SettingsToggle("Notifications", "Show friend and room unread badges", settings.notifications, !saving) { update(settings.copy(notifications = it)) }
+        SettingsToggle("Discoverable profile", "Allow other explorers to find you in search", settings.searchable, !saving) { update(settings.copy(searchable = it)) }
+        SettingsToggle("Sound effects", "Play sounds for navigation actions", settings.soundEffects, !saving) { update(settings.copy(soundEffects = it)) }
+        SettingsToggle("Haptic feedback", "Use vibration for navigation actions", settings.haptics, !saving) { update(settings.copy(haptics = it)) }
+        SettingsToggle("Precise location", "Use high-accuracy location for challenges", settings.preciseLocation, !saving) { update(settings.copy(preciseLocation = it)) }
     }
 }
 
 @Composable
-private fun SettingsToggle(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SettingsToggle(title: String, subtitle: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, color = Ink, fontWeight = FontWeight.Medium)
             Text(subtitle, color = Muted, style = MaterialTheme.typography.bodySmall)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

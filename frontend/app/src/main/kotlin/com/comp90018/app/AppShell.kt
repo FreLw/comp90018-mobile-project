@@ -73,11 +73,19 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = TreasureCollectionViewModel.factory(treasureCollectionRepository, user.uid),
     )
     val treasureCollectionState by treasureCollectionViewModel.uiState.collectAsStateWithLifecycle()
+    val settings = state.profile?.settings
+    val notificationsEnabled = settings?.notifications ?: true
 
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
+            AppBottomNavigation(
+                selected = destination,
+                unreadFriendMessages = if (notificationsEnabled) unreadFriendMessages else 0,
+                unreadRoomMessages = if (notificationsEnabled) unreadRoomMessages else 0,
+                soundEffectsEnabled = settings?.soundEffects ?: true,
+                hapticsEnabled = settings?.haptics ?: true,
+            ) { destination = it }
         },
         snackbarHost = { SensorErrorHost() },
     ) { padding ->
@@ -102,6 +110,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     onRetry = treasureCatalogViewModel::retry,
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     savingTreasureId = treasureCollectionState.savingTreasureId,
+                    preciseLocationEnabled = settings?.preciseLocation ?: true,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })

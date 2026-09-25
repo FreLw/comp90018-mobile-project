@@ -4,6 +4,7 @@ import com.comp90018.app.FriendSummary
 import com.comp90018.app.FriendshipStatus
 import com.comp90018.app.FirebaseSocialService
 import com.comp90018.app.IncomingFriendRequest
+import com.comp90018.app.OutgoingFriendRequest
 import com.comp90018.app.SearchUser
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -20,8 +21,8 @@ class FirebaseSocialRepository(
     override fun getFriendshipStatus(currentUid: String, targetUid: String, onComplete: (FriendshipStatus?, String?) -> Unit) =
         FirebaseSocialService.getFriendshipStatus(firestore, currentUid, targetUid, onComplete)
 
-    override fun sendFriendRequest(fromUid: String, toUid: String, fromUsername: String, toUsername: String, onComplete: (String?) -> Unit) =
-        FirebaseSocialService.sendFriendRequest(firestore, fromUid, toUid, fromUsername, toUsername, onComplete)
+    override fun sendFriendRequest(fromUid: String, toUid: String, fromUsername: String, toUsername: String, message: String, onComplete: (String?) -> Unit) =
+        FirebaseSocialService.sendFriendRequest(firestore, fromUid, toUid, fromUsername, toUsername, message, onComplete)
 
     override fun acceptFriendRequest(fromUid: String, toUid: String, fromUsername: String, toUsername: String, onComplete: (String?) -> Unit) =
         FirebaseSocialService.acceptFriendRequest(firestore, fromUid, toUid, fromUsername, toUsername, onComplete)
@@ -37,6 +38,11 @@ class FirebaseSocialRepository(
 
     override fun observeIncomingFriendRequests(currentUid: String, onChange: (List<IncomingFriendRequest>, String?) -> Unit): Subscription {
         val registration = FirebaseSocialService.observeIncomingFriendRequests(firestore, currentUid, onChange)
+        return Subscription { registration.remove() }
+    }
+
+    override fun observeOutgoingFriendRequests(currentUid: String, onChange: (List<OutgoingFriendRequest>, String?) -> Unit): Subscription {
+        val registration = FirebaseSocialService.observeOutgoingFriendRequests(firestore, currentUid, onChange)
         return Subscription { registration.remove() }
     }
 

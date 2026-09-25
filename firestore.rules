@@ -31,7 +31,10 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly([
-          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'avatarUrl', 'createdAt', 'updatedAt'
+          'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'avatarUrl',
+          'phone', 'department', 'major', 'notificationsEnabled', 'searchable',
+          'soundEffectsEnabled', 'hapticsEnabled', 'preciseLocationEnabled',
+          'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
@@ -42,6 +45,17 @@ service cloud.firestore {
         && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
         && request.resource.data.bio is string
         && request.resource.data.bio.size() <= 500
+        && (!('phone' in request.resource.data)
+          || (request.resource.data.phone is string && request.resource.data.phone.size() <= 40))
+        && (!('department' in request.resource.data)
+          || (request.resource.data.department is string && request.resource.data.department.size() <= 120))
+        && (!('major' in request.resource.data)
+          || (request.resource.data.major is string && request.resource.data.major.size() <= 120))
+        && (!('notificationsEnabled' in request.resource.data) || request.resource.data.notificationsEnabled is bool)
+        && (!('searchable' in request.resource.data) || request.resource.data.searchable is bool)
+        && (!('soundEffectsEnabled' in request.resource.data) || request.resource.data.soundEffectsEnabled is bool)
+        && (!('hapticsEnabled' in request.resource.data) || request.resource.data.hapticsEnabled is bool)
+        && (!('preciseLocationEnabled' in request.resource.data) || request.resource.data.preciseLocationEnabled is bool)
         && (!('avatarUrl' in request.resource.data)
           || (request.resource.data.avatarUrl is string
             && request.resource.data.avatarUrl.size() <= 2000))
@@ -51,7 +65,11 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['username', 'displayName', 'gender', 'bio', 'avatarUrl', 'updatedAt'])
+          .hasOnly([
+            'username', 'displayName', 'gender', 'bio', 'avatarUrl',
+            'phone', 'department', 'major', 'notificationsEnabled', 'searchable',
+            'soundEffectsEnabled', 'hapticsEnabled', 'preciseLocationEnabled', 'updatedAt'
+          ])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.displayName is string
@@ -59,6 +77,17 @@ service cloud.firestore {
         && request.resource.data.gender in ['unspecified', 'male', 'female', 'prefer_not_to_say']
         && request.resource.data.bio is string
         && request.resource.data.bio.size() <= 500
+        && (!('phone' in request.resource.data)
+          || (request.resource.data.phone is string && request.resource.data.phone.size() <= 40))
+        && (!('department' in request.resource.data)
+          || (request.resource.data.department is string && request.resource.data.department.size() <= 120))
+        && (!('major' in request.resource.data)
+          || (request.resource.data.major is string && request.resource.data.major.size() <= 120))
+        && (!('notificationsEnabled' in request.resource.data) || request.resource.data.notificationsEnabled is bool)
+        && (!('searchable' in request.resource.data) || request.resource.data.searchable is bool)
+        && (!('soundEffectsEnabled' in request.resource.data) || request.resource.data.soundEffectsEnabled is bool)
+        && (!('hapticsEnabled' in request.resource.data) || request.resource.data.hapticsEnabled is bool)
+        && (!('preciseLocationEnabled' in request.resource.data) || request.resource.data.preciseLocationEnabled is bool)
         && (!('avatarUrl' in request.resource.data)
           || (request.resource.data.avatarUrl is string
             && request.resource.data.avatarUrl.size() <= 2000))
@@ -94,7 +123,7 @@ service cloud.firestore {
       allow read: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'fromUsername', 'toUsername', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'fromUsername', 'toUsername', 'status', 'message', 'createdAt'])
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
@@ -102,6 +131,8 @@ service cloud.firestore {
         && request.resource.data.fromUsername.matches('^[a-z0-9_]{3,30}$')
         && request.resource.data.toUsername is string
         && request.resource.data.toUsername.matches('^[a-z0-9_]{3,30}$')
+        && (!('message' in request.resource.data)
+          || (request.resource.data.message is string && request.resource.data.message.size() <= 120))
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt == request.time;
       allow update: if signedIn()

@@ -1,7 +1,5 @@
 package com.comp90018.app.features.friends
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,7 +21,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,7 +42,7 @@ fun FriendFinder(
     currentUsername: String,
     currentAvatarUrl: String,
     knownFriendIds: Set<String>,
-    onRequestSent: (SearchUser, String) -> Unit,
+    outgoingRequestIds: Set<String>,
     onClose: () -> Unit,
 ) {
     val repository = remember(firestore) { FirebaseSocialRepository(firestore) }
@@ -69,14 +66,8 @@ fun FriendFinder(
         return
     }
     val normalizedQuery = state.query.trim().lowercase()
-    val mockResults = remember(normalizedQuery) {
-        if (normalizedQuery.isBlank()) emptyList()
-        else mockFriendDirectory
-            .filter { it.username.contains(normalizedQuery) || it.displayName.lowercase().contains(normalizedQuery) }
-            .sortedWith(compareBy<SearchUser> { !it.username.startsWith(normalizedQuery) }.thenBy { it.username })
-    }
-    val candidates = (mockResults + state.results.filter { it.username.contains(normalizedQuery) || it.displayName.lowercase().contains(normalizedQuery) })
-        .distinctBy { it.uid }
+    val candidates = state.results
+        .filter { it.username.contains(normalizedQuery) || it.displayName.lowercase().contains(normalizedQuery) }
         .filter { it.uid != user.uid }
 
     val page = when {
@@ -110,7 +101,7 @@ fun FriendFinder(
                             CandidateRow(
                                 candidate = candidate,
                                 isFriend = candidate.uid in knownFriendIds,
-                                requestSent = candidate.uid in state.sentUserIds,
+                                requestSent = candidate.uid in outgoingRequestIds || candidate.uid in state.sentUserIds,
                                 onViewProfile = { viewModel.selectUser(candidate, knownFriend = candidate.uid in knownFriendIds) },
                                 onAdd = { viewModel.selectUser(candidate, knownFriend = false, requestMode = true) },
                             )
@@ -120,7 +111,7 @@ fun FriendFinder(
             }
             FinderPage.Profile -> state.target?.let { FriendCandidateProfile(it, state, viewModel) }
             FinderPage.Request -> state.target?.let {
-                FriendRequestComposer(it, state, viewModel, onRequestSent)
+                FriendRequestComposer(it, state, viewModel)
             }
         }
     }
@@ -159,9 +150,6 @@ private fun CandidateRow(candidate: SearchUser, isFriend: Boolean, requestSent: 
 
 @Composable
 private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiState, viewModel: FriendFinderViewModel) {
-    val context = LocalContext.current
-    val roomId = target.mockRoomId()
-    var copied by remember(target.uid) { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().padding(top = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -194,17 +182,6 @@ private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiStat
                 CandidateDetail("Gender", genderLabel(target.gender))
                 target.department.takeIf { it.isNotBlank() }?.let { CandidateDetail("Department", it) }
                 target.major.takeIf { it.isNotBlank() }?.let { CandidateDetail("Major", it) }
-                CandidateDetail("Room", if (roomId == null) "Not in a room" else "Exploring in room $roomId")
-                roomId?.let {
-                    TextButton(
-                        onClick = {
-                            context.getSystemService(ClipboardManager::class.java)
-                                .setPrimaryClip(ClipData.newPlainText("Room ID", roomId))
-                            copied = true
-                        },
-                        contentPadding = PaddingValues(0.dp),
-                    ) { Text(if (copied) "Room ID copied" else "Copy room ID", color = Brand) }
-                }
             }
         }
         Spacer(Modifier.weight(1f))
@@ -216,7 +193,6 @@ private fun FriendRequestComposer(
     target: SearchUser,
     state: FriendFinderUiState,
     viewModel: FriendFinderViewModel,
-    onRequestSent: (SearchUser, String) -> Unit,
 ) {
     var requestMessage by remember(target.uid) { mutableStateOf("Hi, would you like to team up?") }
     Column(
@@ -236,8 +212,7 @@ private fun FriendRequestComposer(
         Text("${requestMessage.length}/120", color = Muted, style = MaterialTheme.typography.bodySmall)
         Button(
             onClick = {
-                viewModel.sendFriendRequest(target)
-                onRequestSent(target, requestMessage.trim())
+                viewModel.sendFriendRequest(requestMessage.trim(), target)
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = requestMessage.isNotBlank() && !state.working && state.friendship != FriendshipStatus.OutgoingPending,
@@ -253,14 +228,6 @@ private fun FriendRequestComposer(
         }
         state.message?.let { Text(it, color = if (it == "Friend request sent") Brand else MaterialTheme.colorScheme.error) }
     }
-}
-
-private fun SearchUser.mockRoomId(): String? = when (uid) {
-    "mock_ava" -> "AVA-4821"
-    "mock_zhuoer" -> "ZHUOER-18"
-    "mock_mia" -> "MIA-310"
-    "mock_liang" -> "LIANG-27"
-    else -> null
 }
 
 @Composable

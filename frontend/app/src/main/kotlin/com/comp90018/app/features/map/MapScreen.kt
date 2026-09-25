@@ -125,6 +125,7 @@ fun MapScreen(
     onRetry: () -> Unit,
     discoveredTreasureIds: Set<String>,
     savingTreasureId: String?,
+    preciseLocationEnabled: Boolean,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
 ) {
     val resolvedTreasures = remember(treasures) {
@@ -156,6 +157,7 @@ fun MapScreen(
             TreasureChallengeRoute(
                 config = config,
                 historicalImageResId = relic.historicalImageResId,
+                preciseLocationEnabled = preciseLocationEnabled,
                 onBack = { challengeRelic = null },
             )
             return

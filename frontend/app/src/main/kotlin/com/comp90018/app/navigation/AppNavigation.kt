@@ -1,5 +1,6 @@
 package com.comp90018.app.navigation
 
+import android.view.SoundEffectConstants
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.comp90018.app.R
@@ -31,15 +35,25 @@ fun AppBottomNavigation(
     selected: AppDestination,
     unreadFriendMessages: Int,
     unreadRoomMessages: Int,
+    soundEffectsEnabled: Boolean = true,
+    hapticsEnabled: Boolean = true,
     onSelected: (AppDestination) -> Unit,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
+    val view = LocalView.current
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 10.dp) {
         AppDestination.entries.forEach { destination ->
             val isRooms = destination == AppDestination.Rooms
             val isFriends = destination == AppDestination.Friends
             NavigationBarItem(
                 selected = selected == destination,
-                onClick = { onSelected(destination) },
+                onClick = {
+                    if (selected != destination) {
+                        if (soundEffectsEnabled) view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                    onSelected(destination)
+                },
                 icon = {
                     Box(
                         modifier = Modifier.size(38.dp),

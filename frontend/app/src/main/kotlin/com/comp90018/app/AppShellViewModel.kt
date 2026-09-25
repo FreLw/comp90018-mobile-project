@@ -22,18 +22,24 @@ class AppShellViewModel(
     private val mutableUiState = MutableStateFlow(AppShellUiState())
     val uiState: StateFlow<AppShellUiState> = mutableUiState.asStateFlow()
     private var ensuringProfile = false
+    private var profileEnsured = false
     private val profileSubscription: Subscription = repository.observeProfile(uid) { profile, error ->
         mutableUiState.value = mutableUiState.value.copy(profile = profile, profileError = error)
-        if (error == null && (profile == null || profile.username.isBlank())) ensureProfile()
+        if (error == null && !profileEnsured) {
+            profileEnsured = true
+            ensureProfile()
+        }
     }
 
     fun retry() {
         mutableUiState.value = mutableUiState.value.copy(profileError = null)
+        profileEnsured = false
         ensureProfile()
     }
 
     private fun ensureProfile() {
         if (ensuringProfile) return
+        profileEnsured = true
         ensuringProfile = true
         repository.ensureProfile(uid, email) { error ->
             ensuringProfile = false

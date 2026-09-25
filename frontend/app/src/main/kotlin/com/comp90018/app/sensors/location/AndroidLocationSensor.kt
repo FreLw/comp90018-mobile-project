@@ -27,11 +27,17 @@ import kotlinx.coroutines.flow.asStateFlow
 class AndroidLocationSensor(
     context: Context,
     config: LocationConfig = LocationConfig(),
+    preciseLocationEnabled: Boolean = true,
 ) : LocationSensor {
     private val appContext = context.applicationContext
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(appContext)
-    private val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_UPDATE_INTERVAL_MILLIS)
+    private val locationPriority = if (preciseLocationEnabled) {
+        Priority.PRIORITY_HIGH_ACCURACY
+    } else {
+        Priority.PRIORITY_BALANCED_POWER_ACCURACY
+    }
+    private val request = LocationRequest.Builder(locationPriority, LOCATION_UPDATE_INTERVAL_MILLIS)
         .setMinUpdateIntervalMillis(LOCATION_FASTEST_INTERVAL_MILLIS)
         .setMaxUpdateDelayMillis(LOCATION_MAX_DELAY_MILLIS)
         .build()
@@ -229,7 +235,7 @@ class AndroidLocationSensor(
             return
         }
         staleRecoveryAttempts++
-        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
+        fusedLocationClient.getCurrentLocation(locationPriority, CancellationTokenSource().token)
             .addOnSuccessListener { location ->
                 if (location != null) onLocation(location) else onStaleRecoveryAttemptFailed()
             }
