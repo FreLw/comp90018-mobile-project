@@ -10,3 +10,4 @@ local.properties
 .gradle/
 .gradle-user/
 .gradle-project-cache/
+.idea/claudeCodeEditorTabs.xml

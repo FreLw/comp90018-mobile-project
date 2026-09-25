@@ -85,4 +85,50 @@ object RelicChallengeConfigs {
         holdDurationNanos = 1_200_000_000L,
         photoActionRequired = false,
     )
+
+    /** Same rule set as [oldQuadExcavation]: hold the phone flat and still to "excavate" the tower site. */
+    fun systemGardenGlasshouse(
+        challengeId: String,
+        targetLocation: GeoCoordinate,
+        insideRadiusMeters: Double,
+    ) = RelicChallengeConfig(
+        challengeId = challengeId,
+        type = RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
+        targetLocation = targetLocation,
+        insideRadiusMeters = insideRadiusMeters,
+        requiredHeadingDegrees = null,
+        headingToleranceDegrees = 0.0,
+        requiresStationary = true,
+        requiresStability = true,
+        requiresRotationStill = true,
+        requiresHorizontal = true,
+        holdDurationNanos = 3_000_000_000L,
+        photoActionRequired = false,
+    )
+
+    /**
+     * No heading/stability requirements: the machine "plays" as soon as the explorer arrives and
+     * makes a sound louder than [soundThresholdDecibels] dBFS (a clap or a raised voice).
+     */
+    fun graingerMuseumToneTool(
+        challengeId: String,
+        targetLocation: GeoCoordinate,
+        insideRadiusMeters: Double,
+        soundThresholdDecibels: Double = -30.0,
+    ) = RelicChallengeConfig(
+        challengeId = challengeId,
+        type = RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL,
+        targetLocation = targetLocation,
+        insideRadiusMeters = insideRadiusMeters,
+        requiredHeadingDegrees = null,
+        headingToleranceDegrees = 0.0,
+        requiresStationary = false,
+        requiresStability = false,
+        requiresRotationStill = false,
+        requiresHorizontal = false,
+        holdDurationNanos = 0L,
+        photoActionRequired = false,
+        requiresSound = true,
+        soundThresholdDecibels = soundThresholdDecibels,
+    )
 }
