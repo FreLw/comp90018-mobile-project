@@ -6,6 +6,8 @@ import com.comp90018.app.sensors.address.AndroidAddressLookup
 import com.comp90018.app.sensors.location.AndroidLocationSensor
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationSensor
+import com.comp90018.app.sensors.audio.AndroidSoundLevelSensor
+import com.comp90018.app.sensors.audio.SoundLevelSensor
 import com.comp90018.app.sensors.motion.AndroidMotionSensor
 import com.comp90018.app.sensors.motion.MotionSensor
 import com.comp90018.app.sensors.orientation.AndroidOrientationSensor
@@ -31,6 +33,7 @@ class AndroidDeviceContextEngine(
     private val locationSensor: LocationSensor = AndroidLocationSensor(context),
     private val orientationSensor: OrientationSensor = AndroidOrientationSensor(context),
     private val motionSensor: MotionSensor = AndroidMotionSensor(context),
+    private val soundLevelSensor: SoundLevelSensor = AndroidSoundLevelSensor(context),
     private val addressLookup: AddressLookup = AndroidAddressLookup(context),
 ) : DeviceContextEngine {
     private val _output = MutableStateFlow(DeviceContextSnapshot())
@@ -51,14 +54,21 @@ class AndroidDeviceContextEngine(
         locationSensor.start()
         orientationSensor.start()
         motionSensor.start()
+        soundLevelSensor.start()
 
         sensorJob?.cancel()
         sensorJob = combine(
             locationSensor.output,
             orientationSensor.output,
             motionSensor.output,
-        ) { location, orientation, motionStability ->
-            _output.value.copy(location = location, orientation = orientation, motionStability = motionStability)
+            soundLevelSensor.output,
+        ) { location, orientation, motionStability, sound ->
+            _output.value.copy(
+                location = location,
+                orientation = orientation,
+                motionStability = motionStability,
+                sound = sound,
+            )
         }.onEach { _output.value = it }.launchIn(scope)
 
         geocodeJob?.cancel()
@@ -78,6 +88,7 @@ class AndroidDeviceContextEngine(
         locationSensor.stop()
         orientationSensor.stop()
         motionSensor.stop()
+        soundLevelSensor.stop()
         _output.value = DeviceContextSnapshot()
     }
 }

@@ -213,6 +213,8 @@ private fun RelicChallengeType.title(): String = when (this) {
     RelicChallengeType.WILSON_HALL_OBSERVATION -> "Wilson Hall Observation"
     RelicChallengeType.OLD_QUAD_EXCAVATION -> "Old Quad Excavation"
     RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "South Lawn Atlas"
+    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> "System Garden Glasshouse"
+    RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> "Grainger Museum Tone-Tool"
 }
 
 private fun ChallengeInstruction.displayText(type: RelicChallengeType): String = when (this) {
@@ -227,6 +229,8 @@ private fun ChallengeInstruction.displayText(type: RelicChallengeType): String =
     ChallengeInstruction.HOLD_OBSERVATION -> "Keep observing"
     ChallengeInstruction.HOLD_EXCAVATION_POSITION -> "Excavating"
     ChallengeInstruction.HOLD_VIEWING_ANGLE -> "Locking angle"
+    ChallengeInstruction.HOLD_GLASSHOUSE_POSITION -> "Excavating"
+    ChallengeInstruction.MAKE_SOUND -> "Make some noise"
     ChallengeInstruction.TAKE_PHOTO -> "Take photo"
     ChallengeInstruction.COMPLETED -> "Relic discovered"
 }

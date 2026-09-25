@@ -117,6 +117,14 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
                     snapshot.orientation.rotation.classification == RotationState.STILL,
             ))
         }
+        if (config.requiresSound) {
+            val threshold = requireNotNull(config.soundThresholdDecibels)
+            add(ChallengeConditionState(
+                ChallengeCondition.SOUND_DETECTED,
+                snapshot.sound.validity == SensorValidity.VALID &&
+                    (snapshot.sound.decibels ?: Double.NEGATIVE_INFINITY) >= threshold,
+            ))
+        }
     }
 
     private fun evaluateDirection(snapshot: DeviceContextSnapshot): DirectionOutput? {
@@ -152,12 +160,15 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         if (!conditions.isSatisfied(ChallengeCondition.STABLE) ||
             !conditions.isSatisfied(ChallengeCondition.ROTATION_STILL)
         ) return ChallengeInstruction.HOLD_STILL
+        if (!conditions.isSatisfied(ChallengeCondition.SOUND_DETECTED)) return ChallengeInstruction.MAKE_SOUND
         if (holdComplete && config.photoActionRequired) return ChallengeInstruction.TAKE_PHOTO
         return when (config.type) {
             RelicChallengeType.UNION_LAWN_PHOTO -> ChallengeInstruction.HOLD_ALIGNMENT
             RelicChallengeType.WILSON_HALL_OBSERVATION -> ChallengeInstruction.HOLD_OBSERVATION
             RelicChallengeType.OLD_QUAD_EXCAVATION -> ChallengeInstruction.HOLD_EXCAVATION_POSITION
             RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> ChallengeInstruction.HOLD_VIEWING_ANGLE
+            RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> ChallengeInstruction.HOLD_GLASSHOUSE_POSITION
+            RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> ChallengeInstruction.MAKE_SOUND
         }
     }
 
