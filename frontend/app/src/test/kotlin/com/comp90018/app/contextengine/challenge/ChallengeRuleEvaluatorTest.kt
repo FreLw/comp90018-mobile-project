@@ -223,7 +223,7 @@ class ChallengeRuleEvaluatorTest {
         val grainger = graingerConfig()
         assertTrue(grainger.requiresSound)
         assertEquals(-30.0, grainger.soundThresholdDecibels!!, 0.0)
-        assertEquals(0L, grainger.holdDurationNanos)
+        assertEquals(1_000_000_000L, grainger.holdDurationNanos)
     }
 
     @Test fun graingerOutsideCannotActivate() {
@@ -242,13 +242,36 @@ class ChallengeRuleEvaluatorTest {
         assertFalse(result.completed)
     }
 
-    @Test fun graingerLoudSoundCompletesImmediately() {
+    @Test fun graingerBriefLoudSoundDoesNotCompleteYet() {
         val result = ChallengeRuleEvaluator(graingerConfig()).evaluate(snapshot(soundDecibels = -10.0), 0L)
 
         assertTrue(result.condition(ChallengeCondition.SOUND_DETECTED))
-        assertTrue(result.completed)
-        assertEquals(1.0, result.holdProgress, 0.0)
-        assertEquals(ChallengeInstruction.COMPLETED, result.instruction)
+        assertFalse(result.completed)
+        assertEquals(0.0, result.holdProgress, 0.0)
+        assertEquals(ChallengeInstruction.HOLD_TONE, result.instruction)
+    }
+
+    @Test fun graingerLoudSoundHeldForOneSecondCompletes() {
+        val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
+
+        val completed = evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_000_000_000L)
+        assertTrue(completed.completed)
+        assertEquals(ChallengeInstruction.COMPLETED, completed.instruction)
+    }
+
+    @Test fun graingerSoundDroppingBelowThresholdResetsTheHoldTimer() {
+        val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
+        assertTrue(evaluator.evaluate(snapshot(soundDecibels = -10.0), 500_000_000L).holdProgress > 0.0)
+
+        val silence = evaluator.evaluate(snapshot(soundDecibels = -60.0), 600_000_000L)
+        assertEquals(ChallengeInstruction.MAKE_SOUND, silence.instruction)
+        assertEquals(0.0, silence.holdProgress, 0.0)
+
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 700_000_000L)
+        assertFalse(evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_699_999_999L).completed)
+        assertTrue(evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_700_000_000L).completed)
     }
 
     private fun unionConfig() = RelicChallengeConfigs.unionLawnPhoto(

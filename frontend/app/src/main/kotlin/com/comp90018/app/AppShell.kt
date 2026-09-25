@@ -24,6 +24,7 @@ import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.UnreadRoomMessagesViewModel
 import com.comp90018.app.navigation.AppBottomNavigation
 import com.comp90018.app.navigation.AppDestination
+import com.comp90018.app.ui.components.SensorErrorHost
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -50,9 +51,13 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     )
     val unreadRoomMessages by unreadRoomMessagesViewModel.unreadCount.collectAsStateWithLifecycle()
 
-    Scaffold(containerColor = Background, bottomBar = {
-        AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
-    }) { padding ->
+    Scaffold(
+        containerColor = Background,
+        bottomBar = {
+            AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
+        },
+        snackbarHost = { SensorErrorHost() },
+    ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
                 AppDestination.Treasure -> HomeScreen()

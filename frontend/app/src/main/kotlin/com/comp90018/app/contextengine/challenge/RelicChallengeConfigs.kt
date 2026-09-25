@@ -107,14 +107,16 @@ object RelicChallengeConfigs {
     )
 
     /**
-     * No heading/stability requirements: the machine "plays" as soon as the explorer arrives and
-     * makes a sound louder than [soundThresholdDecibels] dBFS (a clap or a raised voice).
+     * No heading/stability requirements: the explorer must hold a sound louder than
+     * [soundThresholdDecibels] dBFS (a clap or a raised voice) for [soundHoldDurationNanos] so a
+     * brief mic-startup pop or ambient noise blip can't trigger it by accident.
      */
     fun graingerMuseumToneTool(
         challengeId: String,
         targetLocation: GeoCoordinate,
         insideRadiusMeters: Double,
         soundThresholdDecibels: Double = -30.0,
+        soundHoldDurationNanos: Long = 1_000_000_000L,
     ) = RelicChallengeConfig(
         challengeId = challengeId,
         type = RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL,
@@ -126,7 +128,7 @@ object RelicChallengeConfigs {
         requiresStability = false,
         requiresRotationStill = false,
         requiresHorizontal = false,
-        holdDurationNanos = 0L,
+        holdDurationNanos = soundHoldDurationNanos,
         photoActionRequired = false,
         requiresSound = true,
         soundThresholdDecibels = soundThresholdDecibels,

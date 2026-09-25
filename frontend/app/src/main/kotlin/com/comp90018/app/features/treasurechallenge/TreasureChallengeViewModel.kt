@@ -231,6 +231,7 @@ private fun ChallengeInstruction.displayText(type: RelicChallengeType): String =
     ChallengeInstruction.HOLD_VIEWING_ANGLE -> "Locking angle"
     ChallengeInstruction.HOLD_GLASSHOUSE_POSITION -> "Excavating"
     ChallengeInstruction.MAKE_SOUND -> "Make some noise"
+    ChallengeInstruction.HOLD_TONE -> "Keep the noise going"
     ChallengeInstruction.TAKE_PHOTO -> "Take photo"
     ChallengeInstruction.COMPLETED -> "Relic discovered"
 }

@@ -168,7 +168,7 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
             RelicChallengeType.OLD_QUAD_EXCAVATION -> ChallengeInstruction.HOLD_EXCAVATION_POSITION
             RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> ChallengeInstruction.HOLD_VIEWING_ANGLE
             RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> ChallengeInstruction.HOLD_GLASSHOUSE_POSITION
-            RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> ChallengeInstruction.MAKE_SOUND
+            RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> ChallengeInstruction.HOLD_TONE
         }
     }
 

@@ -71,6 +71,7 @@ enum class ChallengeInstruction {
     HOLD_VIEWING_ANGLE,
     HOLD_GLASSHOUSE_POSITION,
     MAKE_SOUND,
+    HOLD_TONE,
     TAKE_PHOTO,
     COMPLETED,
 }
