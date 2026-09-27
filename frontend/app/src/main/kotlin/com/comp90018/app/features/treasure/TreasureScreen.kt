@@ -16,40 +16,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items as lazyItems
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Inventory2
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,19 +45,10 @@ import com.comp90018.app.BrandSoft
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicGold
-import com.comp90018.app.RelicRed
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import java.util.Locale
-
-private enum class TreasureSection { Tasks, Collection }
-
-private enum class CollectionFilter(val label: String) {
-    All("All"),
-    Discovered("Discovered"),
-    Undiscovered("Missing"),
-}
 
 private val stopOne = GeoCoordinate(-37.7986, 144.9602)
 
@@ -83,34 +61,16 @@ fun TreasureScreen(
     onRetry: () -> Unit,
     onOpenMap: () -> Unit,
     discoveredTreasureIds: Set<String>,
-    collectionLoading: Boolean,
-    collectionError: String?,
-    onRetryCollection: () -> Unit,
 ) {
-    var section by remember { mutableStateOf(TreasureSection.Tasks) }
-    var collectionFilter by remember { mutableStateOf(CollectionFilter.All) }
-
     Column(
         Modifier.fillMaxSize().padding(top = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        TreasureTabs(selected = section, onSelected = { section = it })
         when {
             loading && treasures.isEmpty() -> CatalogStateCard("Loading treasures from Firebase…", loading = true)
             error != null && treasures.isEmpty() -> CatalogStateCard(error, actionLabel = "Try again", onAction = onRetry)
             treasures.isEmpty() -> CatalogStateCard("No enabled treasures are available right now.")
-            else -> when (section) {
-                TreasureSection.Tasks -> TasksContent(treasures, discoveredTreasureIds, error, onOpenMap)
-                TreasureSection.Collection -> CollectionContent(
-                    treasures = treasures,
-                    foundIds = discoveredTreasureIds,
-                    loading = collectionLoading,
-                    error = collectionError,
-                    filter = collectionFilter,
-                    onRetry = onRetryCollection,
-                    onFilterChanged = { collectionFilter = it },
-                )
-            }
+            else -> TasksContent(treasures, discoveredTreasureIds, error, onOpenMap)
         }
     }
 }
@@ -135,36 +95,6 @@ private fun CatalogStateCard(
             if (loading) CircularProgressIndicator(color = Brand)
             Text(message, color = if (actionLabel == null) Muted else MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
             actionLabel?.let { label -> Button(onClick = onAction) { Text(label) } }
-        }
-    }
-}
-
-@Composable
-private fun TreasureTabs(selected: TreasureSection, onSelected: (TreasureSection) -> Unit) {
-    Surface(Modifier.fillMaxWidth(), RoundedCornerShape(18.dp), color = BrandSoft) {
-        Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TreasureTab("Tasks", Icons.Rounded.TaskAlt, selected == TreasureSection.Tasks, { onSelected(TreasureSection.Tasks) }, Modifier.weight(1f))
-            TreasureTab("Collection", Icons.Rounded.Inventory2, selected == TreasureSection.Collection, { onSelected(TreasureSection.Collection) }, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun TreasureTab(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) Brand else Color.Transparent,
-        shadowElevation = if (selected) 2.dp else 0.dp,
-    ) {
-        Row(
-            Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, null, tint = if (selected) Color.White else Muted, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(7.dp))
-            Text(label, color = if (selected) Color.White else Ink)
         }
     }
 }
@@ -316,119 +246,8 @@ private fun AvailableHuntCard(relic: MapRelic, discovered: Boolean, onClick: () 
 }
 
 @Composable
-private fun CollectionContent(
-    treasures: List<MapRelic>,
-    foundIds: Set<String>,
-    loading: Boolean,
-    error: String?,
-    filter: CollectionFilter,
-    onRetry: () -> Unit,
-    onFilterChanged: (CollectionFilter) -> Unit,
-) {
-    val visibleRelics = treasures.filter { relic ->
-        when (filter) {
-            CollectionFilter.All -> true
-            CollectionFilter.Discovered -> relic.id in foundIds
-            CollectionFilter.Undiscovered -> relic.id !in foundIds
-        }
-    }
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (loading) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                CatalogStateCard("Loading your collection…", loading = true)
-            }
-        }
-        error?.let { message ->
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                CatalogStateCard(message, actionLabel = "Try again", onAction = onRetry)
-            }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) { CollectionSummary(foundIds.count { id -> treasures.any { it.id == id } }, treasures.size) }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CollectionFilter.entries.forEach { option ->
-                    CollectionFilterButton(option.label, option == filter, { onFilterChanged(option) }, Modifier.weight(1f))
-                }
-            }
-        }
-        gridItems(visibleRelics, key = { it.id }) { relic ->
-            CollectionRelicCard(relic, relic.id in foundIds)
-        }
-    }
-}
-
-@Composable
-private fun CollectionRelicCard(relic: MapRelic, discovered: Boolean) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                Modifier.fillMaxWidth().height(124.dp).background(if (discovered) Color(0xFFFFF2D8) else BrandSoft, RoundedCornerShape(17.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                RelicImage(relic, discovered, Modifier.size(108.dp))
-                Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(7.dp),
-                    shape = CircleShape,
-                    color = if (discovered) Color(0xFF39794A) else Ink.copy(alpha = 0.76f),
-                ) {
-                    Icon(if (discovered) Icons.Rounded.CheckCircle else Icons.Rounded.Lock, if (discovered) "Discovered" else "Locked", tint = Color.White, modifier = Modifier.padding(5.dp).size(16.dp))
-                }
-            }
-            Text(if (discovered) relic.name else "Unknown relic", color = Ink, style = MaterialTheme.typography.titleSmall, maxLines = 2)
-            Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            relic.treasureTypeLabel.takeIf { it.isNotBlank() }?.let { type ->
-                Text(type, color = if (discovered) Brand else Muted, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
 private fun RelicImage(relic: MapRelic, discovered: Boolean, modifier: Modifier = Modifier) {
     TreasurePrototypeImage(relic = relic, discovered = discovered, modifier = modifier)
-}
-
-@Composable
-private fun CollectionSummary(found: Int, total: Int) {
-    val progress = found.toFloat() / total.coerceAtLeast(1)
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1D2))) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Relic collection", color = Ink, style = MaterialTheme.typography.titleLarge)
-                    Text("$found of $total campus relics discovered", color = Muted, style = MaterialTheme.typography.bodySmall)
-                }
-                Text("${(progress * 100).toInt()}%", color = RelicRed, style = MaterialTheme.typography.titleLarge)
-            }
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
-                color = RelicGold,
-                trackColor = Color.White,
-            )
-            Text("Every recovered relic unlocks a campus story.", color = Brand, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun CollectionFilterButton(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Surface(modifier = modifier.clickable(onClick = onClick), shape = RoundedCornerShape(14.dp), color = if (selected) BrandSoft else Color.White) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
-            color = if (selected) Brand else Muted,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-        )
-    }
 }
 
 @Composable
@@ -436,7 +255,7 @@ private fun CollectionCompleteCard() {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFE4F0DF))) {
         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Text("Every campus relic is safe", color = Ink, style = MaterialTheme.typography.titleLarge)
-            Text("Your collection is complete. Revisit a story or help a teammate finish their route.", color = Muted)
+            Text("All hunts are complete. Revisit a story or help a teammate finish their route.", color = Muted)
         }
     }
 }

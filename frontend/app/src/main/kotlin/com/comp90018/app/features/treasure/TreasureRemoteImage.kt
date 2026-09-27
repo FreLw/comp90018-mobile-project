@@ -1,6 +1,7 @@
 package com.comp90018.app.features.treasure
 
 import android.graphics.BitmapFactory
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +26,7 @@ fun RemoteTreasureImage(
     contentDescription: String,
     modifier: Modifier = Modifier,
     silhouette: Boolean = false,
+    @DrawableRes fallbackDrawableRes: Int = R.drawable.treasure_unknown,
 ) {
     val bitmap by produceState<ImageBitmap?>(initialValue = null, imageUrl) {
         value = withContext(Dispatchers.IO) {
@@ -45,7 +47,7 @@ fun RemoteTreasureImage(
         )
     } else {
         Image(
-            painter = painterResource(R.drawable.treasure_unknown),
+            painter = painterResource(fallbackDrawableRes),
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = ContentScale.Fit,
@@ -60,10 +62,29 @@ fun TreasurePrototypeImage(
     discovered: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    RemoteTreasureImage(
-        imageUrl = relic.prototypeImageUrl,
+    Image(
+        painter = painterResource(relic.localTreasureArtworkResId()),
         contentDescription = if (discovered) relic.name else "Locked ${relic.name} silhouette",
         modifier = modifier,
-        silhouette = !discovered,
+        contentScale = ContentScale.Fit,
+        colorFilter = if (discovered) null else ColorFilter.tint(Color(0xFF563B2D)),
     )
+}
+
+/**
+ * Artwork is bundled with the APK so treasure cards work offline and never depend on a Firebase
+ * image URL. Firestore still owns the content and coordinates; a stable id/name selects the asset.
+ */
+@DrawableRes
+fun MapRelic.localTreasureArtworkResId(): Int {
+    val key = "$id $name $locationName $treasureType".lowercase().filter(Char::isLetterOrDigit)
+    return when {
+        "southlawn" in key || "atlas" in key -> R.drawable.treasure_atlas
+        "systemgarden" in key || "glasshouse" in key -> R.drawable.treasure_glasshouse
+        "grainger" in key || "tonetool" in key || "printingpress" in key -> R.drawable.treasure_press
+        "unionlawn" in key || "lostlake" in key || "postcard" in key -> R.drawable.treasure_postcard
+        "oldquad" in key || "oldquadrangle" in key || "rosette" in key -> R.drawable.treasure_rosette
+        "wilson" in key || "fern" in key || "fossil" in key -> R.drawable.treasure_fern
+        else -> R.drawable.nav_treasure_game
+    }
 }

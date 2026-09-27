@@ -18,7 +18,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -43,7 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
 
-private enum class ProfilePage { Overview, Edit, Settings }
+private enum class ProfilePage { Overview, Edit, Settings, About }
 
 @Composable
 fun ProfileScreen(
@@ -73,6 +75,7 @@ fun ProfileScreen(
             initialSettings = profile.settings,
             onBack = { page = ProfilePage.Overview },
         )
+        page == ProfilePage.About -> AboutGameScreen(onBack = { page = ProfilePage.Overview })
         else -> ProfileOverview(
             userEmail = userEmail,
             profile = profile,
@@ -82,6 +85,7 @@ fun ProfileScreen(
             onRetry = onRetry,
             onEdit = { page = ProfilePage.Edit },
             onSettings = { page = ProfilePage.Settings },
+            onAbout = { page = ProfilePage.About },
             onLogout = onLogout,
         )
     }
@@ -97,6 +101,7 @@ private fun ProfileOverview(
     onRetry: () -> Unit,
     onEdit: () -> Unit,
     onSettings: () -> Unit,
+    onAbout: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val email = profile?.email ?: userEmail
@@ -154,8 +159,79 @@ private fun ProfileOverview(
             Text("Sign out")
         }
         HorizontalDivider(color = BrandSoft)
-        Text("About", color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-        Text("Lost Treasures · Version 1.0", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Card(
+            Modifier.fillMaxWidth().clickable(onClick = onAbout),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Rounded.Info, null, tint = Brand)
+                Column(Modifier.weight(1f)) {
+                    Text("About", color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text("Learn about Lost Treasures", color = Muted, style = MaterialTheme.typography.bodySmall)
+                }
+                Icon(Icons.Rounded.ChevronRight, "Open About", tint = Muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutGameScreen(onBack: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 10.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+            Text("About Lost Treasures", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Ink)
+        }
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+        ) {
+            Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Rounded.Info, null, tint = Brand, modifier = Modifier.size(42.dp))
+                Text("Turn campus into an adventure", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Lost Treasures is a location-based exploration game set across the University of Melbourne Parkville campus. Follow historical hints, read the map and uncover relics hidden around familiar landmarks.",
+                    color = Ink,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        }
+        AboutSection(
+            "How to play",
+            "Follow a treasure hint and move around campus. The map senses nearby relics, reveals their location as you approach, and unlocks a compass hunt within 10 metres.",
+        )
+        AboutSection(
+            "Explore together",
+            "Add friends, exchange messages and form a room with another explorer. Team up to compare clues and rediscover the stories behind the campus.",
+        )
+        AboutSection(
+            "Location and safety",
+            "Location is used to calculate proximity during a hunt. Stay aware of paths, traffic, restricted areas and your surroundings while exploring.",
+        )
+        Text("Lost Treasures · Version 1.0", modifier = Modifier.fillMaxWidth(), color = Muted, style = MaterialTheme.typography.bodySmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+@Composable
+private fun AboutSection(title: String, body: String) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = BrandSoft),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(title, color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(body, color = Ink, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 

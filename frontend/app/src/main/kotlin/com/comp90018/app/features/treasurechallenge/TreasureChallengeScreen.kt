@@ -68,6 +68,7 @@ fun TreasureChallengeRoute(
     @DrawableRes historicalImageResId: Int? = null,
     preciseLocationEnabled: Boolean = true,
     onBack: () -> Unit,
+    onCompleted: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -97,6 +98,7 @@ fun TreasureChallengeRoute(
         state = state,
         historicalImageResId = historicalImageResId,
         onBack = onBack,
+        onCompleted = onCompleted,
         onPhotoCaptureStarted = viewModel::onPhotoCaptureStarted,
         onPhotoCaptured = viewModel::onPhotoCaptured,
         onCameraError = viewModel::onCameraError,
@@ -109,6 +111,7 @@ fun TreasureChallengeScreen(
     state: TreasureChallengeUiState,
     @DrawableRes historicalImageResId: Int? = null,
     onBack: () -> Unit,
+    onCompleted: () -> Unit,
     onPhotoCaptureStarted: () -> Unit,
     onPhotoCaptured: (String) -> Unit,
     onCameraError: (String) -> Unit,
@@ -147,7 +150,7 @@ fun TreasureChallengeScreen(
                 )
             }
             if (state.completed) {
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onCompleted, modifier = Modifier.fillMaxWidth()) {
                     Text("Return to map")
                 }
             }

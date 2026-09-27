@@ -89,7 +89,14 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         },
         snackbarHost = { SensorErrorHost() },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .then(
+                if (destination == AppDestination.Map) Modifier
+                else Modifier.padding(horizontal = 20.dp),
+            )
+        Box(contentModifier) {
             when (destination) {
                 AppDestination.Treasure -> TreasureScreen(
                     treasures = treasureCatalogState.treasures,
@@ -98,9 +105,6 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     onRetry = treasureCatalogViewModel::retry,
                     onOpenMap = { destination = AppDestination.Map },
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
-                    collectionLoading = treasureCollectionState.loading,
-                    collectionError = treasureCollectionState.error,
-                    onRetryCollection = treasureCollectionViewModel::retry,
                 )
                 AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
                 AppDestination.Map -> MapScreen(
@@ -111,6 +115,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     savingTreasureId = treasureCollectionState.savingTreasureId,
                     preciseLocationEnabled = settings?.preciseLocation ?: true,
+                    hapticsEnabled = settings?.haptics ?: true,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })

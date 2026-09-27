@@ -33,5 +33,3 @@ data class MapRelic(
             .filter { it.isNotBlank() }
             .joinToString(" ") { word -> word.replaceFirstChar(Char::uppercase) }
 }
-
-val sampleMapRelics: List<MapRelic> = NonFinalChallengeCatalog.relics
