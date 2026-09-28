@@ -22,8 +22,13 @@ class FirebaseTeamRoomRepository(
         return Subscription { registration.remove() }
     }
 
-    override fun createRoom(userId: String, onComplete: (String?, String?) -> Unit) =
-        FirebaseTeamRoomService.createRoom(firestore, userId, onComplete)
+    override fun observePublicRooms(onChange: (List<TeamRoom>, String?) -> Unit): Subscription {
+        val registration = FirebaseTeamRoomService.observePublicRooms(firestore, onChange)
+        return Subscription { registration.remove() }
+    }
+
+    override fun createRoom(userId: String, name: String, isPublic: Boolean, maxMembers: Int, onComplete: (String?, String?) -> Unit) =
+        FirebaseTeamRoomService.createRoom(firestore, userId, name, isPublic, maxMembers, onComplete)
 
     override fun joinRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.joinRoom(firestore, roomId, userId, onComplete)
@@ -43,10 +48,16 @@ class FirebaseTeamRoomRepository(
     override fun loadMembers(memberIds: List<String>, onComplete: (List<TeamRoomMember>) -> Unit) =
         FirebaseTeamRoomService.loadMembers(firestore, memberIds, onComplete)
 
-    override fun sendMessage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
-        FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, recipientId, senderName, senderAvatarUrl, text, onComplete)
-    override fun sendImage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
-        FirebaseTeamRoomService.sendImage(firestore, roomId, senderId, recipientId, senderName, senderAvatarUrl, imageUri, onComplete)
+    override fun updateRoomSettings(roomId: String, userId: String, name: String, isPublic: Boolean, maxMembers: Int, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.updateRoomSettings(firestore, roomId, userId, name, isPublic, maxMembers, onComplete)
+
+    override fun pinCollectedTreasure(roomId: String, userId: String, treasureId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.pinCollectedTreasure(firestore, roomId, userId, treasureId, onComplete)
+
+    override fun sendMessage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, senderName, senderAvatarUrl, text, onComplete)
+    override fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.sendImage(firestore, roomId, senderId, senderName, senderAvatarUrl, imageUri, onComplete)
 
     override fun leaveRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.leaveRoom(firestore, roomId, userId, onComplete)

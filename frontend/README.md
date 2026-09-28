@@ -49,7 +49,7 @@ To build a debug APK from PowerShell instead:
 | Bottom tab | Current behaviour |
 | --- | --- |
 | `treasure` | Placeholder for future treasure gameplay |
-| `Rooms` | Create/join a two-person room, room details, and room chat |
+| `Rooms` | Browse the public plaza, create/join a 2–6 person room, and use room chat |
 | `Map` | Google Map with campus relic markers and GPS/location status |
 | `friend` | Friend lookup, requests, friend list, and private chat |
 | `profile` | Profile view/edit and sign out |

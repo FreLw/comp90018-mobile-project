@@ -2,7 +2,7 @@
 
 Lost Treasures is an Android app for campus explorers. The current release
 focuses on the social experience: accounts and profiles, friend requests,
-one-to-one chat, and a shareable two-person room with real-time messaging.
+one-to-one chat, and shareable 2–6 person rooms with real-time messaging.
 
 > The Treasure and Map tabs are intentionally empty placeholders for future
 > coursework features; they do not currently provide gameplay or mapping.
@@ -14,7 +14,7 @@ one-to-one chat, and a shareable two-person room with real-time messaging.
 - Profile editing for username, gender, and profile photo.
 - Exact username lookup, friend requests, accept/decline actions, and friend removal.
 - Private, real-time direct chat between accepted friends.
-- One active two-person room per explorer: create a room, share/copy its ID, join by ID, chat in real time, inspect room members, leave, or dismiss.
+- One active 2–6 person room per explorer: browse public rooms, create a named public/private room, share/copy its numeric ID, join, chat in real time, inspect room members, leave, or dismiss.
 - Firebase Security Rules for Firestore and Storage.
 
 ## Technology
@@ -126,8 +126,8 @@ The module-specific [frontend README](frontend/README.md) has the same quick-sta
 | `friendRequests/{fromUid_toUid}` | Friend-request state |
 | `rooms/{roomId}` | Deterministic private direct-chat room |
 | `rooms/{roomId}/messages/{messageId}` | Direct-chat message |
-| `teamRooms/{roomId}` | Two-person room and member IDs |
-| `teamRooms/{roomId}/messages/{messageId}` | Two-person room message |
-| `teamMemberships/{uid}` | Explorer's active two-person-room reference |
+| `teamRooms/{roomId}` | Named 2–6 person room, visibility, capacity, and member IDs |
+| `teamRooms/{roomId}/messages/{messageId}` | Team-room message |
+| `teamMemberships/{uid}` | Explorer's active team-room reference |
 
 See [REQUIREMENTS.md](REQUIREMENTS.md) for detailed requirements, constraints, and acceptance criteria.

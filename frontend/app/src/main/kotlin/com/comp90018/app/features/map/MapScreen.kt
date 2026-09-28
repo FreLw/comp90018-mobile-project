@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -156,6 +157,9 @@ fun MapScreen(
     savingTreasureId: String?,
     preciseLocationEnabled: Boolean,
     hapticsEnabled: Boolean,
+    requestedTreasureId: String? = null,
+    startRequestedHunt: Boolean = false,
+    onTreasureRequestConsumed: () -> Unit = {},
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
@@ -295,6 +299,14 @@ fun MapScreen(
 
     LaunchedEffect(visibleRelics) {
         selectedRelic = selectedRelic?.takeIf { selected -> visibleRelics.any { it.id == selected.id } }
+    }
+
+    LaunchedEffect(requestedTreasureId, resolvedTreasures, currentCoordinate) {
+        val requestedId = requestedTreasureId ?: return@LaunchedEffect
+        val relic = resolvedTreasures.firstOrNull { it.id == requestedId } ?: return@LaunchedEffect
+        detailRelic = relic
+        directHuntRelicId = requestedId.takeIf { startRequestedHunt }
+        onTreasureRequestConsumed()
     }
 
     detailRelic?.let { relic ->
@@ -684,6 +696,18 @@ private fun TreasureDetailScreen(
         )
         return
     }
+    if (stage == TreasureHuntStage.COMPASS) {
+        TreasureCompassPanel(
+            relic = relic,
+            locationOutput = locationOutput,
+            deviceHeading = deviceHeading,
+            orientationOutput = orientationOutput,
+            hapticsEnabled = hapticsEnabled,
+            onSignalFound = { stage = TreasureHuntStage.MINI_GAME },
+            onBack = onBack,
+        )
+        return
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
         GoogleMapView(
@@ -729,23 +753,11 @@ private fun TreasureDetailScreen(
                             )
                             TreasureInformationPanel(
                                 relic = relic,
-                                locationOutput = locationOutput,
                                 isFound = isFound,
-                                onStartHunt = {
-                                    stage = if (isFound) TreasureHuntStage.STORY else TreasureHuntStage.COMPASS
-                                },
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        TreasureHuntStage.COMPASS -> TreasureCompassPanel(
-                            relic = relic,
-                            locationOutput = locationOutput,
-                            deviceHeading = deviceHeading,
-                            orientationOutput = orientationOutput,
-                            hapticsEnabled = hapticsEnabled,
-                            onSignalFound = { stage = TreasureHuntStage.MINI_GAME },
-                            onBack = { stage = TreasureHuntStage.DETAILS },
-                        )
+                        TreasureHuntStage.COMPASS -> Unit
                         TreasureHuntStage.MINI_GAME,
                         TreasureHuntStage.DIGGING,
                         TreasureHuntStage.FOUND,
@@ -818,43 +830,14 @@ private fun TreasurePeekHeader(
 @Composable
 private fun TreasureInformationPanel(
     relic: MapRelic,
-    locationOutput: LocationOutput,
     isFound: Boolean,
-    onStartHunt: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val distance = locationOutput.distanceToTargetMeters
-    val huntReady = distance != null && distance <= HUNT_READY_RADIUS_METERS
-    val huntStatus = when {
-        isFound -> "Discovered"
-        locationOutput.proximity == ProximityState.NEARBY || locationOutput.proximity == ProximityState.INSIDE -> "Nearby"
-        else -> "Locked"
-    }
-    val statusColor = when (huntStatus) {
-        "Discovered" -> Color(0xFF3F7D4A)
-        "Nearby" -> Color(0xFFD07B2D)
-        else -> Color(0xFF76665B)
-    }
     Column(modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Button(
-                onClick = onStartHunt,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                enabled = isFound || huntReady,
-            ) {
-                Image(painterResource(R.drawable.map_arrived_symbol), null, modifier = Modifier.size(25.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(if (isFound) "View Treasure" else "Start Hunt")
-            }
-        }
         Surface(
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(start = 14.dp, end = 14.dp, top = 14.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(start = 14.dp, end = 14.dp),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            color = Color(0xFFE9D7BD),
+            color = Color(0xFFF8F0E4),
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -869,8 +852,8 @@ private fun TreasureInformationPanel(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1C9)),
                         ) {
                             Text(
-                                if (huntReady) "You are within 10 m. Start the hunt and follow the compass signal."
-                                else "Move within 10 m to unlock the hunt. The exact treasure story stays hidden until discovery.",
+                                "No explorer has uncovered this treasure yet. The campus legend remembers only this: " +
+                                    relic.description.ifBlank { relic.story.ifBlank { relic.clue.ifBlank { "its secret still waits in silence." } } },
                                 modifier = Modifier.padding(16.dp),
                                 color = Ink,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -878,40 +861,15 @@ private fun TreasureInformationPanel(
                         }
                     }
                 }
-                relic.description.takeIf { it.isNotBlank() }?.let { description ->
+                relic.description.takeIf { isFound && it.isNotBlank() }?.let { description ->
                     item { Text(description, color = Ink, style = MaterialTheme.typography.bodyLarge, lineHeight = 23.sp) }
                 }
-                item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        HuntFactCard(
-                            title = "Treasure type",
-                            value = relic.treasureTypeLabel.ifBlank { "Treasure" },
-                            color = Brand,
-                            modifier = Modifier.weight(1f),
-                        )
-                        HuntFactCard(
-                            title = "Trail status",
-                            value = huntStatus,
-                            color = statusColor,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                item { DetailTextRow("Landmark", relic.locationName) }
-                item { DetailTextRow("Distance from your trail", locationOutput.distanceToTargetMeters.formatDistance()) }
-                item {
-                    Card(
-                        Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1C9)),
-                    ) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Clue", color = Brand, style = MaterialTheme.typography.titleMedium)
-                            Text(relic.clue, color = Ink, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
                 if (isFound) {
+                    item { DetailTextRow("Treasure type", relic.treasureTypeLabel.ifBlank { "Treasure" }) }
+                    item { DetailTextRow("Found at", relic.locationName) }
+                    relic.story.takeIf { it.isNotBlank() }?.let { story ->
+                        item { DetailTextRow("The story", story) }
+                    }
                     relic.buildingStory.takeIf { it.isNotBlank() }?.let { story ->
                         item { DetailTextRow("Landmark story", story) }
                     }
@@ -923,20 +881,6 @@ private fun TreasureInformationPanel(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun HuntFactCard(title: String, value: String, color: Color, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.13f)),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Text(value, color = color, style = MaterialTheme.typography.titleSmall)
         }
     }
 }
@@ -986,88 +930,65 @@ private fun TreasureCompassPanel(
         else -> "Turn left ${abs(turn).formatDegrees()}"
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color.White).padding(horizontal = 18.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to map", tint = Ink)
+            }
             Text(
-                "Follow the treasure signal",
-                color = Ink,
+                "✦ FOLLOW THE ORACLE'S SIGNAL ✦",
+                modifier = Modifier.weight(1f).padding(end = 48.dp),
+                color = Brand,
+                fontFamily = GothicTreasureFontFamily,
                 fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center,
             )
         }
-        item {
-            CompassSignalVisual(
-                relic = relic,
-                turnDegrees = turnDegrees?.toFloat() ?: 0f,
-                signalAvailable = turnDegrees != null,
-                pitchDegrees = orientationOutput.attitude.pitchDegrees?.toFloat(),
-                rollDegrees = orientationOutput.attitude.rollDegrees?.toFloat(),
-                signalLocked = signalLocked,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        item {
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (signalLocked || readiness.allReady) BrandSoft else Color(0xFFFFF1C9),
-                ),
+        CompassSignalVisual(
+            relic = relic,
+            turnDegrees = turnDegrees?.toFloat() ?: 0f,
+            signalAvailable = turnDegrees != null,
+            distanceMeters = distance,
+            pitchDegrees = orientationOutput.attitude.pitchDegrees?.toFloat(),
+            rollDegrees = orientationOutput.attitude.rollDegrees?.toFloat(),
+            signalLocked = signalLocked,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (signalLocked || readiness.allReady) BrandSoft else Color(0xFFFFF1C9),
+            ),
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
-                Column(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        instruction,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Ink,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    )
-                    HuntConditionRow(
-                        label = "Near the treasure",
-                        detail = "Distance ${distance.formatDistance()} · need 10 m or less",
-                        satisfied = readiness.nearTreasure,
-                    )
-                    HuntConditionRow(
-                        label = "Facing the treasure",
-                        detail = turnDegrees?.let { "${abs(it).formatDegrees()} from the signal" } ?: "Waiting for heading sensor",
-                        satisfied = readiness.facingTreasure,
-                    )
-                    HuntConditionRow(
-                        label = "Phone flat and level",
-                        detail = formatPhoneTilt(orientationOutput),
-                        satisfied = readiness.phoneHorizontal,
-                    )
-                }
+                Text(instruction, modifier = Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                HuntConditionRow("Near the treasure", "${distance.formatDistance()} · need 10 m or less", readiness.nearTreasure)
+                HuntConditionRow(
+                    "Facing the treasure",
+                    turnDegrees?.let { "${abs(it).formatDegrees()} from the signal" } ?: "Waiting for heading sensor",
+                    readiness.facingTreasure,
+                )
+                HuntConditionRow("Phone flat and level", formatPhoneTilt(orientationOutput), readiness.phoneHorizontal)
             }
         }
         if (signalLocked) {
-            item {
-                Button(
-                    onClick = onSignalFound,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                ) {
-                    Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(28.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Play mini-game", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-        item {
-            OutlinedButton(
-                onClick = onBack,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+            Button(
+                onClick = onSignalFound,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(18.dp),
             ) {
-                Text("Back", fontWeight = FontWeight.Bold)
+                Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Play mini-game", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -1078,6 +999,7 @@ private fun CompassSignalVisual(
     relic: MapRelic,
     turnDegrees: Float,
     signalAvailable: Boolean,
+    distanceMeters: Double?,
     pitchDegrees: Float?,
     rollDegrees: Float?,
     signalLocked: Boolean,
@@ -1095,40 +1017,38 @@ private fun CompassSignalVisual(
         label = "treasure_compass_roll",
     )
     val density = LocalDensity.current.density
-    Card(
+    val distanceProgress = distanceMeters?.let { (1f - (it / HUNT_READY_RADIUS_METERS).toFloat()).coerceIn(0f, 1f) } ?: 0f
+    val levelDegrees = maxOf(abs(pitchDegrees ?: 0f), abs(rollDegrees ?: 0f))
+    Box(
         modifier = modifier
-            .height(260.dp)
-            .padding(horizontal = 8.dp, vertical = 10.dp)
+            .heightIn(min = 215.dp, max = 285.dp)
+            .padding(horizontal = 12.dp, vertical = 2.dp)
             .graphicsLayer {
                 rotationX = 9f + animatedPitch * 0.42f
                 rotationY = -animatedRoll * 0.42f
                 cameraDistance = 24f * density
-                shadowElevation = 18f * density
             },
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF4B3024)),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize().padding(18.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val centre = Offset(size.width / 2f, size.height / 2f)
-                val radius = size.minDimension * 0.42f
+                val radius = size.minDimension * 0.39f
                 drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0xFF6A4934), Color(0xFF2E1B13)),
-                        center = centre - Offset(radius * 0.22f, radius * 0.25f),
-                        radius = radius * 1.25f,
-                    ),
+                    if (signalLocked) Color(0xFFD49B16) else Brand,
                     radius = radius,
                     center = centre,
+                    style = Stroke(width = if (signalLocked) 9f else 6f),
                 )
-                drawCircle(Color.Black.copy(alpha = 0.32f), radius = radius * 0.98f, center = centre + Offset(0f, 10f), style = Stroke(width = 12f))
-                drawCircle(
-                    if (signalLocked) Color(0xFFFFD76A) else Color(0xFFE9B34F),
-                    radius = radius,
-                    center = centre,
-                    style = Stroke(width = if (signalLocked) 10f else 7f),
+                drawArc(
+                    color = if (distanceProgress >= 0.99f) Color(0xFF3F8A54) else Color(0xFFE9B34F),
+                    startAngle = -90f,
+                    sweepAngle = 360f * distanceProgress,
+                    useCenter = false,
+                    topLeft = Offset(centre.x - radius * 1.12f, centre.y - radius * 1.12f),
+                    size = Size(radius * 2.24f, radius * 2.24f),
+                    style = Stroke(width = 8f),
                 )
-                drawCircle(Color(0xFFE9B34F).copy(alpha = 0.22f), radius = radius * 0.68f, center = centre, style = Stroke(width = 3f))
+                drawCircle(Brand.copy(alpha = 0.28f), radius = radius * 0.68f, center = centre, style = Stroke(width = 3f))
                 repeat(12) { index ->
                     val angle = Math.toRadians(index * 30.0 - 90.0)
                     val outer = Offset(
@@ -1139,7 +1059,7 @@ private fun CompassSignalVisual(
                         centre.x + kotlin.math.cos(angle).toFloat() * radius * 0.86f,
                         centre.y + kotlin.math.sin(angle).toFloat() * radius * 0.86f,
                     )
-                    drawLine(Color(0xFFFFE3A0), inner, outer, strokeWidth = if (index % 3 == 0) 5f else 2f)
+                    drawLine(Ink.copy(alpha = if (index % 3 == 0) 0.82f else 0.45f), inner, outer, strokeWidth = if (index % 3 == 0) 5f else 2f)
                 }
                 if (signalAvailable) {
                     val arrowAngle = Math.toRadians(animatedTurn.toDouble() - 90.0)
@@ -1151,28 +1071,38 @@ private fun CompassSignalVisual(
                         centre.x - kotlin.math.cos(arrowAngle).toFloat() * radius * 0.34f,
                         centre.y - kotlin.math.sin(arrowAngle).toFloat() * radius * 0.34f,
                     )
-                    drawLine(Color(0xFFE9B34F), centre, tail, strokeWidth = 9f)
+                    drawLine(Brand.copy(alpha = 0.72f), centre, tail, strokeWidth = 9f)
                     drawLine(Color(0xFFF25B45), centre, tip, strokeWidth = 14f)
                     drawCircle(Color.White, radius = 12f, center = centre)
-                    drawCircle(Color(0xFF4B3024), radius = 6f, center = centre)
+                    drawCircle(Ink, radius = 6f, center = centre)
                 }
+                val levelCentre = centre + Offset(0f, radius * 0.47f)
+                val bubbleOffset = Offset(
+                    (animatedRoll / 30f) * radius * 0.20f,
+                    (animatedPitch / 30f) * radius * 0.20f,
+                )
+                drawCircle(Ink.copy(alpha = 0.25f), radius = radius * 0.16f, center = levelCentre, style = Stroke(width = 3f))
+                drawCircle(if (levelDegrees <= 8f) Color(0xFF3F8A54) else RelicRed, radius = radius * 0.065f, center = levelCentre + bubbleOffset)
             }
             TreasurePrototypeImage(
                 relic = relic,
                 discovered = false,
-                modifier = Modifier.size(68.dp),
+                modifier = Modifier.size(58.dp),
             )
-            Text("N", modifier = Modifier.align(Alignment.TopCenter), color = Color.White, fontWeight = FontWeight.Bold)
+            Text("N", modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp), color = Ink, fontWeight = FontWeight.Bold)
+            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(distanceMeters.formatDistance(), color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (levelDegrees <= 8f) Color(0xFF3F8A54) else Muted, style = MaterialTheme.typography.labelSmall)
+            }
             if (signalLocked) {
                 Text(
                     "SIGNAL LOCKED",
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    color = Color(0xFFFFD76A),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                    color = Color(0xFFD49B16),
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelMedium,
                 )
             }
-        }
     }
 }
 
@@ -1748,9 +1678,9 @@ private fun coordinateAtDistance(target: GeoCoordinate, distanceMeters: Double):
 
 private fun GeoCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
 
-private val DEFAULT_CAMPUS_CENTRE = GeoCoordinate(-37.7986, 144.9602)
+internal val DEFAULT_CAMPUS_CENTRE = GeoCoordinate(-37.7986, 144.9602)
 private const val RADAR_SCAN_RADIUS_METERS = 100.0
-private const val REVEAL_RADIUS_METERS = 50.0
+internal const val REVEAL_RADIUS_METERS = 50.0
 private const val HUNT_READY_RADIUS_METERS = 10.0
 private const val COMPASS_ALIGNMENT_TOLERANCE_DEGREES = 15.0
 private const val EARTH_RADIUS_METERS = 6_371_000.0
@@ -1797,7 +1727,7 @@ private fun ProximitySimulation.next(): ProximitySimulation = when (this) {
     ProximitySimulation.TEN_METRES -> ProximitySimulation.OFF
 }
 
-private fun isProbablyEmulator(): Boolean =
+internal fun isProbablyEmulator(): Boolean =
     Build.FINGERPRINT.startsWith("generic") ||
         Build.FINGERPRINT.lowercase(Locale.US).contains("emulator") ||
         Build.MODEL.lowercase(Locale.US).let {

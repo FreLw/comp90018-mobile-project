@@ -263,14 +263,28 @@ service cloud.firestore {
     }
 
     match /teamRooms/{roomId} {
-      // A room ID is intentionally shareable; listing all rooms remains private.
+      // Private rooms can be opened only with their exact numeric ID. Plaza queries
+      // must explicitly filter to public rooms so Firestore can prove this rule.
       allow get: if signedIn();
-      allow list: if false;
+      allow list: if signedIn() && resource.data.isPublic == true;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'createdAt', 'updatedAt'])
+        && roomId.matches('^[0-9]{6}$')
+        && request.resource.data.keys().hasOnly([
+          'creatorId', 'memberIds', 'name', 'isPublic', 'maxMembers', 'pinnedTreasureId',
+          'taskId', 'taskTitle', 'taskStatus', 'createdAt', 'updatedAt'
+        ])
         && request.resource.data.creatorId == request.auth.uid
         && request.resource.data.memberIds.size() == 1
         && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.isPublic is bool
+        && request.resource.data.maxMembers is int
+        && request.resource.data.maxMembers >= 2
+        && request.resource.data.maxMembers <= 6
+        && (!('pinnedTreasureId' in request.resource.data)
+          || request.resource.data.pinnedTreasureId == '')
         && request.resource.data.taskId is string
         && request.resource.data.taskTitle is string
         && request.resource.data.taskStatus == 'unassigned'
@@ -281,12 +295,7 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.memberIds
         && request.resource.data.memberIds.hasAll(resource.data.memberIds)
         && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
-        && request.resource.data.memberIds.size() <= 2
-        && request.resource.data.creatorId == resource.data.creatorId
-        && request.resource.data.taskId == resource.data.taskId
-        && request.resource.data.taskTitle == resource.data.taskTitle
-        && request.resource.data.taskStatus == resource.data.taskStatus
-        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.memberIds.size() <= (('maxMembers' in resource.data) ? resource.data.maxMembers : 2)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
         && request.resource.data.updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/teamMemberships/$(request.auth.uid));
@@ -296,27 +305,47 @@ service cloud.firestore {
         && !(request.auth.uid in request.resource.data.memberIds)
         && resource.data.memberIds.hasAll(request.resource.data.memberIds)
         && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
-        && request.resource.data.creatorId == resource.data.creatorId
-        && request.resource.data.taskId == resource.data.taskId
-        && request.resource.data.taskTitle == resource.data.taskTitle
-        && request.resource.data.taskStatus == resource.data.taskStatus
-        && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.creatorId
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'isPublic', 'maxMembers', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.isPublic is bool
+        && request.resource.data.maxMembers is int
+        && request.resource.data.maxMembers >= request.resource.data.memberIds.size()
+        && request.resource.data.maxMembers >= 2
+        && request.resource.data.maxMembers <= 6
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.memberIds
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinnedTreasureId', 'updatedAt'])
+        && request.resource.data.pinnedTreasureId is string
+        && request.resource.data.pinnedTreasureId.size() > 0
+        && request.resource.data.pinnedTreasureId.size() <= 160
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.pinnedTreasureId))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.pinnedTreasureId)).data.status == 'discovered'
         && request.resource.data.updatedAt == request.time;
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
 
       match /messages/{messageId} {
         allow read: if isTeamRoomMember(roomId);
         allow create: if isTeamRoomMember(roomId)
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'imageUrl', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
           && request.resource.data.senderName.size() <= 30
           && request.resource.data.senderAvatarUrl is string
           && request.resource.data.senderAvatarUrl.size() <= 2000
           && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
+          && (!('imageUrl' in request.resource.data)
+            || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2000))
+          && (request.resource.data.text.size() > 0
+            || ('imageUrl' in request.resource.data && request.resource.data.imageUrl.size() > 0))
           && request.resource.data.createdAt == request.time;
         allow update: if false;
         allow delete: if signedIn()

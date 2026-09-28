@@ -20,6 +20,8 @@ data class TeamRoomChatUiState(
     val error: String? = null,
     val sending: Boolean = false,
     val leaving: Boolean = false,
+    val savingSettings: Boolean = false,
+    val pinningTreasure: Boolean = false,
 )
 
 class TeamRoomChatViewModel(
@@ -60,17 +62,33 @@ class TeamRoomChatViewModel(
         val text = mutableUiState.value.input.trim()
         if (text.isBlank() || mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(input = "", error = null, sending = true)
-        val recipientId = mutableUiState.value.room?.memberIds?.firstOrNull { it != userId }
-        repository.sendMessage(roomId, userId, recipientId, senderName.ifBlank { "You" }, senderAvatarUrl, text) { error ->
+        repository.sendMessage(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, text) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
         }
     }
     fun sendImage(uri: Uri, senderName: String, senderAvatarUrl: String) {
         if (mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
-        val recipientId = mutableUiState.value.room?.memberIds?.firstOrNull { it != userId }
-        repository.sendImage(roomId, userId, recipientId, senderName.ifBlank { "You" }, senderAvatarUrl, uri) { error ->
+        repository.sendImage(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, uri) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+        }
+    }
+
+    fun updateSettings(name: String, isPublic: Boolean, maxMembers: Int, onSaved: () -> Unit) {
+        if (mutableUiState.value.savingSettings) return
+        mutableUiState.value = mutableUiState.value.copy(savingSettings = true, error = null)
+        repository.updateRoomSettings(roomId, userId, name, isPublic, maxMembers) { error ->
+            mutableUiState.value = mutableUiState.value.copy(savingSettings = false, error = error)
+            if (error == null) onSaved()
+        }
+    }
+
+    fun pinTreasure(treasureId: String, onPinned: () -> Unit) {
+        if (mutableUiState.value.pinningTreasure) return
+        mutableUiState.value = mutableUiState.value.copy(pinningTreasure = true, error = null)
+        repository.pinCollectedTreasure(roomId, userId, treasureId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(pinningTreasure = false, error = error)
+            if (error == null) onPinned()
         }
     }
 

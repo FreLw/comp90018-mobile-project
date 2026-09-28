@@ -38,6 +38,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> Unit) {
     var destination by remember { mutableStateOf(AppDestination.Friends) }
+    var mapTreasureRequest by remember { mutableStateOf<MapTreasureRequest?>(null) }
     val repository = remember(firestore) { FirebaseProfileRepository(firestore) }
     val viewModel: AppShellViewModel = viewModel(
         key = "app_shell_${user.uid}",
@@ -103,10 +104,24 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     loading = treasureCatalogState.loading,
                     error = treasureCatalogState.error,
                     onRetry = treasureCatalogViewModel::retry,
-                    onOpenMap = { destination = AppDestination.Map },
+                    onStartNearbyHunt = { treasureId ->
+                        mapTreasureRequest = MapTreasureRequest(treasureId, startHunt = true)
+                        destination = AppDestination.Map
+                    },
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                 )
-                AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
+                AppDestination.Rooms -> RoomsScreen(
+                    user = user,
+                    firestore = firestore,
+                    profile = state.profile,
+                    viewModel = roomsViewModel,
+                    treasures = treasureCatalogState.treasures,
+                    discoveredTreasureIds = treasureCollectionState.discoveredIds,
+                    onOpenTreasureMap = { treasureId ->
+                        mapTreasureRequest = MapTreasureRequest(treasureId, startHunt = false)
+                        destination = AppDestination.Map
+                    },
+                )
                 AppDestination.Map -> MapScreen(
                     treasures = treasureCatalogState.treasures,
                     loading = treasureCatalogState.loading,
@@ -116,6 +131,9 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     savingTreasureId = treasureCollectionState.savingTreasureId,
                     preciseLocationEnabled = settings?.preciseLocation ?: true,
                     hapticsEnabled = settings?.haptics ?: true,
+                    requestedTreasureId = mapTreasureRequest?.treasureId,
+                    startRequestedHunt = mapTreasureRequest?.startHunt == true,
+                    onTreasureRequestConsumed = { mapTreasureRequest = null },
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
@@ -133,3 +151,5 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         }
     }
 }
+
+private data class MapTreasureRequest(val treasureId: String, val startHunt: Boolean)
