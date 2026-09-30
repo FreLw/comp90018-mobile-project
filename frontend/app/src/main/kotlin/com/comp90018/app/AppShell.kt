@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -21,6 +22,7 @@ import com.comp90018.app.data.treasure.FirebaseTreasureRepository
 import com.comp90018.app.features.friends.FriendsScreen
 import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
+import com.comp90018.app.features.map.UserLocationViewModel
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.RoomsViewModel
@@ -75,6 +77,13 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     val treasureCollectionState by treasureCollectionViewModel.uiState.collectAsStateWithLifecycle()
     val settings = state.profile?.settings
     val notificationsEnabled = settings?.notifications ?: true
+    val preciseLocationEnabled = settings?.preciseLocation ?: true
+    val context = LocalContext.current
+    val userLocationViewModel: UserLocationViewModel = viewModel(
+        key = "user_location_$preciseLocationEnabled",
+        factory = UserLocationViewModel.factory(context, preciseLocationEnabled),
+    )
+    val userLocation by userLocationViewModel.output.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Background,
@@ -110,7 +119,9 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     onRetry = treasureCatalogViewModel::retry,
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     savingTreasureId = treasureCollectionState.savingTreasureId,
-                    preciseLocationEnabled = settings?.preciseLocation ?: true,
+                    preciseLocationEnabled = preciseLocationEnabled,
+                    userLocation = userLocation,
+                    onEnableLocation = userLocationViewModel::retryAfterPermissionGranted,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })

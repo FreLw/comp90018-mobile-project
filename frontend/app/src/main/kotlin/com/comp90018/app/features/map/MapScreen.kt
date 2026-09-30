@@ -1,5 +1,6 @@
 package com.comp90018.app.features.map
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -13,6 +14,8 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -87,7 +90,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.comp90018.app.sensors.location.GeoCoordinate
-import com.comp90018.app.sensors.location.LocationAvailabilityState
 import com.comp90018.app.sensors.location.LocationCalculator
 import com.comp90018.app.sensors.location.LocationConfig
 import com.comp90018.app.sensors.location.LocationOutput
@@ -126,6 +128,8 @@ fun MapScreen(
     discoveredTreasureIds: Set<String>,
     savingTreasureId: String?,
     preciseLocationEnabled: Boolean,
+    userLocation: LocationOutput,
+    onEnableLocation: () -> Unit,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
 ) {
     val resolvedTreasures = remember(treasures) {
@@ -137,7 +141,20 @@ fun MapScreen(
     val foundRelicIds = discoveredTreasureIds
     val deviceHeading = rememberDeviceHeading()
     val activeRelic = detailRelic ?: selectedRelic
-    val locationOutput = remember(activeRelic) { stopOneLocationOutput(activeRelic) }
+    val locationOutput = remember(activeRelic, userLocation) {
+        LocationCalculator.buildOutput(
+            currentLocation = userLocation.currentLocation,
+            targetLocation = activeRelic?.coordinate,
+            timestampNanos = userLocation.timestampNanos,
+            config = LocationConfig(
+                insideRadiusMeters = activeRelic?.insideRadiusMeters ?: 20.0,
+                nearbyRadiusMeters = activeRelic?.nearbyRadiusMeters ?: 120.0,
+            ),
+            permission = userLocation.permission,
+            availability = userLocation.availability,
+            accuracyMeters = userLocation.accuracyMeters,
+        )
+    }
     val markerTransition = rememberInfiniteTransition(label = "map_quest_marker")
     val markerPulse by markerTransition.animateFloat(
         initialValue = 0.90f,
@@ -195,20 +212,30 @@ fun MapScreen(
         )
 
         if (selectedRelic == null) {
-            FindTreasurePrompt(
-                message = when {
-                    loading -> "Loading treasures from Firebase…"
-                    error != null -> error
-                    resolvedTreasures.isEmpty() -> "No enabled treasures are available right now."
-                    else -> "Psst… tap a treasure and see what’s hiding nearby!"
-                },
-                loading = loading,
-                onRetry = onRetry.takeIf { error != null },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 16.dp),
-            )
+            if (userLocation.permission != LocationPermissionState.GRANTED) {
+                LocationPermissionPrompt(
+                    onPermissionGranted = onEnableLocation,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 16.dp),
+                )
+            } else {
+                FindTreasurePrompt(
+                    message = when {
+                        loading -> "Loading treasures from Firebase…"
+                        error != null -> error
+                        resolvedTreasures.isEmpty() -> "No enabled treasures are available right now."
+                        else -> "Psst… tap a treasure and see what’s hiding nearby!"
+                    },
+                    loading = loading,
+                    onRetry = onRetry.takeIf { error != null },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 16.dp),
+                )
+            }
         }
 
         AnimatedContent(
@@ -356,6 +383,39 @@ private fun FindTreasurePrompt(
             if (loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 3.dp, color = Brand)
             Text(message, modifier = Modifier.weight(1f), color = if (onRetry == null) Ink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             onRetry?.let { retry -> Button(onClick = retry) { Text("Retry") } }
+        }
+    }
+}
+
+@Composable
+private fun LocationPermissionPrompt(onPermissionGranted: () -> Unit, modifier: Modifier = Modifier) {
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { results ->
+        if (results.values.any { it }) onPermissionGranted()
+    }
+    ElevatedCard(modifier = modifier, shape = RoundedCornerShape(20.dp), colors = CardDefaults.elevatedCardColors(containerColor = Color.White.copy(alpha = 0.96f))) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Turn on location to see how close you are to each relic.",
+                color = Ink,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Button(
+                onClick = {
+                    permissionLauncher.launch(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                    )
+                },
+            ) {
+                Icon(Icons.Rounded.LocationOn, contentDescription = null)
+                Text(" Enable location")
+            }
         }
     }
 }
@@ -1138,8 +1198,7 @@ private fun renderCurrentLocation(
     return map.addMarker(
         MarkerOptions()
             .position(position)
-            .title("You · Melbourne University Stop 1")
-            .snippet("Demo starting location")
+            .title("You")
             .icon(currentLocationIcon(context))
             .anchor(0.5f, 0.72f)
             .flat(true)
@@ -1240,20 +1299,6 @@ private fun moveCameraToRelic(map: GoogleMap, selectedRelic: MapRelic) {
 }
 
 private fun GeoCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
-
-private val MELBOURNE_UNIVERSITY_STOP_ONE = GeoCoordinate(-37.7986, 144.9602)
-
-private fun stopOneLocationOutput(relic: MapRelic?): LocationOutput = LocationCalculator.buildOutput(
-    currentLocation = MELBOURNE_UNIVERSITY_STOP_ONE,
-    targetLocation = relic?.coordinate,
-    config = LocationConfig(
-        insideRadiusMeters = relic?.insideRadiusMeters ?: 20.0,
-        nearbyRadiusMeters = relic?.nearbyRadiusMeters ?: 120.0,
-    ),
-    permission = LocationPermissionState.GRANTED,
-    availability = LocationAvailabilityState.AVAILABLE,
-    accuracyMeters = 5.0,
-)
 
 private fun Double?.formatDistance(): String = when {
     this == null -> "unknown"
