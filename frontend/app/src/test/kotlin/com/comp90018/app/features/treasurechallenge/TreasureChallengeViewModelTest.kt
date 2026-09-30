@@ -31,12 +31,16 @@ import org.junit.Test
 class TreasureChallengeViewModelTest {
     private val target = GeoCoordinate(0.0, 0.0)
 
+    /** Each call represents a fresh device reading unless a test pins an explicit timestamp. */
+    private var nextAutoTimestampNanos = 1L
+
     @Test fun unionFlowsFromOutsideThroughPhotoCaptureAndKeepsReadyDuringShutterMovement() {
         withHarness(unionConfig()) { viewModel, engine, clock ->
             viewModel.start()
             engine.emit(snapshot(inside = false))
             assertEquals(ChallengeInstruction.MOVE_CLOSER, viewModel.uiState.value.instruction)
 
+            engine.emit(snapshot())
             engine.emit(snapshot(headingDegrees = 340.0))
             assertEquals(ChallengeInstruction.TURN_RIGHT, viewModel.uiState.value.instruction)
 
@@ -64,6 +68,7 @@ class TreasureChallengeViewModelTest {
     @Test fun wilsonInterruptionResetsProgressBeforeSuccessfulObservation() {
         withHarness(wilsonConfig()) { viewModel, engine, clock ->
             viewModel.start()
+            engine.emit(snapshot())
             engine.emit(snapshot(headingDegrees = 30.0))
             assertEquals(ChallengeInstruction.TURN_LEFT, viewModel.uiState.value.instruction)
 
@@ -88,6 +93,7 @@ class TreasureChallengeViewModelTest {
     @Test fun oldQuadTiltResetsExcavationBeforeSuccessfulHold() {
         withHarness(oldQuadConfig()) { viewModel, engine, clock ->
             viewModel.start()
+            engine.emit(snapshot())
             engine.emit(snapshot(horizontal = false))
             assertEquals(ChallengeInstruction.KEEP_PHONE_LEVEL, viewModel.uiState.value.instruction)
 
@@ -112,6 +118,7 @@ class TreasureChallengeViewModelTest {
     @Test fun southLawnPrioritisesTurnGuidanceThenRequiresStillFinalLock() {
         withHarness(southConfig()) { viewModel, engine, clock ->
             viewModel.start()
+            engine.emit(snapshot())
             engine.emit(snapshot(headingDegrees = 340.0, rotationStill = false))
             assertEquals(ChallengeInstruction.TURN_RIGHT, viewModel.uiState.value.instruction)
 
@@ -151,6 +158,7 @@ class TreasureChallengeViewModelTest {
         withHarness(unionConfig()) { viewModel, engine, clock ->
             viewModel.start()
             engine.emit(snapshot())
+            engine.emit(snapshot())
             clock.now = 800_000_000L
             engine.emit(snapshot(timestampNanos = clock.now))
             assertTrue(viewModel.uiState.value.actionReady)
@@ -162,6 +170,7 @@ class TreasureChallengeViewModelTest {
             assertEquals(null, engine.challengeTargetHeadingDegrees)
             assertTrue(engine.isStarted)
 
+            engine.emit(snapshot())
             engine.emit(snapshot())
             assertEquals(0.0, viewModel.uiState.value.holdProgress, 0.0)
             assertEquals(ChallengeInstruction.HOLD_EXCAVATION_POSITION, viewModel.uiState.value.instruction)
@@ -223,7 +232,7 @@ class TreasureChallengeViewModelTest {
         stationary: Boolean = true,
         stable: Boolean = true,
         rotationStill: Boolean = true,
-        timestampNanos: Long = 0L,
+        timestampNanos: Long = nextAutoTimestampNanos++,
     ) = DeviceContextSnapshot(
         location = LocationOutput(
             currentLocation = if (inside) target else GeoCoordinate(0.0, 0.001),

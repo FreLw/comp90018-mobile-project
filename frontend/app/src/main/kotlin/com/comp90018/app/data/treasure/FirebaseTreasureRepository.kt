@@ -1,5 +1,7 @@
 package com.comp90018.app.data.treasure
 
+import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
+import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.sensors.location.GeoCoordinate
@@ -42,6 +44,9 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
     val longitude = number("longitude") ?: return null
     if (title.isBlank() || locationName.isBlank()) return null
 
+    val coordinate = GeoCoordinate(latitude, longitude)
+    val insideRadiusMeters = number("insideRadiusMeters") ?: 20.0
+
     return MapRelic(
         id = getString("id")?.trim().takeUnless { it.isNullOrBlank() } ?: id,
         name = title,
@@ -58,11 +63,46 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
         sourceTitle = getString("sourceTitle")?.trim().orEmpty(),
         sourceUrl = getString("sourceUrl")?.trim().orEmpty(),
         treasureType = getString("treasureType")?.trim().orEmpty(),
-        coordinate = GeoCoordinate(latitude, longitude),
-        insideRadiusMeters = number("insideRadiusMeters") ?: 20.0,
+        coordinate = coordinate,
+        insideRadiusMeters = insideRadiusMeters,
         nearbyRadiusMeters = number("nearbyRadiusMeters") ?: 60.0,
         sortOrder = number("sortOrder")?.toInt() ?: Int.MAX_VALUE,
+        challengeConfig = toChallengeConfig(coordinate, insideRadiusMeters),
     )
+}
+
+/** Parses the `challenge` map that Firestore treasure documents embed (see database/treasures.json). */
+@Suppress("UNCHECKED_CAST")
+private fun DocumentSnapshot.toChallengeConfig(
+    targetLocation: GeoCoordinate,
+    insideRadiusMeters: Double,
+): RelicChallengeConfig? {
+    val challenge = get("challenge") as? Map<String, Any?> ?: return null
+    if (challenge["enabled"] == false) return null
+    val challengeId = (challenge["challengeId"] as? String)?.trim().takeUnless { it.isNullOrBlank() } ?: return null
+    val type = (challenge["type"] as? String)?.let { raw -> runCatching { RelicChallengeType.valueOf(raw) }.getOrNull() }
+        ?: return null
+    val requiresSound = challenge["requiresSound"] as? Boolean ?: false
+    val soundThresholdDecibels = (challenge["soundThresholdDecibels"] as? Number)?.toDouble()
+
+    return runCatching {
+        RelicChallengeConfig(
+            challengeId = challengeId,
+            type = type,
+            targetLocation = targetLocation,
+            insideRadiusMeters = insideRadiusMeters,
+            requiredHeadingDegrees = (challenge["requiredHeadingDegrees"] as? Number)?.toDouble(),
+            headingToleranceDegrees = (challenge["headingToleranceDegrees"] as? Number)?.toDouble() ?: 0.0,
+            requiresStationary = challenge["requiresStationary"] as? Boolean ?: false,
+            requiresStability = challenge["requiresStability"] as? Boolean ?: false,
+            requiresRotationStill = challenge["requiresRotationStill"] as? Boolean ?: false,
+            requiresHorizontal = challenge["requiresHorizontal"] as? Boolean ?: false,
+            holdDurationNanos = ((challenge["holdDurationMs"] as? Number)?.toLong() ?: 0L) * 1_000_000L,
+            photoActionRequired = challenge["photoActionRequired"] as? Boolean ?: false,
+            requiresSound = requiresSound,
+            soundThresholdDecibels = soundThresholdDecibels,
+        )
+    }.getOrNull()
 }
 
 private fun DocumentSnapshot.number(field: String): Double? = (get(field) as? Number)?.toDouble()
