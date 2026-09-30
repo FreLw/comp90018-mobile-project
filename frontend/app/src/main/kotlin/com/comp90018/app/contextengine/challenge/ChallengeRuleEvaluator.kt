@@ -21,6 +21,8 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
     private var holdStartedAtNanos: Long? = null
     private var lastEvaluationNanos: Long? = null
     private var isCompleted = false
+    private var lastLocationTimestampNanos: Long? = null
+    private var consecutiveInsideReadings = 0
 
     fun evaluate(
         snapshot: DeviceContextSnapshot,
@@ -75,6 +77,8 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         holdStartedAtNanos = null
         lastEvaluationNanos = null
         isCompleted = false
+        lastLocationTimestampNanos = null
+        consecutiveInsideReadings = 0
     }
 
     private fun buildConditionStates(
@@ -134,12 +138,32 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         return DirectionProcessor.evaluate(heading, target, config.headingToleranceDegrees)
     }
 
+    /**
+     * A single GPS fix can drift hundreds of metres off while still reporting an "acceptable"
+     * accuracy figure (indoor/urban multipath), so treating one in-range fix as proof of arrival
+     * is unsafe once [RelicChallengeConfig.insideRadiusMeters] is small. This requires the fix's
+     * own accuracy to be no worse than that radius, and requires two distinct fixes (identified by
+     * [DeviceContextSnapshot]'s location timestamp) to agree before the relic is "found" - a lone
+     * noisy reading can no longer flip the geofence on its own.
+     */
     private fun isInsideTarget(snapshot: DeviceContextSnapshot): Boolean {
-        if (snapshot.location.validity != SensorValidity.VALID) return false
-        val current = snapshot.location.currentLocation ?: return false
-        if (!current.isValid()) return false
-        return LocationCalculator.distanceMeters(current, config.targetLocation) <= config.insideRadiusMeters
+        val location = snapshot.location
+        val current = location.currentLocation
+        val withinRange = location.validity == SensorValidity.VALID &&
+            current != null && current.isValid() &&
+            isAccurateEnough(location.accuracyMeters) &&
+            LocationCalculator.distanceMeters(current, config.targetLocation) <= config.insideRadiusMeters
+
+        val timestamp = location.timestampNanos
+        if (timestamp == null || timestamp != lastLocationTimestampNanos) {
+            lastLocationTimestampNanos = timestamp
+            consecutiveInsideReadings = if (withinRange) consecutiveInsideReadings + 1 else 0
+        }
+        return consecutiveInsideReadings >= REQUIRED_CONSECUTIVE_INSIDE_READINGS
     }
+
+    private fun isAccurateEnough(accuracyMeters: Double?): Boolean =
+        accuracyMeters == null || accuracyMeters <= config.insideRadiusMeters
 
     private fun instruction(
         conditions: List<ChallengeConditionState>,
@@ -178,4 +202,8 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
     private fun GeoCoordinate.isValid(): Boolean =
         latitude.isFinite() && latitude in -90.0..90.0 &&
             longitude.isFinite() && longitude in -180.0..180.0
+
+    private companion object {
+        const val REQUIRED_CONSECUTIVE_INSIDE_READINGS = 2
+    }
 }
