@@ -12,3 +12,4 @@ local.properties
 .gradle-project-cache/
 .idea/claudeCodeEditorTabs.xml
 /.idea
+.idea/claudeCodeEditorTabs.xml
