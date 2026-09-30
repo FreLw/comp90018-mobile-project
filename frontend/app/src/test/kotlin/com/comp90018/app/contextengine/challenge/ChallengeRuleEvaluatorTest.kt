@@ -56,7 +56,9 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun unionMisalignmentGivesTurnDirection() {
-        val result = ChallengeRuleEvaluator(unionConfig()).evaluate(snapshot(headingDegrees = 340.0), 0L)
+        val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(headingDegrees = 340.0), 0L)
+        val result = evaluator.evaluate(snapshot(headingDegrees = 340.0), 0L)
 
         assertEquals(ChallengeInstruction.TURN_RIGHT, result.instruction)
         assertFalse(result.condition(ChallengeCondition.HEADING_ALIGNED))
@@ -65,6 +67,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun unionAlignedFor800MillisBecomesActionReadyButNotComplete() {
         val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 0L)
         val almostReady = evaluator.evaluate(snapshot(), 799_000_000L)
         val ready = evaluator.evaluate(snapshot(), 800_000_000L)
@@ -78,6 +81,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun unionPhotoEventCompletesOnlyAfterActionIsReady() {
         val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(), 0L)
         val earlyCapture = evaluator.evaluate(snapshot(), 0L, ChallengeEvent.PHOTO_CAPTURED)
         assertFalse(earlyCapture.completed)
 
@@ -94,6 +98,7 @@ class ChallengeRuleEvaluatorTest {
     @Test fun wilsonAllConditionsHeldForThreeSecondsCompletes() {
         val evaluator = ChallengeRuleEvaluator(wilsonConfig())
         evaluator.evaluate(snapshot(), 0L)
+        evaluator.evaluate(snapshot(), 0L)
         val completed = evaluator.evaluate(snapshot(), 3_000_000_000L)
 
         assertTrue(completed.completed)
@@ -102,6 +107,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun wilsonMovementResetsTimer() {
         val evaluator = ChallengeRuleEvaluator(wilsonConfig())
+        evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 0L)
         assertTrue(evaluator.evaluate(snapshot(), 2_000_000_000L).holdProgress > 0.0)
 
@@ -115,6 +121,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun wilsonDirectionLossResetsTimer() {
         val evaluator = ChallengeRuleEvaluator(wilsonConfig())
+        evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 1_000_000_000L)
 
@@ -130,6 +137,7 @@ class ChallengeRuleEvaluatorTest {
     @Test fun wilsonGyroscopeRotationResetsTimer() {
         val evaluator = ChallengeRuleEvaluator(wilsonConfig())
         evaluator.evaluate(snapshot(), 0L)
+        evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 2_000_000_000L)
 
         val rotating = evaluator.evaluate(snapshot(rotationStill = false), 2_100_000_000L)
@@ -141,7 +149,9 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun oldQuadNonHorizontalCannotProgress() {
-        val result = ChallengeRuleEvaluator(oldQuadConfig()).evaluate(snapshot(horizontal = false), 0L)
+        val evaluator = ChallengeRuleEvaluator(oldQuadConfig())
+        evaluator.evaluate(snapshot(horizontal = false), 0L)
+        val result = evaluator.evaluate(snapshot(horizontal = false), 0L)
 
         assertEquals(ChallengeInstruction.KEEP_PHONE_LEVEL, result.instruction)
         assertEquals(0.0, result.holdProgress, 0.0)
@@ -149,7 +159,9 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun oldQuadHorizontalButMovingCannotProgress() {
-        val result = ChallengeRuleEvaluator(oldQuadConfig()).evaluate(snapshot(stationary = false), 0L)
+        val evaluator = ChallengeRuleEvaluator(oldQuadConfig())
+        evaluator.evaluate(snapshot(stationary = false), 0L)
+        val result = evaluator.evaluate(snapshot(stationary = false), 0L)
 
         assertEquals(ChallengeInstruction.STOP_MOVING, result.instruction)
         assertEquals(0.0, result.holdProgress, 0.0)
@@ -158,6 +170,7 @@ class ChallengeRuleEvaluatorTest {
     @Test fun oldQuadAllConditionsHeldForThreeSecondsCompletes() {
         val evaluator = ChallengeRuleEvaluator(oldQuadConfig())
         evaluator.evaluate(snapshot(), 0L)
+        evaluator.evaluate(snapshot(), 0L)
 
         val completed = evaluator.evaluate(snapshot(), 3_000_000_000L)
         assertTrue(completed.completed)
@@ -165,8 +178,13 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun southLawnAngularErrorProducesLeftAndRightInstructions() {
-        val left = ChallengeRuleEvaluator(southConfig()).evaluate(snapshot(headingDegrees = 20.0), 0L)
-        val right = ChallengeRuleEvaluator(southConfig()).evaluate(snapshot(headingDegrees = 340.0), 0L)
+        val leftEvaluator = ChallengeRuleEvaluator(southConfig())
+        leftEvaluator.evaluate(snapshot(headingDegrees = 20.0), 0L)
+        val left = leftEvaluator.evaluate(snapshot(headingDegrees = 20.0), 0L)
+
+        val rightEvaluator = ChallengeRuleEvaluator(southConfig())
+        rightEvaluator.evaluate(snapshot(headingDegrees = 340.0), 0L)
+        val right = rightEvaluator.evaluate(snapshot(headingDegrees = 340.0), 0L)
 
         assertEquals(ChallengeInstruction.TURN_LEFT, left.instruction)
         assertEquals(ChallengeInstruction.TURN_RIGHT, right.instruction)
@@ -174,6 +192,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun southLawnAlignedButRotatingDoesNotComplete() {
         val evaluator = ChallengeRuleEvaluator(southConfig())
+        evaluator.evaluate(snapshot(rotationStill = false), 0L)
         val rotating = evaluator.evaluate(snapshot(rotationStill = false), 0L)
         val stillStartsTimer = evaluator.evaluate(snapshot(), 2_000_000_000L)
 
@@ -185,6 +204,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun southLawnAlignedStableAndStillFor1200MillisCompletes() {
         val evaluator = ChallengeRuleEvaluator(southConfig())
+        evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 0L)
         val completed = evaluator.evaluate(snapshot(), 1_200_000_000L)
 
@@ -204,7 +224,9 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun systemGardenNonHorizontalCannotProgress() {
-        val result = ChallengeRuleEvaluator(systemGardenConfig()).evaluate(snapshot(horizontal = false), 0L)
+        val evaluator = ChallengeRuleEvaluator(systemGardenConfig())
+        evaluator.evaluate(snapshot(horizontal = false), 0L)
+        val result = evaluator.evaluate(snapshot(horizontal = false), 0L)
 
         assertEquals(ChallengeInstruction.KEEP_PHONE_LEVEL, result.instruction)
         assertEquals(0.0, result.holdProgress, 0.0)
@@ -212,6 +234,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun systemGardenAllConditionsHeldForThreeSecondsCompletes() {
         val evaluator = ChallengeRuleEvaluator(systemGardenConfig())
+        evaluator.evaluate(snapshot(), 0L)
         evaluator.evaluate(snapshot(), 0L)
 
         val completed = evaluator.evaluate(snapshot(), 3_000_000_000L)
@@ -235,7 +258,9 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun graingerSilenceAsksForSound() {
-        val result = ChallengeRuleEvaluator(graingerConfig()).evaluate(snapshot(soundDecibels = -60.0), 0L)
+        val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -60.0), 0L)
+        val result = evaluator.evaluate(snapshot(soundDecibels = -60.0), 0L)
 
         assertEquals(ChallengeInstruction.MAKE_SOUND, result.instruction)
         assertFalse(result.condition(ChallengeCondition.SOUND_DETECTED))
@@ -243,7 +268,9 @@ class ChallengeRuleEvaluatorTest {
     }
 
     @Test fun graingerBriefLoudSoundDoesNotCompleteYet() {
-        val result = ChallengeRuleEvaluator(graingerConfig()).evaluate(snapshot(soundDecibels = -10.0), 0L)
+        val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
+        val result = evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
 
         assertTrue(result.condition(ChallengeCondition.SOUND_DETECTED))
         assertFalse(result.completed)
@@ -254,6 +281,7 @@ class ChallengeRuleEvaluatorTest {
     @Test fun graingerLoudSoundHeldForOneSecondCompletes() {
         val evaluator = ChallengeRuleEvaluator(graingerConfig())
         evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
 
         val completed = evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_000_000_000L)
         assertTrue(completed.completed)
@@ -262,6 +290,7 @@ class ChallengeRuleEvaluatorTest {
 
     @Test fun graingerSoundDroppingBelowThresholdResetsTheHoldTimer() {
         val evaluator = ChallengeRuleEvaluator(graingerConfig())
+        evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
         evaluator.evaluate(snapshot(soundDecibels = -10.0), 0L)
         assertTrue(evaluator.evaluate(snapshot(soundDecibels = -10.0), 500_000_000L).holdProgress > 0.0)
 
@@ -272,6 +301,55 @@ class ChallengeRuleEvaluatorTest {
         evaluator.evaluate(snapshot(soundDecibels = -10.0), 700_000_000L)
         assertFalse(evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_699_999_999L).completed)
         assertTrue(evaluator.evaluate(snapshot(soundDecibels = -10.0), 1_700_000_000L).completed)
+    }
+
+    @Test fun locationInsideRequiresTwoDistinctReadingsBeforeItIsTrusted() {
+        val evaluator = ChallengeRuleEvaluator(unionConfig())
+
+        val first = evaluator.evaluate(snapshot(locationTimestampNanos = 1_000L), 0L)
+        assertFalse(first.condition(ChallengeCondition.LOCATION_INSIDE))
+        assertEquals(ChallengeInstruction.MOVE_CLOSER, first.instruction)
+
+        val second = evaluator.evaluate(snapshot(locationTimestampNanos = 2_000L), 0L)
+        assertTrue(second.condition(ChallengeCondition.LOCATION_INSIDE))
+    }
+
+    @Test fun locationInsideIgnoresRepeatedFixWithTheSameTimestamp() {
+        val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(locationTimestampNanos = 1_000L), 0L)
+
+        val repeated = evaluator.evaluate(snapshot(locationTimestampNanos = 1_000L), 0L)
+
+        assertFalse(repeated.condition(ChallengeCondition.LOCATION_INSIDE))
+    }
+
+    @Test fun locationInsideRejectsAFixWhoseAccuracyIsWorseThanTheGeofenceRadius() {
+        val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(locationAccuracyMeters = 200.0, locationTimestampNanos = 1_000L), 0L)
+
+        val result = evaluator.evaluate(snapshot(locationAccuracyMeters = 200.0, locationTimestampNanos = 2_000L), 0L)
+
+        assertFalse(result.condition(ChallengeCondition.LOCATION_INSIDE))
+        assertEquals(ChallengeInstruction.MOVE_CLOSER, result.instruction)
+    }
+
+    @Test fun locationInsideAcceptsAFixAsAccurateAsTheGeofenceRadius() {
+        val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(locationAccuracyMeters = radiusMeters, locationTimestampNanos = 1_000L), 0L)
+
+        val result = evaluator.evaluate(snapshot(locationAccuracyMeters = radiusMeters, locationTimestampNanos = 2_000L), 0L)
+
+        assertTrue(result.condition(ChallengeCondition.LOCATION_INSIDE))
+    }
+
+    @Test fun locationInsideOneNoisyReadingBreaksTheStreak() {
+        val evaluator = ChallengeRuleEvaluator(unionConfig())
+        evaluator.evaluate(snapshot(locationTimestampNanos = 1_000L), 0L)
+        evaluator.evaluate(snapshot(locationAccuracyMeters = 200.0, locationTimestampNanos = 2_000L), 0L)
+
+        val result = evaluator.evaluate(snapshot(locationTimestampNanos = 3_000L), 0L)
+
+        assertFalse(result.condition(ChallengeCondition.LOCATION_INSIDE))
     }
 
     private fun unionConfig() = RelicChallengeConfigs.unionLawnPhoto(
@@ -321,10 +399,14 @@ class ChallengeRuleEvaluatorTest {
         stable: Boolean = true,
         rotationStill: Boolean = true,
         soundDecibels: Double? = null,
+        locationAccuracyMeters: Double? = null,
+        locationTimestampNanos: Long? = null,
     ) = DeviceContextSnapshot(
         location = LocationOutput(
             currentLocation = if (inside) target else GeoCoordinate(0.0, 0.001),
             validity = SensorValidity.VALID,
+            accuracyMeters = locationAccuracyMeters,
+            timestampNanos = locationTimestampNanos,
         ),
         orientation = OrientationOutput(
             direction = DirectionOutput(
