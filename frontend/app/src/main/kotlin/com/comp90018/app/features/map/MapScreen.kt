@@ -89,6 +89,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
+import com.comp90018.app.contextengine.challenge.RelicChallengeType
+import com.comp90018.app.features.treasurechallenge.TreasureChallengeViewModel
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import com.comp90018.app.sensors.location.LocationConfig
@@ -188,8 +193,11 @@ fun MapScreen(
             deviceHeading = deviceHeading,
             isFound = relic.id in foundRelicIds,
             collecting = savingTreasureId == relic.id,
+            preciseLocationEnabled = preciseLocationEnabled,
             onCollected = { onComplete -> onCollectTreasure(relic.id, onComplete) },
-            onStartChallenge = relic.challengeConfig?.let { { challengeRelic = relic } },
+            onStartChallenge = relic.challengeConfig
+                ?.takeUnless { it.type in LOCAL_HUNT_CHALLENGE_TYPES }
+                ?.let { { challengeRelic = relic } },
             onBack = {
                 detailRelic = null
             },
@@ -420,6 +428,21 @@ private fun LocationPermissionPrompt(onPermissionGranted: () -> Unit, modifier: 
     }
 }
 
+/** These relics keep the local scan-and-dig hunt panel instead of the sensor-driven challenge screen. */
+private val LOCAL_HUNT_CHALLENGE_TYPES = setOf(
+    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
+    RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL,
+)
+
+/**
+ * Within [LOCAL_HUNT_CHALLENGE_TYPES], these additionally drive the scan panel's "ready" state from
+ * the same [TreasureChallengeViewModel] pipeline the sensor challenge screen uses, instead of the
+ * fixed 4.5s timer - the visual panel is unchanged, only what decides completion.
+ */
+private val REAL_SENSOR_HUNT_TYPES = setOf(
+    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
+)
+
 @Composable
 private fun TreasureDetailScreen(
     relic: MapRelic,
@@ -427,6 +450,7 @@ private fun TreasureDetailScreen(
     deviceHeading: Float,
     isFound: Boolean,
     collecting: Boolean,
+    preciseLocationEnabled: Boolean,
     onCollected: ((String?) -> Unit) -> Unit,
     onStartChallenge: (() -> Unit)?,
     onBack: () -> Unit,
@@ -436,13 +460,14 @@ private fun TreasureDetailScreen(
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }
     var collectionActionError by remember(relic.id) { mutableStateOf<String?>(null) }
+    val realSensorHuntConfig = relic.challengeConfig?.takeIf { it.type in REAL_SENSOR_HUNT_TYPES }
 
     LaunchedEffect(relic.id) {
         detailsVisible = true
     }
 
-    LaunchedEffect(stage) {
-        if (stage == TreasureHuntStage.SEARCHING) {
+    LaunchedEffect(stage, realSensorHuntConfig) {
+        if (stage == TreasureHuntStage.SEARCHING && realSensorHuntConfig == null) {
             searchStep = 0
             delay(1_500)
             searchStep = 1
@@ -525,13 +550,23 @@ private fun TreasureDetailScreen(
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        TreasureHuntStage.SEARCHING -> TreasureSearchPanel(
-                            searchStep = searchStep,
-                            readyToDig = false,
-                            deviceHeading = deviceHeading,
-                            onDig = {},
-                            onBack = { stage = TreasureHuntStage.DETAILS },
-                        )
+                        TreasureHuntStage.SEARCHING -> if (realSensorHuntConfig != null) {
+                            RealSensorHuntPanel(
+                                config = realSensorHuntConfig,
+                                deviceHeading = deviceHeading,
+                                preciseLocationEnabled = preciseLocationEnabled,
+                                onReady = { stage = TreasureHuntStage.READY_TO_DIG },
+                                onBack = { stage = TreasureHuntStage.DETAILS },
+                            )
+                        } else {
+                            TreasureSearchPanel(
+                                searchStep = searchStep,
+                                readyToDig = false,
+                                deviceHeading = deviceHeading,
+                                onDig = {},
+                                onBack = { stage = TreasureHuntStage.DETAILS },
+                            )
+                        }
                         TreasureHuntStage.READY_TO_DIG -> TreasureSearchPanel(
                             searchStep = searchStep,
                             readyToDig = true,
@@ -728,36 +763,123 @@ private fun TreasureSearchPanel(
     onBack: () -> Unit,
 ) {
     val phase = searchStep.coerceIn(0, 2)
-    val acceleration = listOf(1.28f, 0.46f, 0.12f)[phase]
-    val levelTilt = listOf(12.4f, 4.8f, 1.2f)[phase]
-    val simulatedHeading = listOf(28f, 74f, 118f)[phase] + (deviceHeading * 0.02f)
+    val motion = rememberDeviceMotion()
     val command = when {
         readyToDig -> "Signal captured — the relic is beneath your feet."
         phase == 0 -> "Freeze the trail — stop and steady your stance."
         phase == 1 -> "Balance the relic lens — hold your phone level."
         else -> "Sweep the horizon — rotate slowly until the signal blooms."
     }
+    val hint = if (readyToDig) "The hidden lock has opened. Dig when your team is ready."
+    else "Calm motion, centre the level spark, then turn with the compass glow."
+    HuntScanPanel(
+        headline = command,
+        hintText = hint,
+        ready = readyToDig,
+        acceleration = motion.accelerationMagnitude,
+        levelTilt = motion.tiltDegrees,
+        heading = deviceHeading,
+        primaryActionLabel = "Dig for treasure",
+        onPrimaryAction = onDig,
+        onBack = onBack,
+    )
+}
+
+/**
+ * Drives [HuntScanPanel] from the same [TreasureChallengeViewModel] pipeline the sensor challenge
+ * screen uses, so the "ready to dig" transition reflects real device motion/orientation instead of a
+ * fixed timer. Only used for relic types in [REAL_SENSOR_HUNT_TYPES]; the visual panel is identical
+ * to [TreasureSearchPanel].
+ */
+@Composable
+private fun RealSensorHuntPanel(
+    config: RelicChallengeConfig,
+    deviceHeading: Float,
+    preciseLocationEnabled: Boolean,
+    onReady: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val viewModel: TreasureChallengeViewModel = viewModel(
+        key = "local_hunt_${config.challengeId}_$preciseLocationEnabled",
+        factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled),
+    )
+    val challengeState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    DisposableEffect(lifecycleOwner.lifecycle, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.start()
+                Lifecycle.Event.ON_STOP -> viewModel.stop()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) viewModel.start()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stop()
+        }
+    }
+
+    LaunchedEffect(challengeState.completed) {
+        if (challengeState.completed) onReady()
+    }
+
+    val motion = rememberDeviceMotion()
+    HuntScanPanel(
+        headline = challengeState.instructionText,
+        hintText = "Calm motion, centre the level spark, then turn with the compass glow.",
+        ready = false,
+        acceleration = motion.accelerationMagnitude,
+        levelTilt = motion.tiltDegrees,
+        heading = deviceHeading,
+        primaryActionLabel = "",
+        onPrimaryAction = {},
+        onBack = onBack,
+    )
+}
+
+/**
+ * Reusable scan-and-dig hunt visual: an instruction headline, the [RelicScannerVisual] gauge (or
+ * [AnimatedTreasureChest] once [ready]), a hint card, and Dig/Back actions. Callers own what decides
+ * [ready] and what data feeds the gauge, so this can back either a scripted or sensor-driven hunt.
+ */
+@Composable
+fun HuntScanPanel(
+    headline: String,
+    hintText: String,
+    ready: Boolean,
+    acceleration: Float,
+    levelTilt: Float,
+    heading: Float,
+    primaryActionLabel: String,
+    onPrimaryAction: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
             Text(
-                command,
+                headline,
                 color = Ink,
                 style = MaterialTheme.typography.titleLarge,
             )
         }
         item {
-            if (readyToDig) {
+            if (ready) {
                 AnimatedTreasureChest(Modifier.size(150.dp))
             } else {
                 RelicScannerVisual(
                     acceleration = acceleration,
                     levelTilt = levelTilt,
-                    heading = simulatedHeading,
+                    heading = heading,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -769,24 +891,23 @@ private fun TreasureSearchPanel(
                 colors = CardDefaults.cardColors(containerColor = BrandSoft),
             ) {
                 Text(
-                    if (readyToDig) "The hidden lock has opened. Dig when your team is ready."
-                    else "Calm motion, centre the level spark, then turn with the compass glow.",
+                    hintText,
                     modifier = Modifier.padding(16.dp),
                     color = Ink,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
-        if (readyToDig) {
+        if (ready) {
             item {
                 Button(
-                    onClick = onDig,
+                    onClick = onPrimaryAction,
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(18.dp),
                 ) {
                     Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Dig for treasure", fontWeight = FontWeight.Bold)
+                    Text(primaryActionLabel, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1129,6 +1250,37 @@ private fun rememberDeviceHeading(): Float {
         onDispose { sensorManager.unregisterListener(listener) }
     }
     return heading
+}
+
+private data class DeviceMotionSample(val accelerationMagnitude: Float, val tiltDegrees: Float)
+
+/** Reads the accelerometer to drive [RelicScannerVisual]'s MOTION/LEVEL readout with real device motion. */
+@Composable
+private fun rememberDeviceMotion(): DeviceMotionSample {
+    val context = LocalContext.current
+    var motion by remember { mutableStateOf(DeviceMotionSample(0f, 0f)) }
+    DisposableEffect(context) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val (x, y, z) = event.values
+                val magnitude = kotlin.math.sqrt(x * x + y * y + z * z)
+                val linearAcceleration = kotlin.math.abs(magnitude - SensorManager.GRAVITY_EARTH)
+                val tiltDegrees = if (magnitude > 0f) {
+                    Math.toDegrees(kotlin.math.acos((z / magnitude).coerceIn(-1f, 1f)).toDouble()).toFloat()
+                } else {
+                    0f
+                }
+                motion = DeviceMotionSample(linearAcceleration, tiltDegrees)
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        accelerometer?.let { sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI) }
+        onDispose { sensorManager.unregisterListener(listener) }
+    }
+    return motion
 }
 
 @Composable
