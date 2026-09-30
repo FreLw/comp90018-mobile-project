@@ -24,15 +24,26 @@ class RoomsViewModel(
     private val mutableUiState = MutableStateFlow(RoomsUiState())
     val uiState: StateFlow<RoomsUiState> = mutableUiState.asStateFlow()
     private val membershipSubscription: Subscription = repository.observeMembership(userId) { roomId, error ->
-        mutableUiState.value = mutableUiState.value.copy(activeRoomId = roomId, membershipError = error)
+        val previous = mutableUiState.value
+        val roomWasExited = previous.activeRoomId != null && roomId == null
+        mutableUiState.value = previous.copy(
+            activeRoomId = roomId,
+            membershipError = if (roomWasExited) null else error,
+            actionError = if (roomWasExited || roomId != null) null else previous.actionError,
+            working = if (roomWasExited) false else previous.working,
+        )
     }
 
     fun updateRoomId(roomId: String) {
-        mutableUiState.value = mutableUiState.value.copy(roomIdInput = roomId)
+        mutableUiState.value = mutableUiState.value.copy(roomIdInput = roomId, actionError = null, membershipError = null)
     }
 
     fun beginJoin() {
         mutableUiState.value = mutableUiState.value.copy(joining = true, actionError = null)
+    }
+
+    fun clearErrors() {
+        mutableUiState.value = mutableUiState.value.copy(actionError = null, membershipError = null, working = false)
     }
 
     fun createRoom() {

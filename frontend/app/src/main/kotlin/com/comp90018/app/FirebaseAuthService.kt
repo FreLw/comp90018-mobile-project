@@ -1,6 +1,7 @@
 package com.comp90018.app
 
 import android.net.Uri
+import com.comp90018.app.features.profile.ProfileExtras
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
@@ -55,6 +56,14 @@ object FirebaseAuthService {
 				if (readTask.result.getString("gender").isNullOrBlank()) {
 					updates["gender"] = "unspecified"
 				}
+				if (readTask.result.get("phone") == null) updates["phone"] = ""
+				if (readTask.result.get("department") == null) updates["department"] = ""
+				if (readTask.result.get("major") == null) updates["major"] = ""
+				if (readTask.result.getBoolean("notificationsEnabled") == null) updates["notificationsEnabled"] = true
+				if (readTask.result.getBoolean("searchable") == null) updates["searchable"] = true
+				if (readTask.result.getBoolean("soundEffectsEnabled") == null) updates["soundEffectsEnabled"] = true
+				if (readTask.result.getBoolean("hapticsEnabled") == null) updates["hapticsEnabled"] = true
+				if (readTask.result.getBoolean("preciseLocationEnabled") == null) updates["preciseLocationEnabled"] = true
 				if (updates.isNotEmpty()) {
 					updates["updatedAt"] = FieldValue.serverTimestamp()
 					reference.update(updates).addOnCompleteListener { updateTask ->
@@ -74,6 +83,14 @@ object FirebaseAuthService {
 				"gender" to "unspecified",
 				"bio" to "",
 				"avatarUrl" to "",
+				"phone" to "",
+				"department" to "",
+				"major" to "",
+				"notificationsEnabled" to true,
+				"searchable" to true,
+				"soundEffectsEnabled" to true,
+				"hapticsEnabled" to true,
+				"preciseLocationEnabled" to true,
 				"createdAt" to FieldValue.serverTimestamp(),
 				"updatedAt" to FieldValue.serverTimestamp(),
 			)
@@ -89,6 +106,7 @@ object FirebaseAuthService {
 		username: String,
 		gender: String,
 		bio: String,
+		extras: ProfileExtras,
 		avatarUrl: String? = null,
 		onComplete: (String?) -> Unit,
 	) {
@@ -106,11 +124,18 @@ object FirebaseAuthService {
 			onComplete("Bio cannot exceed 500 characters")
 			return
 		}
+		if (extras.phone.length > 40 || extras.department.length > 120 || extras.major.length > 120) {
+			onComplete("Profile details are too long")
+			return
+		}
 
 		val updates = mutableMapOf<String, Any>(
 				"username" to cleanUsername,
 				"gender" to gender,
-				"bio" to cleanBio,
+					"bio" to cleanBio,
+					"phone" to extras.phone.trim(),
+					"department" to extras.department.trim(),
+					"major" to extras.major.trim(),
 				"updatedAt" to FieldValue.serverTimestamp(),
 		)
 		avatarUrl?.let { updates["avatarUrl"] = it }

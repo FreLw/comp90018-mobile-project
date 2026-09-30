@@ -16,12 +16,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
 import com.comp90018.app.data.social.FirebaseSocialRepository
+import com.comp90018.app.data.treasure.FirebaseTreasureCollectionRepository
+import com.comp90018.app.data.treasure.FirebaseTreasureRepository
 import com.comp90018.app.features.friends.FriendsScreen
 import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
+import com.comp90018.app.features.rooms.RoomsViewModel
 import com.comp90018.app.features.rooms.UnreadRoomMessagesViewModel
+import com.comp90018.app.features.treasure.TreasureScreen
+import com.comp90018.app.features.treasure.TreasureCatalogViewModel
+import com.comp90018.app.features.treasure.TreasureCollectionViewModel
 import com.comp90018.app.navigation.AppBottomNavigation
 import com.comp90018.app.navigation.AppDestination
 import com.comp90018.app.ui.components.SensorErrorHost
@@ -50,25 +56,75 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = UnreadRoomMessagesViewModel.factory(teamRoomRepository, user.uid),
     )
     val unreadRoomMessages by unreadRoomMessagesViewModel.unreadCount.collectAsStateWithLifecycle()
+    val roomsViewModel: RoomsViewModel = viewModel(
+        key = "rooms_${user.uid}",
+        factory = RoomsViewModel.factory(teamRoomRepository, user.uid),
+    )
+    val roomsState by roomsViewModel.uiState.collectAsStateWithLifecycle()
+    val treasureRepository = remember(firestore) { FirebaseTreasureRepository(firestore) }
+    val treasureCatalogViewModel: TreasureCatalogViewModel = viewModel(
+        key = "treasure_catalog",
+        factory = TreasureCatalogViewModel.factory(treasureRepository),
+    )
+    val treasureCatalogState by treasureCatalogViewModel.uiState.collectAsStateWithLifecycle()
+    val treasureCollectionRepository = remember(firestore) { FirebaseTreasureCollectionRepository(firestore) }
+    val treasureCollectionViewModel: TreasureCollectionViewModel = viewModel(
+        key = "treasure_collection_${user.uid}",
+        factory = TreasureCollectionViewModel.factory(treasureCollectionRepository, user.uid),
+    )
+    val treasureCollectionState by treasureCollectionViewModel.uiState.collectAsStateWithLifecycle()
+    val settings = state.profile?.settings
+    val notificationsEnabled = settings?.notifications ?: true
 
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            AppBottomNavigation(destination, unreadFriendMessages, unreadRoomMessages) { destination = it }
+            AppBottomNavigation(
+                selected = destination,
+                unreadFriendMessages = if (notificationsEnabled) unreadFriendMessages else 0,
+                unreadRoomMessages = if (notificationsEnabled) unreadRoomMessages else 0,
+                soundEffectsEnabled = settings?.soundEffects ?: true,
+                hapticsEnabled = settings?.haptics ?: true,
+            ) { destination = it }
         },
         snackbarHost = { SensorErrorHost() },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
             when (destination) {
-                AppDestination.Treasure -> HomeScreen()
-                AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile)
-                AppDestination.Map -> MapScreen()
-                AppDestination.Friends -> FriendsScreen(user, firestore, state.profile)
-                AppDestination.Profile -> ProfileScreen(user.uid, user.email.orEmpty(), repository, state.profile, state.profileError, onRetry = viewModel::retry, onLogout = onLogout)
+                AppDestination.Treasure -> TreasureScreen(
+                    treasures = treasureCatalogState.treasures,
+                    loading = treasureCatalogState.loading,
+                    error = treasureCatalogState.error,
+                    onRetry = treasureCatalogViewModel::retry,
+                    onOpenMap = { destination = AppDestination.Map },
+                    discoveredTreasureIds = treasureCollectionState.discoveredIds,
+                    collectionLoading = treasureCollectionState.loading,
+                    collectionError = treasureCollectionState.error,
+                    onRetryCollection = treasureCollectionViewModel::retry,
+                )
+                AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
+                AppDestination.Map -> MapScreen(
+                    treasures = treasureCatalogState.treasures,
+                    loading = treasureCatalogState.loading,
+                    error = treasureCatalogState.error,
+                    onRetry = treasureCatalogViewModel::retry,
+                    discoveredTreasureIds = treasureCollectionState.discoveredIds,
+                    savingTreasureId = treasureCollectionState.savingTreasureId,
+                    preciseLocationEnabled = settings?.preciseLocation ?: true,
+                    onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
+                )
+                AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
+                AppDestination.Profile -> ProfileScreen(
+                    userUid = user.uid,
+                    userEmail = user.email.orEmpty(),
+                    repository = repository,
+                    profile = state.profile,
+                    profileError = state.profileError,
+                    currentRoomId = roomsState.activeRoomId,
+                    onRetry = viewModel::retry,
+                    onLogout = onLogout,
+                )
             }
         }
     }
 }
-
-@Composable
-private fun HomeScreen() = Box(Modifier.fillMaxSize())

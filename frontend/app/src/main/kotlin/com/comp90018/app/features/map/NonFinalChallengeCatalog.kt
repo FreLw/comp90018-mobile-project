@@ -98,4 +98,31 @@ object NonFinalChallengeCatalog {
             ),
         ),
     )
+
+    /** Adds the non-final challenge rules to matching Firestore treasure content. */
+    fun attachChallenge(relic: MapRelic): MapRelic {
+        if (relic.challengeConfig != null) return relic
+        val searchable = normalise("${relic.id} ${relic.name} ${relic.locationName}")
+        val template = relics.firstOrNull { candidate ->
+            normalise(candidate.id) == normalise(relic.id) || when (candidate.id) {
+                "union-lawn" -> "unionlawn" in searchable
+                "wilson" -> "wilson" in searchable
+                "old-quad" -> "oldquad" in searchable || "oldquadrangle" in searchable
+                "south-lawn" -> "southlawn" in searchable
+                "baillieu" -> "baillieu" in searchable
+                else -> false
+            }
+        } ?: return relic
+        val config = template.challengeConfig ?: return relic
+        return relic.copy(
+            challengeConfig = config.copy(
+                targetLocation = relic.coordinate,
+                insideRadiusMeters = relic.insideRadiusMeters,
+            ),
+            historicalImageResId = template.historicalImageResId,
+        )
+    }
+
+    private fun normalise(value: String): String =
+        value.lowercase().filter(Char::isLetterOrDigit)
 }

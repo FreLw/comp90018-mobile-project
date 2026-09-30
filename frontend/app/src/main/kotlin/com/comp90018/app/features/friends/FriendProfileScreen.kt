@@ -38,7 +38,8 @@ fun FriendProfileScreen(
         Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }; Text("Friend profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Ink) }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(profile?.username ?: friend.username, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            profile?.email?.takeIf { it.isNotBlank() }?.let { Detail("Email", it) }; profile?.gender?.let { Detail("Gender", it) }; profile?.bio?.takeIf { it.isNotBlank() }?.let { Detail("About", it) }
+            profile?.bio?.takeIf { it.isNotBlank() }?.let { Text(it, color = Ink, style = MaterialTheme.typography.bodyLarge) }
+            profile?.email?.takeIf { it.isNotBlank() }?.let { Detail("Email", it) }; profile?.gender?.let { Detail("Gender", it) }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } }
         Button(onClick = { viewModel.remove(onRemoveFriend, friend.uid, onRemoved) }, modifier = Modifier.fillMaxWidth(), enabled = !state.removing, colors = ButtonDefaults.buttonColors(containerColor = RelicRed)) { Text(if (state.removing) "Removing..." else "Remove friend") }

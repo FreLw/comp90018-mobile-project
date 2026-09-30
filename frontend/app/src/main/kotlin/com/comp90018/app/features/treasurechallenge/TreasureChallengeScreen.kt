@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,13 +67,14 @@ import kotlin.math.abs
 fun TreasureChallengeRoute(
     config: RelicChallengeConfig,
     @DrawableRes historicalImageResId: Int? = null,
+    preciseLocationEnabled: Boolean = true,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val viewModel: TreasureChallengeViewModel = viewModel(
-        key = "treasure_challenge_${config.challengeId}",
-        factory = TreasureChallengeViewModel.factory(context, config),
+        key = "treasure_challenge_${config.challengeId}_$preciseLocationEnabled",
+        factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -99,6 +101,7 @@ fun TreasureChallengeRoute(
         onPhotoCaptureStarted = viewModel::onPhotoCaptureStarted,
         onPhotoCaptured = viewModel::onPhotoCaptured,
         onCameraError = viewModel::onCameraError,
+        onMicPermissionGranted = viewModel::restart,
     )
 }
 
@@ -111,6 +114,7 @@ fun TreasureChallengeScreen(
     onPhotoCaptureStarted: () -> Unit,
     onPhotoCaptured: (String) -> Unit,
     onCameraError: (String) -> Unit,
+    onMicPermissionGranted: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -144,6 +148,9 @@ fun TreasureChallengeScreen(
                     onPhotoCaptured = onPhotoCaptured,
                     onCameraError = onCameraError,
                 )
+            }
+            if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed) {
+                MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
             }
             if (state.completed) {
                 Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
@@ -181,6 +188,38 @@ private fun ChallengeStatusCard(state: TreasureChallengeUiState) {
                     String.format(Locale.US, "%.0f%%", state.holdProgress * 100.0),
                     style = MaterialTheme.typography.labelLarge,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MicrophonePermissionPanel(onPermissionGranted: () -> Unit) {
+    val context = LocalContext.current
+    var permissionRefreshKey by remember { mutableIntStateOf(0) }
+    val hasMicPermission = remember(permissionRefreshKey) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionRefreshKey++
+        if (granted) onPermissionGranted()
+    }
+
+    if (hasMicPermission) return
+
+    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "This relic listens for sound. Allow microphone access to continue.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Button(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }) {
+                Icon(Icons.Rounded.Mic, contentDescription = null)
+                Text(" Enable microphone")
             }
         }
     }

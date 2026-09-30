@@ -190,11 +190,21 @@ class TreasureChallengeViewModel(
     }
 
     companion object {
-        fun factory(context: Context, config: RelicChallengeConfig) = object : ViewModelProvider.Factory {
+        fun factory(
+            context: Context,
+            config: RelicChallengeConfig,
+            preciseLocationEnabled: Boolean = true,
+        ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = TreasureChallengeViewModel(
                 initialConfig = config,
-                engineFactory = { scope -> AndroidDeviceContextEngine(context.applicationContext, scope) },
+                engineFactory = { scope ->
+                    AndroidDeviceContextEngine(
+                        context = context.applicationContext,
+                        scope = scope,
+                        preciseLocationEnabled = preciseLocationEnabled,
+                    )
+                },
                 timeSource = MonotonicTimeSource(SystemClock::elapsedRealtimeNanos),
             ) as T
         }

@@ -45,7 +45,13 @@ class RoomMemberProfileViewModel(
     }
 
     fun sendFriendRequest(username: String) = work {
-        socialRepository.sendFriendRequest(currentUid, memberUid, currentUsername, username) { error ->
+        socialRepository.sendFriendRequest(
+            currentUid,
+            memberUid,
+            currentUsername,
+            username,
+            "Hi, would you like to team up?",
+        ) { error ->
             mutableUiState.value = mutableUiState.value.copy(
                 working = false,
                 error = error ?: "Friend request sent",

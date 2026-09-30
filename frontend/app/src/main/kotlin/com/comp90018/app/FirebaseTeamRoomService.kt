@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.MetadataChanges
 
 /** Separate persistence boundary for two-person treasure teams; never used for direct messages. */
 data class TeamRoom(
@@ -28,9 +29,12 @@ object FirebaseTeamRoomService {
         userId: String,
         onChange: (String?, String?) -> Unit,
     ): ListenerRegistration = firestore.collection("teamMemberships").document(userId)
-        .addSnapshotListener { snapshot, exception ->
-            if (exception != null) onChange(null, exception.localizedMessage ?: "Unable to load team membership")
-            else onChange(snapshot?.getString("roomId"), null)
+        .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, exception ->
+            when {
+                exception != null -> onChange(null, exception.localizedMessage ?: "Unable to load team membership")
+                snapshot?.metadata?.hasPendingWrites() == true -> Unit
+                else -> onChange(snapshot?.getString("roomId"), null)
+            }
         }
 
     fun observeUnreadMessages(
@@ -38,9 +42,11 @@ object FirebaseTeamRoomService {
         userId: String,
         onChange: (Int, String?) -> Unit,
     ): ListenerRegistration = firestore.collection("teamMemberships").document(userId)
-        .addSnapshotListener { snapshot, exception ->
+        .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, exception ->
             if (exception != null) {
                 onChange(0, exception.localizedMessage ?: "Unable to load room unread messages")
+            } else if (snapshot?.metadata?.hasPendingWrites() == true) {
+                return@addSnapshotListener
             } else {
                 onChange(
                     (snapshot?.getLong("unreadCount") ?: 0L)
@@ -64,18 +70,23 @@ object FirebaseTeamRoomService {
                 onComplete(null, "You are already in a treasure room")
             } else {
                 val room = firestore.collection("teamRooms").document()
+                // Keep both documents atomic. The membership rule validates the room through
+                // existsAfter(), while listeners ignore local pending writes until this commits.
                 firestore.batch().apply {
                     set(room, mapOf(
                         "creatorId" to userId,
                         "memberIds" to listOf(userId),
-                        // Reserved for the task assignment feature.
                         "taskId" to "",
                         "taskTitle" to "",
                         "taskStatus" to "unassigned",
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp(),
                     ))
-                    set(membership, mapOf("roomId" to room.id, "createdAt" to FieldValue.serverTimestamp(), "unreadCount" to 0))
+                    set(membership, mapOf(
+                        "roomId" to room.id,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "unreadCount" to 0,
+                    ))
                 }.commit().addOnCompleteListener { task ->
                     onComplete(if (task.isSuccessful) room.id else null, task.exception?.localizedMessage ?: "Unable to create room")
                 }
