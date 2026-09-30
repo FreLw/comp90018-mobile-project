@@ -110,6 +110,8 @@ object NonFinalChallengeCatalog {
                 "old-quad" -> "oldquad" in searchable || "oldquadrangle" in searchable
                 "south-lawn" -> "southlawn" in searchable
                 "baillieu" -> "baillieu" in searchable
+                "system-garden" -> "systemgarden" in searchable
+                "grainger-museum" -> "grainger" in searchable
                 else -> false
             }
         } ?: return relic
