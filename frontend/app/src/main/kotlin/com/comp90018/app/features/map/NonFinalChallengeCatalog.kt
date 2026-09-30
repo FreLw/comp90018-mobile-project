@@ -18,7 +18,7 @@ object NonFinalChallengeCatalog {
     private val oldQuad = GeoCoordinate(-37.798156, 144.960481)
     private val southLawn = GeoCoordinate(-37.79856, 144.96050)
 
-    private val systemGarden = GeoCoordinate(-37.79669, 144.95924)
+    private val systemGarden = GeoCoordinate(-37.7966124089, 144.959126948)
     private val graingerMuseum = GeoCoordinate(-37.79730, 144.95845)
 
     val relics = listOf(
