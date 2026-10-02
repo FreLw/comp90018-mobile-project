@@ -1,8 +1,12 @@
 package com.comp90018.app.features.map
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.provider.Settings
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Path
@@ -52,6 +56,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,10 +64,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -79,6 +86,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +94,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -158,8 +168,12 @@ fun MapScreen(
             permission = userLocation.permission,
             availability = userLocation.availability,
             accuracyMeters = userLocation.accuracyMeters,
+            lastKnownLocation = userLocation.lastKnownLocation,
         )
     }
+    val isLocationStale = userLocation.permission == LocationPermissionState.GRANTED &&
+        locationOutput.currentLocation == null &&
+        locationOutput.lastKnownLocation != null
     val markerTransition = rememberInfiniteTransition(label = "map_quest_marker")
     val markerPulse by markerTransition.animateFloat(
         initialValue = 0.90f,
@@ -218,6 +232,14 @@ fun MapScreen(
             },
             modifier = Modifier.fillMaxSize(),
         )
+
+        if (isLocationStale) {
+            StaleLocationBadge(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+            )
+        }
 
         if (selectedRelic == null) {
             if (userLocation.permission != LocationPermissionState.GRANTED) {
@@ -342,24 +364,27 @@ private fun GoogleMapView(
                     }
                     renderedPulseBucket = pulseBucket
                 }
+                val displayLocation = locationOutput.currentLocation ?: locationOutput.lastKnownLocation
+                val isStaleDisplay = locationOutput.currentLocation == null && locationOutput.lastKnownLocation != null
                 currentLocationMarker = renderCurrentLocation(
                     context = context,
                     map = map,
                     currentLocationMarker = currentLocationMarker,
-                    currentLocation = locationOutput.currentLocation,
+                    currentLocation = displayLocation,
                     headingDegrees = deviceHeading,
+                    stale = isStaleDisplay,
                 )
                 if (!cameraInitialised) {
                     if (focusSelectedRelic && selectedRelic != null) {
                         moveCameraToRelic(map, selectedRelic)
                     } else {
-                        moveCameraToCampus(map, relics, locationOutput.currentLocation)
+                        moveCameraToCampus(map, relics, displayLocation)
                     }
                     cameraInitialised = true
                     cameraSelectedRelicId = if (focusSelectedRelic) selectedRelic?.id else null
                     cameraRelicSignature = relicSignature
                 } else if (!focusSelectedRelic && relics.isNotEmpty() && cameraRelicSignature != relicSignature) {
-                    moveCameraToCampus(map, relics, locationOutput.currentLocation)
+                    moveCameraToCampus(map, relics, displayLocation)
                     cameraRelicSignature = relicSignature
                 } else if (
                     focusSelectedRelic &&
@@ -392,6 +417,25 @@ private fun FindTreasurePrompt(
             Text(message, modifier = Modifier.weight(1f), color = if (onRetry == null) Ink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             onRetry?.let { retry -> Button(onClick = retry) { Text("Retry") } }
         }
+    }
+}
+
+/** Shown when GPS has gone stale/inaccurate and the dot on the map is a last-known fallback, not a live fix. */
+@Composable
+private fun StaleLocationBadge(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFFFF4D6),
+        shadowElevation = 2.dp,
+    ) {
+        Text(
+            "Weak signal — showing last known location",
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            color = Ink,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+        )
     }
 }
 
@@ -441,6 +485,7 @@ private val LOCAL_HUNT_CHALLENGE_TYPES = setOf(
  */
 private val REAL_SENSOR_HUNT_TYPES = setOf(
     RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
+    RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL,
 )
 
 @Composable
@@ -801,6 +846,39 @@ private fun RealSensorHuntPanel(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = remember(context) { context.findActivity() }
+
+    fun checkMicPermission() = !config.requiresSound ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+        PackageManager.PERMISSION_GRANTED
+
+    var hasMicPermission by remember { mutableStateOf(checkMicPermission()) }
+    // Set once a request comes back denied with the system no longer willing to show its own
+    // rationale - that means the user picked "Don't allow" in a way Android now treats as
+    // permanent (or chose "Deny" a second time), so re-launching the same request is a silent
+    // no-op and the only way forward is the app's system Settings page.
+    var micPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    var micPermissionRequested by remember(config.challengeId) { mutableStateOf(false) }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        hasMicPermission = granted
+        if (!granted) {
+            micPermissionPermanentlyDenied = activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    // The relic needs the microphone to judge completion, so ask for it as soon as this hunt
+    // opens (i.e. right after "Start Hunt" is tapped) instead of silently never detecting sound.
+    LaunchedEffect(config.requiresSound, hasMicPermission) {
+        if (config.requiresSound && !hasMicPermission && !micPermissionRequested) {
+            micPermissionRequested = true
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     val viewModel: TreasureChallengeViewModel = viewModel(
         key = "local_hunt_${config.challengeId}_$preciseLocationEnabled",
         factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled),
@@ -811,6 +889,9 @@ private fun RealSensorHuntPanel(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> viewModel.start()
+                // Catches permission changes made outside this flow (e.g. the user backs out to
+                // system Settings and grants it there, then returns).
+                Lifecycle.Event.ON_RESUME -> hasMicPermission = checkMicPermission()
                 Lifecycle.Event.ON_STOP -> viewModel.stop()
                 else -> Unit
             }
@@ -838,6 +919,67 @@ private fun RealSensorHuntPanel(
         primaryActionLabel = "",
         onPrimaryAction = {},
         onBack = onBack,
+        soundProgress = if (config.requiresSound) challengeState.holdProgress.toFloat() else null,
+    )
+
+    if (config.requiresSound && !hasMicPermission) {
+        MicrophonePermissionDialog(
+            permanentlyDenied = micPermissionPermanentlyDenied,
+            onRequestPermission = { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+            onOpenSettings = { context.startActivity(appSettingsIntent(context)) },
+            onCancel = onBack,
+        )
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var current = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
+}
+
+private fun appSettingsIntent(context: Context): Intent = Intent(
+    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+    Uri.fromParts("package", context.packageName, null),
+)
+
+/**
+ * Fallback for when the automatic request on entering [RealSensorHuntPanel] was denied: keeps
+ * offering a way to grant microphone access instead of leaving a sound-based hunt stuck with no
+ * explanation. Once Android reports the permission as [permanentlyDenied] (the user declined in a
+ * way the system won't show its own rationale for again), re-requesting is a silent no-op, so this
+ * routes to the app's system Settings page instead.
+ */
+@Composable
+private fun MicrophonePermissionDialog(
+    permanentlyDenied: Boolean,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Microphone needed") },
+        text = {
+            Text(
+                if (permanentlyDenied) {
+                    "This relic listens for sound, but microphone access was blocked. Enable it in Settings to keep hunting."
+                } else {
+                    "This relic listens for sound. Allow microphone access to keep hunting."
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = if (permanentlyDenied) onOpenSettings else onRequestPermission) {
+                Text(if (permanentlyDenied) "Open Settings" else "Allow microphone")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
     )
 }
 
@@ -858,6 +1000,7 @@ fun HuntScanPanel(
     onPrimaryAction: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    soundProgress: Float? = null,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -890,12 +1033,34 @@ fun HuntScanPanel(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = BrandSoft),
             ) {
-                Text(
-                    hintText,
-                    modifier = Modifier.padding(16.dp),
-                    color = Ink,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                if (soundProgress != null) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            "Blow into the mic - the bar fills while you're loud enough.",
+                            color = Ink,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        LinearProgressIndicator(
+                            progress = { soundProgress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(5.dp)),
+                            color = Brand,
+                            trackColor = Color.White,
+                        )
+                    }
+                } else {
+                    Text(
+                        hintText,
+                        modifier = Modifier.padding(16.dp),
+                        color = Ink,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
         if (ready) {
@@ -1330,33 +1495,52 @@ private fun renderRelics(
     return markers
 }
 
+/**
+ * [stale] means [currentLocation] is a last-known fallback rather than a live fix (see
+ * [com.comp90018.app.sensors.location.LocationOutput.lastKnownLocation]) - the dot is dimmed
+ * instead of being removed so the explorer still has a position to go by.
+ */
 private fun renderCurrentLocation(
     context: Context,
     map: GoogleMap,
     currentLocationMarker: Marker?,
     currentLocation: GeoCoordinate?,
     headingDegrees: Float,
+    stale: Boolean,
 ): Marker? {
     if (currentLocation == null) {
         currentLocationMarker?.remove()
         return null
     }
     val position = currentLocation.toLatLng()
+    val alpha = if (stale) STALE_LOCATION_ALPHA else 1f
     if (currentLocationMarker != null) {
         currentLocationMarker.position = position
         currentLocationMarker.rotation = headingDegrees
+        currentLocationMarker.alpha = alpha
+        currentLocationMarker.title = if (stale) "Last known location" else "You"
+        currentLocationMarker.zIndex = CURRENT_LOCATION_Z_INDEX
         return currentLocationMarker
     }
     return map.addMarker(
         MarkerOptions()
             .position(position)
-            .title("You")
+            .title(if (stale) "Last known location" else "You")
             .icon(currentLocationIcon(context))
             .anchor(0.5f, 0.72f)
             .flat(true)
-            .rotation(headingDegrees),
+            .rotation(headingDegrees)
+            .alpha(alpha)
+            // Relics sit at zIndex 0, so when a relic shares the player's exact spot (e.g. an
+            // emulator's mock location pinned on top of a relic for testing) the "you are here"
+            // dot still renders above it instead of being hidden underneath.
+            .zIndex(CURRENT_LOCATION_Z_INDEX),
     )
 }
+
+private const val CURRENT_LOCATION_Z_INDEX = 10f
+
+private const val STALE_LOCATION_ALPHA = 0.5f
 
 private fun questMarkerIcon(context: Context, selected: Boolean, pulseScale: Float = 1f): BitmapDescriptor {
     val density = context.resources.displayMetrics.density

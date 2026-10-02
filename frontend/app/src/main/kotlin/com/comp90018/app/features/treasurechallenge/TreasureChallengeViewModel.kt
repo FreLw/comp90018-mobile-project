@@ -240,7 +240,7 @@ private fun ChallengeInstruction.displayText(type: RelicChallengeType): String =
     ChallengeInstruction.HOLD_EXCAVATION_POSITION -> "Excavating"
     ChallengeInstruction.HOLD_VIEWING_ANGLE -> "Locking angle"
     ChallengeInstruction.HOLD_GLASSHOUSE_POSITION -> "Excavating"
-    ChallengeInstruction.MAKE_SOUND -> "Make some noise"
+    ChallengeInstruction.MAKE_SOUND -> if (type == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL) "Blow Hard For 1s" else "Make some noise"
     ChallengeInstruction.HOLD_TONE -> "Keep the noise going"
     ChallengeInstruction.TAKE_PHOTO -> "Take photo"
     ChallengeInstruction.COMPLETED -> "Relic discovered"
