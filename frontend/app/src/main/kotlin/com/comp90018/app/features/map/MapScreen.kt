@@ -1083,7 +1083,7 @@ private fun TreasureInformationPanel(
             // its button to be tapped left an explorer at the destination with every action
             // appearing disabled.
             Button(onClick = { onArrived?.invoke() },
-                enabled = onArrived != null && hasPreciseLocation && navigating && proximityStage == HuntProximityStage.HUNT_READY,
+                enabled = onArrived != null && hasPreciseLocation && proximityStage == HuntProximityStage.HUNT_READY,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                 Image(painterResource(R.drawable.map_arrived_symbol), null, modifier = Modifier.size(25.dp))
                 Spacer(Modifier.width(6.dp))
