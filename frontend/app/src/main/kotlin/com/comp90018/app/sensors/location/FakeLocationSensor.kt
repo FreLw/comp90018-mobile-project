@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class FakeLocationSensor(
     config: LocationConfig = LocationConfig(),
+    private val permission: LocationPermissionState = LocationPermissionState.PRECISE,
 ) : LocationSensor {
     private val _output = MutableStateFlow(LocationOutput())
     override val output: StateFlow<LocationOutput> = _output.asStateFlow()
@@ -68,7 +69,7 @@ class FakeLocationSensor(
                 targetLocation = targetLocation,
                 timestampNanos = timestampNanos,
                 config = activeConfig,
-                permission = LocationPermissionState.GRANTED,
+                permission = permission,
                 availability = LocationAvailabilityState.AVAILABLE,
                 accuracyMeters = accuracyMeters,
                 previousProximity = lastStableProximity,
@@ -79,7 +80,7 @@ class FakeLocationSensor(
             LocationOutput(
                 currentLocation = currentLocation,
                 targetLocation = targetLocation,
-                permission = LocationPermissionState.GRANTED,
+                permission = permission,
                 availability = LocationAvailabilityState.UNKNOWN,
                 accuracyMeters = accuracyMeters,
                 timestampNanos = timestampNanos,
