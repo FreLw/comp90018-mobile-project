@@ -62,11 +62,16 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if isOwner(userId)
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.email == resource.data.email
+        // Profiles created by earlier app versions may not have stored these
+        // identity fields.  Their owner can add the canonical values once;
+        // established profiles must still keep them immutable.
+        && ((('uid' in resource.data) && request.resource.data.uid == resource.data.uid)
+          || (!('uid' in resource.data) && request.resource.data.uid == userId))
+        && ((('email' in resource.data) && request.resource.data.email == resource.data.email)
+          || (!('email' in resource.data) && request.resource.data.email == request.auth.token.email))
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly([
-            'username', 'displayName', 'gender', 'bio', 'avatarUrl',
+            'uid', 'email', 'username', 'displayName', 'gender', 'bio', 'avatarUrl',
             'phone', 'department', 'major', 'notificationsEnabled', 'searchable',
             'soundEffectsEnabled', 'hapticsEnabled', 'preciseLocationEnabled', 'updatedAt'
           ])
