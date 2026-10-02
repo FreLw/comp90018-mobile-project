@@ -33,6 +33,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -52,6 +53,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.WbIncandescent
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -104,6 +107,7 @@ import com.comp90018.app.sensors.location.LocationPermissionState
 import com.comp90018.app.sensors.location.ProximityState
 import com.comp90018.app.Brand
 import com.comp90018.app.BrandSoft
+import com.comp90018.app.Background
 import com.comp90018.app.GothicTreasureFontFamily
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
@@ -140,11 +144,31 @@ fun MapScreen(
     userLocation: LocationOutput,
     onEnableLocation: () -> Unit,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
+    activeHuntTreasureId: String? = null,
+    activeHuntOwnerId: String? = null,
+    activeHuntMemberIds: List<String> = emptyList(),
+    activeHuntCompletedMemberIds: List<String> = emptyList(),
+    currentUserId: String = "",
+    onCompleteActiveHuntTask: () -> Unit = {},
 ) {
-    val resolvedTreasures = treasures
+    val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
+    val teamHuntActive = teamHuntTarget != null && activeHuntOwnerId != null
+    val teamHuntIsOwner = activeHuntOwnerId == currentUserId
+    val teamHuntAllCompleted = teamHuntActive && activeHuntMemberIds.size == 2 &&
+        activeHuntMemberIds.all { it in activeHuntCompletedMemberIds }
+    val teamHuntTaskPendingForCurrentUser = TeamHuntTaskEligibility.isPendingFor(
+        huntActive = teamHuntActive,
+        memberIds = activeHuntMemberIds,
+        completedMemberIds = activeHuntCompletedMemberIds,
+        currentUserId = currentUserId,
+    )
+    // An active team hunt locks the solo catalogue to its shared target.
+    val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
     var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
     var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var memberQuizRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var teamArrivalPromptedForId by remember { mutableStateOf<String?>(null) }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
     val revealCoordinator = remember { PostChallengeRevealCoordinator() }
     val foundRelicIds = discoveredTreasureIds
@@ -164,6 +188,28 @@ fun MapScreen(
             accuracyMeters = userLocation.accuracyMeters,
         )
     }
+    val teamHuntLocationOutput = remember(teamHuntTarget, userLocation) {
+        LocationCalculator.buildOutput(
+            currentLocation = userLocation.currentLocation,
+            targetLocation = teamHuntTarget?.coordinate,
+            timestampNanos = userLocation.timestampNanos,
+            config = LocationConfig(
+                insideRadiusMeters = teamHuntTarget?.insideRadiusMeters ?: 20.0,
+                nearbyRadiusMeters = teamHuntTarget?.radarRadiusMeters ?: 100.0,
+            ),
+            permission = userLocation.permission,
+            availability = userLocation.availability,
+            accuracyMeters = userLocation.accuracyMeters,
+        )
+    }
+    val teamHuntProximity = teamHuntTarget?.let { target ->
+        HuntProximityResolver.resolve(
+            distanceMeters = teamHuntLocationOutput.distanceToTargetMeters,
+            locationValidity = userLocation.validity,
+            radarRadiusMeters = target.radarRadiusMeters,
+            insideRadiusMeters = target.insideRadiusMeters,
+        )
+    }
     val markerTransition = rememberInfiniteTransition(label = "map_quest_marker")
     val markerPulse by markerTransition.animateFloat(
         initialValue = 0.90f,
@@ -176,6 +222,59 @@ fun MapScreen(
         selectedRelic = selectedRelic?.let { selected -> resolvedTreasures.firstOrNull { it.id == selected.id } }
         detailRelic = detailRelic?.let { detail -> resolvedTreasures.firstOrNull { it.id == detail.id } }
         challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
+    }
+    LaunchedEffect(teamHuntAllCompleted, teamHuntTarget?.id) {
+        if (teamHuntAllCompleted) detailRelic = teamHuntTarget
+    }
+    LaunchedEffect(teamHuntTarget?.id) {
+        teamArrivalPromptedForId = null
+    }
+    LaunchedEffect(teamHuntTarget?.id, teamHuntProximity, teamHuntTaskPendingForCurrentUser, teamArrivalPromptedForId) {
+        if (teamHuntTaskPendingForCurrentUser &&
+            teamHuntProximity == HuntProximityStage.HUNT_READY &&
+            teamArrivalPromptedForId != teamHuntTarget?.id
+        ) {
+            teamArrivalPromptedForId = teamHuntTarget?.id
+        }
+    }
+
+    if (teamHuntTaskPendingForCurrentUser && teamArrivalPromptedForId == teamHuntTarget?.id) {
+        TeamHuntArrivalDialog(
+            isOwner = teamHuntIsOwner,
+            onDismiss = { teamArrivalPromptedForId = "dismissed:${teamHuntTarget?.id}" },
+            onContinue = {
+                val target = requireNotNull(teamHuntTarget)
+                teamArrivalPromptedForId = "dismissed:${target.id}"
+                // The owner always performs the treasure's normal individual challenge. This
+                // keeps the GPS/sensor rules and challenge examples identical in solo and team
+                // hunts; team mode only adds the shared completion update on success.
+                if (teamHuntIsOwner && target.challengeConfig != null) {
+                    challengeRelic = target
+                } else if (teamHuntIsOwner) {
+                    detailRelic = target
+                } else {
+                    memberQuizRelic = target
+                }
+            },
+        )
+    }
+
+    memberQuizRelic?.let { relic ->
+        MemberHuntQuiz(
+            relic = relic,
+            locationOutput = LocationCalculator.buildOutput(
+                currentLocation = userLocation.currentLocation,
+                targetLocation = relic.coordinate,
+                timestampNanos = userLocation.timestampNanos,
+                config = LocationConfig(relic.insideRadiusMeters, relic.radarRadiusMeters),
+                permission = userLocation.permission,
+                availability = userLocation.availability,
+                accuracyMeters = userLocation.accuracyMeters,
+            ),
+            onCompleted = { onCompleteActiveHuntTask(); memberQuizRelic = null },
+            onBack = { memberQuizRelic = null },
+        )
+        return
     }
 
     revealCoordinator.session?.let { session ->
@@ -194,8 +293,21 @@ fun MapScreen(
                 treasureId = relic.id,
                 radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                debugSimulationEnabled = BuildConfig.DEBUG && debugSimulationEnabled,
-                onChallengeCompleted = { onComplete -> saveRelicDiscovery(relic, onCollectTreasure, onComplete) },
+                // Debug builds must always expose deterministic sensor controls.  The map's
+                // launcher also sets this flag, but making the build type authoritative avoids
+                // falling back to real emulator GPS/sensor readings if that UI state is lost.
+                debugSimulationEnabled = BuildConfig.DEBUG,
+                onChallengeCompleted = { onComplete ->
+                    if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) {
+                        // A Room owner's challenge is that owner's shared hunt task, not a solo
+                        // discovery.  Wait for both Room members before exposing the dig action.
+                        onCompleteActiveHuntTask()
+                        challengeRelic = null
+                        debugSimulationEnabled = false
+                    } else {
+                        saveRelicDiscovery(relic, onCollectTreasure, onComplete)
+                    }
+                },
                 onDiscoverySaved = { capturedPhotoUri ->
                     revealCoordinator.openAfterSave(relic, capturedPhotoUri)
                     challengeRelic = null
@@ -214,13 +326,17 @@ fun MapScreen(
             locationValidity = userLocation.validity,
             hapticsEnabled = hapticsEnabled,
             deviceHeading = deviceHeading,
-            isFound = relic.id in foundRelicIds,
+            // Team hunts remain replayable even when this relic is already in the explorer's
+            // personal collection; the shared hunt completion is tracked separately.
+            isFound = relic.id in foundRelicIds && !teamHuntActive,
             collecting = savingTreasureId == relic.id,
             preciseLocationEnabled = preciseLocationEnabled,
             onCollected = { onComplete -> onCollectTreasure(relic.id, onComplete) },
             onStartChallenge = relic.challengeConfig
                 ?.takeUnless { it.type in LOCAL_HUNT_CHALLENGE_TYPES }
                 ?.let { { debugSimulationEnabled = false; challengeRelic = relic } },
+            forceReadyToDig = teamHuntAllCompleted && relic.id == teamHuntTarget?.id,
+            onTeamTaskFinished = if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) onCompleteActiveHuntTask else null,
             onBack = {
                 detailRelic = null
             },
@@ -235,9 +351,18 @@ fun MapScreen(
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
             markerPulse = if (selectedRelic == null) markerPulse else 1f,
+            activeHuntTreasureId = activeHuntTreasureId,
             focusSelectedRelic = false,
             onRelicSelected = {
-                selectedRelic = it
+                if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner && it.id == teamHuntTarget?.id &&
+                    it.challengeConfig != null
+                ) {
+                    challengeRelic = it
+                } else if (teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner && it.id == teamHuntTarget?.id) {
+                    memberQuizRelic = it
+                } else {
+                    selectedRelic = it
+                }
             },
             modifier = Modifier.fillMaxSize(),
         )
@@ -251,7 +376,7 @@ fun MapScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 16.dp),
                 )
-            } else {
+            } else if (!teamHuntActive) {
                 FindTreasurePrompt(
                     message = when {
                         loading -> "Loading treasures from Firebase…"
@@ -266,6 +391,42 @@ fun MapScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 16.dp),
                 )
+            }
+        }
+
+        activeHuntTreasureId?.let { huntId ->
+            resolvedTreasures.firstOrNull { it.id == huntId }?.let { relic ->
+                Card(
+                    // The hunt marker can sit directly beneath the user's location marker.  Make
+                    // the persistent banner an equivalent, unambiguous way to open the target.
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 14.dp)
+                        .clickable {
+                            if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner && relic.challengeConfig != null) {
+                                challengeRelic = relic
+                            } else if (teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner) {
+                                memberQuizRelic = relic
+                            } else {
+                                selectedRelic = relic
+                            }
+                        },
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
+                    shape = RoundedCornerShape(20.dp),
+                ) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.LocationOn, null, tint = Brand)
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            when {
+                                teamHuntAllCompleted -> "Both explorers are ready — dig the treasure!"
+                                currentUserId in activeHuntCompletedMemberIds -> "Waiting for your teammate — you can help them."
+                                else -> "Go and hunt for the treasure: ${relic.name}\nTap here to open the hunt"
+                            },
+                            color = Ink, fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
             }
         }
 
@@ -311,11 +472,114 @@ fun MapScreen(
     }
 }
 
+@Composable
+private fun TeamHuntArrivalDialog(
+    isOwner: Boolean,
+    onDismiss: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    val glow = rememberInfiniteTransition(label = "team_hunt_lightbulb")
+    val glowScale by glow.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.10f,
+        animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
+        label = "team_hunt_lightbulb_glow",
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Rounded.WbIncandescent,
+                contentDescription = null,
+                tint = Color(0xFFFFB300),
+                modifier = Modifier.size(54.dp).graphicsLayer {
+                    scaleX = glowScale
+                    scaleY = glowScale
+                    shadowElevation = 18f
+                },
+            )
+        },
+        title = {
+            Text(
+                "Location found!",
+                color = Ink,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        text = {
+            Text(
+                if (isOwner) {
+                    "Congratulations, you have found the location. Next, complete the following task to unlock the treasure!"
+                } else {
+                    "Congratulations, you have found the location. Next, answer the following questions to unlock the treasure!"
+                },
+                color = Muted,
+                textAlign = TextAlign.Center,
+            )
+        },
+        confirmButton = {
+            Button(onClick = onContinue) {
+                Text(if (isOwner) "Start task" else "Answer questions")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text("Later") }
+        },
+    )
+}
+
+/** Member-only team-hunt checkpoint. Replace the template prompts with destination content later. */
+@Composable
+private fun MemberHuntQuiz(
+    relic: MapRelic,
+    locationOutput: LocationOutput,
+    onCompleted: () -> Unit,
+    onBack: () -> Unit,
+) {
+    var questionIndex by remember(relic.id) { mutableIntStateOf(0) }
+    var incorrect by remember(relic.id) { mutableStateOf(false) }
+    val closeEnough = locationOutput.distanceToTargetMeters?.let { it <= relic.insideRadiusMeters } == true
+    val questions = listOf(
+        "Template Q1",
+        "Template Q2",
+    )
+    val answers = listOf(1, 2) // Temporary answer key: Q1=B, Q2=C.
+    Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Team hunt checkpoint", style = MaterialTheme.typography.headlineSmall, color = Ink, fontWeight = FontWeight.Bold)
+        Text(relic.name, color = Brand, fontWeight = FontWeight.Medium)
+        if (!closeEnough) {
+            Text("Reach the treasure location to unlock your two questions.", color = Muted)
+            locationOutput.distanceToTargetMeters?.let { Text("${it.formatDistance()} away", color = Ink) }
+            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
+        } else {
+            Text("Question ${questionIndex + 1} of 2", color = Muted)
+            Text(questions[questionIndex], style = MaterialTheme.typography.titleLarge, color = Ink)
+            listOf("A", "B", "C", "D").forEachIndexed { index, option ->
+                OutlinedButton(onClick = {
+                    if (index == answers[questionIndex]) {
+                        incorrect = false
+                        if (questionIndex == questions.lastIndex) onCompleted() else questionIndex += 1
+                    } else {
+                        incorrect = true
+                    }
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text(option)
+                }
+            }
+            if (incorrect) Text("Not quite — try again.", color = RelicRed)
+        }
+    }
+}
+
 private val DEBUG_SENSOR_CHALLENGES = setOf(
     RelicChallengeType.UNION_LAWN_PHOTO,
     RelicChallengeType.WILSON_HALL_OBSERVATION,
     RelicChallengeType.OLD_QUAD_EXCAVATION,
     RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE,
+    // Use System Garden for the local test flow; unlike Grainger Museum, it never requests audio.
+    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
 )
 
 @Composable
@@ -347,6 +611,7 @@ private fun GoogleMapView(
     locationOutput: LocationOutput,
     deviceHeading: Float,
     markerPulse: Float = 1f,
+    activeHuntTreasureId: String? = null,
     focusSelectedRelic: Boolean = true,
     onRelicSelected: (MapRelic) -> Unit,
     modifier: Modifier = Modifier,
@@ -385,23 +650,31 @@ private fun GoogleMapView(
                         true
                     } ?: false
                 }
+                // Google Maps draws its blue location layer above overlapping treasure markers,
+                // which made an arrived explorer unable to tap their active hunt target. Our
+                // own marker is rendered below whenever we have a usable reading, so avoid the
+                // native layer and keep the target marker tappable.
                 map.isMyLocationEnabled = false
+                map.uiSettings.isMyLocationButtonEnabled = false
                 val selectedRelicId = selectedRelic?.id ?: "__none__"
                 val relicSignature = relics.joinToString("|") { relic ->
                     "${relic.id}:${relic.coordinate.latitude}:${relic.coordinate.longitude}"
                 }
-                val mapKey = "$selectedRelicId|$relicSignature"
+                val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature"
                 if (renderedMapKey != mapKey) {
                     map.clear()
                     currentLocationMarker = null
-                    renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, markerPulse)
+                    renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, activeHuntTreasureId, markerPulse)
                     renderedMapKey = mapKey
                 }
                 val pulseBucket = (markerPulse * 20).toInt()
                 if (renderedPulseBucket != pulseBucket) {
                     val pulseIcon = questMarkerIcon(context, selected = false, pulseScale = markerPulse)
                     renderedRelicMarkers.forEach { (relicId, marker) ->
-                        if (relicId != selectedRelic?.id) marker.setIcon(pulseIcon)
+                        when {
+                            relicId == activeHuntTreasureId -> marker.setIcon(huntMarkerIcon(context, markerPulse))
+                            relicId != selectedRelic?.id -> marker.setIcon(pulseIcon)
+                        }
                     }
                     renderedPulseBucket = pulseBucket
                 }
@@ -518,6 +791,8 @@ private fun TreasureDetailScreen(
     preciseLocationEnabled: Boolean,
     onCollected: ((String?) -> Unit) -> Unit,
     onStartChallenge: (() -> Unit)?,
+    forceReadyToDig: Boolean = false,
+    onTeamTaskFinished: (() -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     var navigating by remember(relic.id) { mutableStateOf(false) }
@@ -544,7 +819,7 @@ private fun TreasureDetailScreen(
             else -> Unit
         }
     }
-    var stage by remember(relic.id) { mutableStateOf(TreasureHuntStage.DETAILS) }
+    var stage by remember(relic.id, forceReadyToDig) { mutableStateOf(if (forceReadyToDig) TreasureHuntStage.READY_TO_DIG else TreasureHuntStage.DETAILS) }
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }
     var collectionActionError by remember(relic.id) { mutableStateOf<String?>(null) }
@@ -564,6 +839,9 @@ private fun TreasureDetailScreen(
             delay(1_500)
             stage = TreasureHuntStage.READY_TO_DIG
         }
+    }
+    LaunchedEffect(stage) {
+        if (stage == TreasureHuntStage.READY_TO_DIG && !forceReadyToDig) onTeamTaskFinished?.invoke()
     }
 
     if (stage == TreasureHuntStage.FOUND) {
@@ -754,8 +1032,11 @@ private fun TreasureInformationPanel(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // Navigation is optional guidance, not a prerequisite for beginning a hunt. Requiring
+            // its button to be tapped left an explorer at the destination with every action
+            // appearing disabled.
             Button(onClick = { onArrived?.invoke() },
-                enabled = onArrived != null && navigating && proximityStage == HuntProximityStage.HUNT_READY,
+                enabled = onArrived != null && proximityStage == HuntProximityStage.HUNT_READY,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                 Image(painterResource(R.drawable.map_arrived_symbol), null, modifier = Modifier.size(25.dp))
                 Spacer(Modifier.width(6.dp))
@@ -1433,6 +1714,7 @@ private fun renderRelics(
     map: GoogleMap,
     relics: List<MapRelic>,
     selectedRelic: MapRelic?,
+    activeHuntTreasureId: String?,
     pulseScale: Float,
 ): Map<String, Marker> {
     val availableIcon = questMarkerIcon(context, selected = false, pulseScale = pulseScale)
@@ -1444,13 +1726,36 @@ private fun renderRelics(
                 .position(relic.coordinate.toLatLng())
                 .title(relic.name)
                 .snippet(relic.locationName)
-                .icon(if (relic.id == selectedRelic?.id) selectedIcon else availableIcon)
+                .icon(when {
+                    relic.id == activeHuntTreasureId -> huntMarkerIcon(context, pulseScale)
+                    relic.id == selectedRelic?.id -> selectedIcon
+                    else -> availableIcon
+                })
                 .anchor(0.5f, 0.5f),
         )
         marker?.tag = relic.id
         marker?.let { markers[relic.id] = it }
     }
     return markers
+}
+
+/** The team-selected destination has a gold halo which gently breathes during an active hunt. */
+private fun huntMarkerIcon(context: Context, pulseScale: Float): BitmapDescriptor {
+    val density = context.resources.displayMetrics.density
+    val size = (52f * pulseScale * density).toInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val center = size / 2f
+    canvas.drawCircle(center, center, size * 0.48f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(100, 255, 197, 46)
+    })
+    canvas.drawCircle(center, center, size * 0.33f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(242, 181, 67)
+    })
+    canvas.drawCircle(center, center, size * 0.17f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+    })
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
 private fun renderCurrentLocation(

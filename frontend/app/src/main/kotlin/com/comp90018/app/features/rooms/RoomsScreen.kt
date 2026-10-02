@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +36,7 @@ import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.chat.DirectChatScreen
+import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.ui.components.AppTextField
 import com.comp90018.app.ui.components.ChatComposer
 import com.comp90018.app.ui.components.formatMessageTimestamp
@@ -41,7 +44,16 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, viewModel: RoomsViewModel) {
+fun RoomsScreen(
+    user: FirebaseUser,
+    firestore: FirebaseFirestore,
+    profile: UserProfile?,
+    viewModel: RoomsViewModel,
+    treasures: List<MapRelic>,
+    treasuresLoading: Boolean,
+    treasuresError: String?,
+    onStartHunt: (String) -> Unit,
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var mockActiveRoomId by remember { mutableStateOf<String?>(null) }
     when {
@@ -56,6 +68,10 @@ fun RoomsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: UserP
             firestore,
             profile,
             onRoomExited = viewModel::clearErrors,
+            treasures = treasures,
+            treasuresLoading = treasuresLoading,
+            treasuresError = treasuresError,
+            onStartHunt = onStartHunt,
         )
         else -> RoomEntryScreen(
             state = state,
@@ -96,7 +112,17 @@ private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJo
 private const val DEMO_ROOM_ID = "CAMPUS-2026"
 
 @Composable
-private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: FirebaseFirestore, profile: UserProfile?, onRoomExited: () -> Unit) {
+private fun TeamRoomChatScreen(
+    roomId: String,
+    user: FirebaseUser,
+    firestore: FirebaseFirestore,
+    profile: UserProfile?,
+    onRoomExited: () -> Unit,
+    treasures: List<MapRelic>,
+    treasuresLoading: Boolean,
+    treasuresError: String?,
+    onStartHunt: (String) -> Unit,
+) {
     val repository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
     val viewModel: TeamRoomChatViewModel = viewModel(
         key = "team_room_${roomId}_${user.uid}",
@@ -112,6 +138,7 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
     val members = state.members
     val error = state.error
     var showDetails by remember(roomId) { mutableStateOf(false) }
+    var choosingDestination by remember(roomId) { mutableStateOf(false) }
     var viewingMember by remember(roomId) { mutableStateOf<TeamRoomMember?>(null) }
     var directChatId by remember(roomId) { mutableStateOf<String?>(null) }
     if (directChatId != null) {
@@ -131,6 +158,38 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
         return
     }
     Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
+        if (room?.taskStatus == "hunting") {
+            ActiveHuntHeader(
+                room = room,
+                currentUserId = user.uid,
+                updating = state.updatingTask,
+                onContinue = { onStartHunt(room.taskId) },
+                onTerminate = viewModel::terminateHunt,
+            )
+        } else {
+            RoomHuntControls(
+                room = room,
+                treasures = treasures,
+                isOwner = room?.creatorId == user.uid,
+                // `memberIds` comes from the live room snapshot. Profile records may
+                // arrive later, so they must not determine whether the room is full.
+                memberCount = room?.memberIds?.size ?: 0,
+                treasuresLoading = treasuresLoading,
+                treasuresError = treasuresError,
+                updating = state.updatingTask,
+                onChooseDestination = { choosingDestination = true },
+                onStartHunt = { viewModel.startHunt { onStartHunt(requireNotNull(room).taskId) } },
+            )
+        }
+        error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
         Row(
             Modifier.fillMaxWidth().clickable { showDetails = true }.padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -164,8 +223,19 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             showTreasureAction = true,
         )
     }
+    if (choosingDestination) DestinationPickerDialog(
+        treasures = treasures,
+        loading = treasuresLoading,
+        error = treasuresError,
+        onSelected = { relic ->
+            viewModel.selectDestination(relic.id, relic.name)
+            choosingDestination = false
+        },
+        onDismiss = { choosingDestination = false },
+    )
     if (showDetails) RoomDetailsDialog(
         roomId = roomId,
+        room = room,
         members = members,
         isOwner = room?.creatorId == user.uid,
         onMemberClick = { viewingMember = it; showDetails = false },
@@ -175,6 +245,128 @@ private fun TeamRoomChatScreen(roomId: String, user: FirebaseUser, firestore: Fi
             viewModel.dismiss(onRoomExited)
         },
         onDismiss = { showDetails = false },
+    )
+}
+
+@Composable
+private fun ActiveHuntHeader(
+    room: TeamRoom,
+    currentUserId: String,
+    updating: Boolean,
+    onContinue: () -> Unit,
+    onTerminate: () -> Unit,
+) {
+    val completed = currentUserId in room.taskCompletedMemberIds
+    val allCompleted = room.memberIds.isNotEmpty() && room.memberIds.all { it in room.taskCompletedMemberIds }
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = BrandSoft)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("Targeting ${room.taskTitle}", color = Ink, fontWeight = FontWeight.Bold)
+            Text(
+                when {
+                    allCompleted -> "Both explorers are ready. Turn to the map to dig the treasure."
+                    completed -> "Waiting for your teammate to finish. You can help them."
+                    else -> "Go and hunt for the treasure."
+                },
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
+                Text(if (allCompleted) "Turn to map and dig" else "Turn to map to continue your hunt")
+            }
+            if (room.creatorId == currentUserId) {
+                OutlinedButton(onClick = onTerminate, enabled = !updating, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (updating) "Terminating..." else "Terminate Hunt", color = RelicRed)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoomHuntControls(
+    room: TeamRoom?,
+    treasures: List<MapRelic>,
+    isOwner: Boolean,
+    memberCount: Int,
+    treasuresLoading: Boolean,
+    treasuresError: String?,
+    updating: Boolean,
+    onChooseDestination: () -> Unit,
+    onStartHunt: () -> Unit,
+) {
+    val hasDestination = !room?.taskId.isNullOrBlank()
+    val hasTwoMembers = memberCount == 2
+    val destinationName = room?.taskTitle?.takeIf { it.isNotBlank() } ?: "Choose destination"
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = onChooseDestination,
+                enabled = !updating,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(Icons.Rounded.LocationOn, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(destinationName, maxLines = 1)
+            }
+            if (isOwner) {
+                Button(
+                    onClick = onStartHunt,
+                    enabled = hasTwoMembers && hasDestination && !updating,
+                    colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                ) {
+                    Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text(if (updating) "Starting..." else "Start Hunt")
+                }
+            }
+        }
+        if (!isOwner || !hasTwoMembers || !hasDestination) {
+            Text(
+                when {
+                    !isOwner -> "Only the room owner can start a hunt."
+                    !hasTwoMembers -> "Start Hunt unlocks when 2 explorers are in the room."
+                    treasuresLoading -> "Loading the six treasure destinations…"
+                    treasuresError != null -> "Treasure destinations are unavailable right now."
+                    else -> "Choose one of the six treasures to unlock Start Hunt."
+                },
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else if (room.taskStatus == "hunting") {
+            Text("Hunt in progress: $destinationName", color = Brand, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun DestinationPickerDialog(
+    treasures: List<MapRelic>,
+    loading: Boolean,
+    error: String?,
+    onSelected: (MapRelic) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose destination", color = Ink, fontWeight = FontWeight.Bold) },
+        text = {
+            when {
+                loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Brand) }
+                error != null -> Text(error, color = MaterialTheme.colorScheme.error)
+                treasures.isEmpty() -> Text("No enabled treasures are available yet. Add the six treasure records in Firestore, then try again.", color = Muted)
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(treasures.take(6), key = { it.id }) { relic ->
+                        OutlinedButton(onClick = { onSelected(relic) }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(relic.name, color = Ink, fontWeight = FontWeight.Medium)
+                                Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Brand) } },
     )
 }
 
@@ -307,6 +499,7 @@ private fun RoomMemberProfileScreen(
 @Composable
 private fun RoomDetailsDialog(
     roomId: String,
+    room: TeamRoom?,
     members: List<TeamRoomMember>,
     isOwner: Boolean,
     onMemberClick: (TeamRoomMember) -> Unit,
@@ -333,6 +526,16 @@ private fun RoomDetailsDialog(
                 Text("MEMBERS (${members.size}/2)", color = Muted, style = MaterialTheme.typography.labelMedium); Spacer(Modifier.height(8.dp))
                 members.forEach { member -> TextButton(onClick = { onMemberClick(member) }, contentPadding = PaddingValues(0.dp)) { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) { ProfileAvatar(member.avatarUrl, member.name, 36.dp); Spacer(Modifier.width(10.dp)); Text(member.name, color = Ink, fontWeight = FontWeight.Medium) } } }
                 if (members.size < 2) Text("Waiting for one more explorer to join.", color = Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            room?.takeIf { it.taskStatus == "hunting" }?.let { activeHunt ->
+                Column {
+                    Text("HUNT STATUS", color = Muted, style = MaterialTheme.typography.labelMedium)
+                    Text(activeHunt.taskTitle, color = Ink, fontWeight = FontWeight.Medium)
+                    members.forEach { member ->
+                        val done = member.uid in activeHunt.taskCompletedMemberIds
+                        Text("${if (done) "✓" else "○"} ${member.name}: ${if (done) "Task complete" else "Still hunting"}", color = if (done) Brand else Muted)
+                    }
+                }
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = Brand) } }, dismissButton = {

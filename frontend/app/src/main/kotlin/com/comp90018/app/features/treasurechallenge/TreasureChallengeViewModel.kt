@@ -15,6 +15,8 @@ import com.comp90018.app.contextengine.challenge.ChallengeConditionState
 import com.comp90018.app.contextengine.challenge.ChallengeRuleEvaluator
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
+import com.comp90018.app.sensors.SensorValidity
+import com.comp90018.app.sensors.audio.SoundLevelOutput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -147,11 +149,46 @@ class TreasureChallengeViewModel(
         )
     }
 
+    /** Invoked only by the debug-only calibration panel to exercise the real rule evaluator. */
+    fun simulateSustainedSoundForDebug() {
+        if (!config.requiresSound || mutableUiState.value.completed) return
+        val snapshot = mutableUiState.value.latestSnapshot ?: return
+        val threshold = config.soundThresholdDecibels ?: return
+        val startedAt = timeSource.nowNanos()
+        val audibleSnapshot = snapshot.copy(
+            sound = SoundLevelOutput(
+                decibels = threshold + 5.0,
+                validity = SensorValidity.VALID,
+                timestampNanos = startedAt,
+            ),
+        )
+        evaluator.evaluate(audibleSnapshot, startedAt)
+        val progress = evaluator.evaluate(audibleSnapshot, startedAt + config.holdDurationNanos)
+        publish(progress, audibleSnapshot)
+    }
+
+    /**
+     * Debug-only UI supplies a valid fake snapshot here.  Completion still uses the production
+     * evaluator: two distinct location readings are required, followed by the configured hold.
+     */
+    fun completeWithDebugSnapshot(snapshot: DeviceContextSnapshot) {
+        if (mutableUiState.value.completed) return
+        val startedAt = timeSource.nowNanos()
+        val firstReading = snapshot.copy(location = snapshot.location.copy(timestampNanos = startedAt))
+        evaluator.evaluate(firstReading, startedAt)
+        val secondReading = firstReading.copy(location = firstReading.location.copy(timestampNanos = startedAt + 1L))
+        evaluator.evaluate(secondReading, startedAt + 1L)
+        val completedAt = startedAt + config.holdDurationNanos + 1L
+        val progress = evaluator.evaluate(secondReading, completedAt)
+        publish(progress, secondReading)
+    }
+
     override fun onCleared() {
         stop()
     }
 
     private fun onSnapshot(snapshot: DeviceContextSnapshot) {
+        if (mutableUiState.value.completed) return
         // Once TAKE_PHOTO has legitimately been reached, preserve that opportunity through the
         // physical shutter interaction. Completion still comes only from the evaluator event.
         if (photoOpportunityReady && config.photoActionRequired && !mutableUiState.value.completed) return

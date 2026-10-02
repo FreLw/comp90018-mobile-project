@@ -16,6 +16,10 @@ interface TeamRoomRepository {
     fun observeMessages(roomId: String, onChange: (List<ChatMessage>, String?) -> Unit): Subscription
     fun markMessagesRead(userId: String)
     fun loadMembers(memberIds: List<String>, onComplete: (List<TeamRoomMember>) -> Unit)
+    fun selectTask(roomId: String, userId: String, taskId: String, taskTitle: String, onComplete: (String?) -> Unit)
+    fun startHunt(roomId: String, userId: String, onComplete: (String?) -> Unit)
+    fun terminateHunt(roomId: String, userId: String, onComplete: (String?) -> Unit)
+    fun completeHuntTask(roomId: String, userId: String, onComplete: (String?) -> Unit)
     fun sendMessage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit)
     fun sendImage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit)
     fun leaveRoom(roomId: String, userId: String, onComplete: (String?) -> Unit)
