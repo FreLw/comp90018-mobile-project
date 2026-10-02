@@ -48,4 +48,40 @@ class LocationReadingFilterTest {
         assertNull(LocationReadingFilter.accepted(invalid, nowNanos = 5_000L, config = config))
         assertEquals(SensorValidity.UNRELIABLE, LocationReadingFilter.validity(invalid, 5_000L, config))
     }
+
+    @Test
+    fun missingReadingIsUnknown() {
+        assertNull(LocationReadingFilter.accepted(null, nowNanos = 5_000L, config = config))
+        assertEquals(SensorValidity.UNKNOWN, LocationReadingFilter.validity(null, 5_000L, config))
+    }
+
+    @Test
+    fun futureTimestampReadingIsRejected() {
+        assertNull(LocationReadingFilter.accepted(validReading, nowNanos = 500L, config = config))
+        assertEquals(SensorValidity.UNRELIABLE, LocationReadingFilter.validity(validReading, 500L, config))
+    }
+
+    @Test
+    fun negativeAccuracyReadingIsRejected() {
+        val impossibleAccuracy = validReading.copy(accuracyMeters = -1.0)
+
+        assertNull(LocationReadingFilter.accepted(impossibleAccuracy, nowNanos = 5_000L, config = config))
+        assertEquals(SensorValidity.UNRELIABLE, LocationReadingFilter.validity(impossibleAccuracy, 5_000L, config))
+    }
+
+    @Test
+    fun nonFiniteAccuracyReadingIsRejected() {
+        val impossibleAccuracy = validReading.copy(accuracyMeters = Double.NaN)
+
+        assertNull(LocationReadingFilter.accepted(impossibleAccuracy, nowNanos = 5_000L, config = config))
+        assertEquals(SensorValidity.UNRELIABLE, LocationReadingFilter.validity(impossibleAccuracy, 5_000L, config))
+    }
+
+    @Test
+    fun unknownAccuracyIsAcceptedWhenCoordinateAndTimestampAreReliable() {
+        val unknownAccuracy = validReading.copy(accuracyMeters = null)
+
+        assertSame(unknownAccuracy, LocationReadingFilter.accepted(unknownAccuracy, nowNanos = 5_000L, config = config))
+        assertEquals(SensorValidity.VALID, LocationReadingFilter.validity(unknownAccuracy, 5_000L, config))
+    }
 }
