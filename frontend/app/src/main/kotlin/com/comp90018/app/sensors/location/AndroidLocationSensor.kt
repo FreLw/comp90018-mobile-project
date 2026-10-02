@@ -201,6 +201,7 @@ class AndroidLocationSensor(
         _output.value = if (reading == null) {
             LocationOutput(
                 currentLocation = null,
+                lastKnownLocation = if (canUseReading) lastReading?.coordinate else null,
                 targetLocation = targetLocation,
                 proximity = ProximityState.UNKNOWN,
                 validity = readingValidity,
@@ -218,6 +219,7 @@ class AndroidLocationSensor(
                 permission = permission,
                 availability = availability,
                 accuracyMeters = reading.accuracyMeters,
+                lastKnownLocation = reading.coordinate,
             )
         }
     }
