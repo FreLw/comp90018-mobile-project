@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
@@ -26,6 +31,7 @@ import com.comp90018.app.features.map.UserLocationViewModel
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.RoomsViewModel
+import com.comp90018.app.features.rooms.TeamRoomChatViewModel
 import com.comp90018.app.features.rooms.UnreadRoomMessagesViewModel
 import com.comp90018.app.features.treasure.TreasureScreen
 import com.comp90018.app.features.treasure.TreasureCatalogViewModel
@@ -40,6 +46,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> Unit) {
     var destination by remember { mutableStateOf(AppDestination.Friends) }
+    var activeHuntTreasureId by remember { mutableStateOf<String?>(null) }
     val repository = remember(firestore) { FirebaseProfileRepository(firestore) }
     val viewModel: AppShellViewModel = viewModel(
         key = "app_shell_${user.uid}",
@@ -63,6 +70,24 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = RoomsViewModel.factory(teamRoomRepository, user.uid),
     )
     val roomsState by roomsViewModel.uiState.collectAsStateWithLifecycle()
+    // Keep the active hunt visible on Map even after the user leaves the Room tab.
+    val activeRoomHuntViewModel: TeamRoomChatViewModel? = roomsState.activeRoomId?.let { roomId ->
+        viewModel(
+            key = "active_room_hunt_${roomId}_${user.uid}",
+            factory = TeamRoomChatViewModel.factory(teamRoomRepository, roomId, user.uid),
+        )
+    }
+    val activeRoomHuntState by (activeRoomHuntViewModel?.uiState
+        ?: remember { kotlinx.coroutines.flow.MutableStateFlow(com.comp90018.app.features.rooms.TeamRoomChatUiState()) })
+        .collectAsStateWithLifecycle()
+    // The local ID only bridges the short period between starting a hunt and the
+    // Firestore listener receiving it. Once the room reports a non-hunting
+    // state (including termination), it must not keep the map hunt alive.
+    LaunchedEffect(activeRoomHuntState.room?.taskStatus) {
+        if (activeRoomHuntState.room?.taskStatus != null && activeRoomHuntState.room?.taskStatus != "hunting") {
+            activeHuntTreasureId = null
+        }
+    }
     val treasureRepository = remember(firestore) { FirebaseTreasureRepository(firestore) }
     val treasureCatalogViewModel: TreasureCatalogViewModel = viewModel(
         key = "treasure_catalog",
@@ -84,6 +109,17 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = UserLocationViewModel.factory(context, preciseLocationEnabled),
     )
     val userLocation by userLocationViewModel.output.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, userLocationViewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                userLocationViewModel.refreshWhenForegrounded()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         containerColor = Background,
@@ -111,7 +147,19 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     collectionError = treasureCollectionState.error,
                     onRetryCollection = treasureCollectionViewModel::retry,
                 )
-                AppDestination.Rooms -> RoomsScreen(user, firestore, state.profile, roomsViewModel)
+                AppDestination.Rooms -> RoomsScreen(
+                    user = user,
+                    firestore = firestore,
+                    profile = state.profile,
+                    viewModel = roomsViewModel,
+                    treasures = treasureCatalogState.treasures,
+                    treasuresLoading = treasureCatalogState.loading,
+                    treasuresError = treasureCatalogState.error,
+                    onStartHunt = { treasureId ->
+                        activeHuntTreasureId = treasureId
+                        destination = AppDestination.Map
+                    },
+                )
                 AppDestination.Map -> MapScreen(
                     treasures = treasureCatalogState.treasures,
                     loading = treasureCatalogState.loading,
@@ -124,6 +172,13 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     userLocation = userLocation,
                     onEnableLocation = userLocationViewModel::retryAfterPermissionGranted,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
+                    activeHuntTreasureId = activeHuntTreasureId
+                        ?: activeRoomHuntState.room?.takeIf { it.taskStatus == "hunting" }?.taskId,
+                    activeHuntOwnerId = activeRoomHuntState.room?.takeIf { it.taskStatus == "hunting" }?.creatorId,
+                    activeHuntMemberIds = activeRoomHuntState.room?.memberIds.orEmpty(),
+                    activeHuntCompletedMemberIds = activeRoomHuntState.room?.taskCompletedMemberIds.orEmpty(),
+                    currentUserId = user.uid,
+                    onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
                 AppDestination.Profile -> ProfileScreen(

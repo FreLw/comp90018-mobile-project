@@ -15,6 +15,7 @@ data class TeamRoom(
     val taskId: String,
     val taskTitle: String,
     val taskStatus: String,
+    val taskCompletedMemberIds: List<String> = emptyList(),
 )
 
 data class TeamRoomMember(
@@ -79,6 +80,7 @@ object FirebaseTeamRoomService {
                         "taskId" to "",
                         "taskTitle" to "",
                         "taskStatus" to "unassigned",
+                        "taskCompletedMemberIds" to emptyList<String>(),
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp(),
                     ))
@@ -131,9 +133,90 @@ object FirebaseTeamRoomService {
                     taskId = snapshot.getString("taskId").orEmpty(),
                     taskTitle = snapshot.getString("taskTitle").orEmpty(),
                     taskStatus = snapshot.getString("taskStatus").orEmpty(),
+                    taskCompletedMemberIds = (snapshot.get("taskCompletedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                 ), null)
             }
         }
+
+    fun selectTask(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        userId: String,
+        taskId: String,
+        taskTitle: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        if (taskId.isBlank() || taskTitle.isBlank()) return onComplete("Choose a destination first")
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            if (userId !in members) throw IllegalStateException("You are not a member of this room")
+            transaction.update(room, mapOf(
+                "taskId" to taskId,
+                "taskTitle" to taskTitle,
+                "taskStatus" to "assigned",
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to choose destination") }
+    }
+
+    fun startHunt(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        userId: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            if (userId !in members) throw IllegalStateException("You are not a member of this room")
+            if (snapshot.getString("creatorId") != userId) throw IllegalStateException("Only the room owner can start a hunt")
+            if (members.size != 2) throw IllegalStateException("Start Hunt requires two room members")
+            if (snapshot.getString("taskStatus") != "assigned") throw IllegalStateException("Choose a destination before starting")
+            if (snapshot.getString("taskId").isNullOrBlank()) throw IllegalStateException("Choose a destination before starting")
+            transaction.update(room, mapOf(
+                "taskStatus" to "hunting",
+                "taskCompletedMemberIds" to emptyList<String>(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to start hunt") }
+    }
+
+    fun terminateHunt(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        userId: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            if (snapshot.getString("creatorId") != userId) throw IllegalStateException("Only the room owner can terminate a hunt")
+            if (snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
+            transaction.update(room, mapOf(
+                "taskId" to "",
+                "taskTitle" to "",
+                "taskStatus" to "unassigned",
+                "taskCompletedMemberIds" to emptyList<String>(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to terminate hunt") }
+    }
+
+    fun completeHuntTask(firestore: FirebaseFirestore, roomId: String, userId: String, onComplete: (String?) -> Unit) {
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
+            transaction.update(room, mapOf(
+                "taskCompletedMemberIds" to FieldValue.arrayUnion(userId),
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to update hunt progress") }
+    }
 
     fun observeMessages(
         firestore: FirebaseFirestore,

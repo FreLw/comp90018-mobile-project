@@ -28,8 +28,15 @@ class UserLocationViewModel(
         sensor.start()
     }
 
-    /** Sensor.start() is a no-op once permission was denied at launch; call this after the user grants it. */
+    /** Re-read Android's permission state before (re)starting location updates. */
     fun retryAfterPermissionGranted() {
+        sensor.refreshPermissionState()
+        sensor.start()
+    }
+
+    /** Covers permissions changed in Settings while the app was in the background. */
+    fun refreshWhenForegrounded() {
+        sensor.refreshPermissionState()
         sensor.start()
     }
 

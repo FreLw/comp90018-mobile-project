@@ -9,5 +9,5 @@ object ChallengeSimulationFactory {
 
     @Composable
     fun CalibrationPanel(treasureId: String, config: RelicChallengeConfig, radarRadiusMeters: Double,
-        state: TreasureChallengeUiState) = Unit
+        state: TreasureChallengeUiState, onSimulateSound: () -> Unit) = Unit
 }

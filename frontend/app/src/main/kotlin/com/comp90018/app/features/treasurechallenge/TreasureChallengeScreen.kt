@@ -119,13 +119,22 @@ fun TreasureChallengeRoute(
         onRetrySave = { discoverySave.retry(onChallengeCompleted) },
         simulation = simulation,
         debugCalibrationInfo = if (BuildConfig.DEBUG) {
-            { ChallengeSimulationFactory.CalibrationPanel(treasureId, config, radarRadiusMeters, state) }
+            {
+                ChallengeSimulationFactory.CalibrationPanel(
+                    treasureId = treasureId,
+                    config = config,
+                    radarRadiusMeters = radarRadiusMeters,
+                    state = state,
+                    onSimulateSound = viewModel::simulateSustainedSoundForDebug,
+                )
+            }
         } else null,
         onBack = onBack,
         onPhotoCaptureStarted = viewModel::onPhotoCaptureStarted,
         onPhotoCaptured = viewModel::onPhotoCaptured,
         onCameraError = viewModel::onCameraError,
         onMicPermissionGranted = viewModel::restart,
+        onCompleteWithDebugSnapshot = viewModel::completeWithDebugSnapshot,
     )
 }
 
@@ -143,6 +152,7 @@ fun TreasureChallengeScreen(
     onPhotoCaptured: (String) -> Unit,
     onCameraError: (String) -> Unit,
     onMicPermissionGranted: () -> Unit = {},
+    onCompleteWithDebugSnapshot: (com.comp90018.app.contextengine.DeviceContextSnapshot) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -181,7 +191,11 @@ fun TreasureChallengeScreen(
                 MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
             }
             if (simulation != null && !state.completed) {
-                simulation.Controls(state = state, onPhotoCaptured = onPhotoCaptured)
+                simulation.Controls(
+                    state = state,
+                    onPhotoCaptured = onPhotoCaptured,
+                    onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
+                )
             }
             if (state.completed) {
                 when (saveStatus) {

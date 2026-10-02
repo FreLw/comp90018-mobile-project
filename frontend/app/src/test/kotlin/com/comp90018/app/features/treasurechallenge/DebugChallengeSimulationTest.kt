@@ -22,6 +22,7 @@ class DebugChallengeSimulationTest {
     private val wilson = RelicChallengeConfigs.wilsonHallObservation("wilson-hall-observation", target, 20.0, 0.0)
     private val oldQuad = RelicChallengeConfigs.oldQuadExcavation("old-quad-excavation", target, 18.0)
     private val south = RelicChallengeConfigs.southLawnViewingAngle("south-lawn-viewing-angle", target, 15.0, 0.0)
+    private val toneTool = RelicChallengeConfigs.graingerMuseumToneTool("grainger-tone-tool", target, 15.0)
 
     @Test fun debugBuildUsesExistingFakeEngineAndReleaseStubIsSeparateSource() {
         assertTrue(BuildConfig.DEBUG)
@@ -62,6 +63,11 @@ class DebugChallengeSimulationTest {
         assertFalse(runPreset(south, "Heading misaligned").completed)
         assertFalse(runPreset(south, "Aligned but rotating").completed)
         assertTrue(runPreset(south, "All valid (hold)").completed)
+    }
+
+    @Test fun toneToolDebugPresetsSimulateQuietAndDetectedSound() {
+        assertFalse(runPreset(toneTool, "Quiet (inside target)").completed)
+        assertTrue(runPreset(toneTool, "Make noise (hold)").completed)
     }
 
     @Test fun invalidGpsAndPoorAccuracyBlockCompletion() {

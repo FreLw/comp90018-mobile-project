@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
@@ -37,6 +38,7 @@ import com.comp90018.app.sensors.RotationState
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.StabilityOutput
 import com.comp90018.app.sensors.StabilityState
+import com.comp90018.app.sensors.audio.SoundLevelOutput
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationOutput
 import com.comp90018.app.sensors.location.LocationCalculator
@@ -49,7 +51,7 @@ object ChallengeSimulationFactory {
 
     @Composable
     fun CalibrationPanel(treasureId: String, config: RelicChallengeConfig, radarRadiusMeters: Double,
-        state: TreasureChallengeUiState) {
+        state: TreasureChallengeUiState, onSimulateSound: () -> Unit) {
         var expanded by remember { mutableStateOf(false) }
         OutlinedButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
             Text(if (expanded) "Hide calibration diagnostics" else "Show calibration diagnostics")
@@ -81,6 +83,11 @@ object ChallengeSimulationFactory {
                 state.conditionStates.forEach { condition ->
                     Text("${condition.condition}: ${if (condition.satisfied) "pass" else "wait"}")
                 }
+                if (config.requiresSound && !state.completed) {
+                    Button(onClick = onSimulateSound, modifier = Modifier.fillMaxWidth()) {
+                        Text("DEBUG: simulate sustained noise")
+                    }
+                }
             }
         }
     }
@@ -97,6 +104,7 @@ data class DebugContextControls(
     val stationary: Boolean = true,
     val stable: Boolean = true,
     val rotationStill: Boolean = true,
+    val soundDetected: Boolean = false,
 ) {
     fun snapshot(config: RelicChallengeConfig, timestampNanos: Long): DeviceContextSnapshot {
         val coordinate = GeoCoordinate(
@@ -143,6 +151,15 @@ data class DebugContextControls(
                     timestampNanos = timestampNanos,
                 ),
             ),
+            sound = SoundLevelOutput(
+                decibels = if (soundDetected) {
+                    (config.soundThresholdDecibels ?: -30.0) + 5.0
+                } else {
+                    (config.soundThresholdDecibels ?: -30.0) - 20.0
+                },
+                validity = SensorValidity.VALID,
+                timestampNanos = timestampNanos,
+            ),
         )
     }
 }
@@ -175,6 +192,15 @@ fun debugScenarios(config: RelicChallengeConfig): List<DebugChallengeScenario> {
             DebugChallengeScenario("Aligned but rotating", valid.copy(rotationStill = false)),
             DebugChallengeScenario("All valid (hold)", valid),
         )
+        RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> listOf(
+            DebugChallengeScenario("Not horizontal", valid.copy(horizontal = false)),
+            DebugChallengeScenario("Horizontal but moving", valid.copy(stationary = false)),
+            DebugChallengeScenario("All valid (3s hold)", valid),
+        )
+        RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> listOf(
+            DebugChallengeScenario("Quiet (inside target)", valid),
+            DebugChallengeScenario("Make noise (hold)", valid.copy(soundDetected = true)),
+        )
         else -> emptyList()
     }
 }
@@ -188,7 +214,11 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
     ))
 
     @Composable
-    override fun Controls(state: TreasureChallengeUiState, onPhotoCaptured: (String) -> Unit) {
+    override fun Controls(
+        state: TreasureChallengeUiState,
+        onPhotoCaptured: (String) -> Unit,
+        onCompleteWithDebugSnapshot: (DeviceContextSnapshot) -> Unit,
+    ) {
         LaunchedEffect(this, controls, state.completed) {
             while (!state.completed) {
                 if (engine.isStarted) engine.emit(controls.snapshot(config, SystemClock.elapsedRealtimeNanos()))
@@ -196,10 +226,21 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
             }
         }
         Card(Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Text("DEBUG · Fake sensor context")
                 debugScenarios(config).forEach { scenario ->
-                    OutlinedButton(onClick = { controls = scenario.controls }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = {
+                        controls = scenario.controls
+                        // This remains a real evaluator completion, then uses the normal save/reveal flow.
+                        if (!config.photoActionRequired && scenario.label.startsWith("All valid")) {
+                            onCompleteWithDebugSnapshot(
+                                scenario.controls.snapshot(config, SystemClock.elapsedRealtimeNanos()),
+                            )
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) {
                         Text(scenario.label)
                     }
                 }
@@ -213,6 +254,9 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
                 Toggle("Stationary", controls.stationary) { controls = controls.copy(stationary = it) }
                 Toggle("Stable", controls.stable) { controls = controls.copy(stable = it) }
                 Toggle("Gyroscope still", controls.rotationStill) { controls = controls.copy(rotationStill = it) }
+                if (config.requiresSound) {
+                    Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it) }
+                }
                 if (config.photoActionRequired) {
                     Button(
                         onClick = { onPhotoCaptured("android.resource://com.comp90018.app/${R.drawable.treasure_postcard}") },

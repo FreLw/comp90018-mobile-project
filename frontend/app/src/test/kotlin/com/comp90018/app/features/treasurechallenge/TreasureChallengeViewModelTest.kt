@@ -138,6 +138,20 @@ class TreasureChallengeViewModelTest {
         }
     }
 
+    @Test fun debugSoundSimulationCompletesToneToolAfterLocationIsConfirmed() {
+        withHarness(toneToolConfig()) { viewModel, engine, clock ->
+            viewModel.start()
+            engine.emit(snapshot())
+            engine.emit(snapshot())
+            assertEquals(ChallengeInstruction.MAKE_SOUND, viewModel.uiState.value.instruction)
+
+            clock.now = 100L
+            viewModel.simulateSustainedSoundForDebug()
+            assertTrue(viewModel.uiState.value.completed)
+            assertEquals(ChallengeInstruction.COMPLETED, viewModel.uiState.value.instruction)
+        }
+    }
+
     @Test fun stoppingChallengeStopsEngineAndClearsActiveSensorUiState() {
         withHarness(wilsonConfig()) { viewModel, engine, _ ->
             viewModel.start()
@@ -241,6 +255,12 @@ class TreasureChallengeViewModelTest {
         targetLocation = target,
         insideRadiusMeters = 20.0,
         requiredHeadingDegrees = 0.0,
+    )
+
+    private fun toneToolConfig() = RelicChallengeConfigs.graingerMuseumToneTool(
+        challengeId = "tone-tool-test",
+        targetLocation = target,
+        insideRadiusMeters = 20.0,
     )
 
     private fun snapshot(

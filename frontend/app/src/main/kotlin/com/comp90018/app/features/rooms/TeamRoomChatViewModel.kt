@@ -20,6 +20,7 @@ data class TeamRoomChatUiState(
     val error: String? = null,
     val sending: Boolean = false,
     val leaving: Boolean = false,
+    val updatingTask: Boolean = false,
 )
 
 class TeamRoomChatViewModel(
@@ -37,7 +38,11 @@ class TeamRoomChatViewModel(
         roomSubscription = repository.observeRoom(roomId) { room, error ->
             mutableUiState.value = mutableUiState.value.copy(room = room, error = error)
             room?.memberIds?.let { memberIds -> repository.loadMembers(memberIds) { members ->
-                mutableUiState.value = mutableUiState.value.copy(members = members)
+                // Profile lookups are asynchronous. Ignore an older lookup when a
+                // newer room snapshot (for example, a teammate joining) arrived first.
+                if (mutableUiState.value.room?.memberIds == memberIds) {
+                    mutableUiState.value = mutableUiState.value.copy(members = members)
+                }
             } }
         }
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
@@ -71,6 +76,41 @@ class TeamRoomChatViewModel(
         val recipientId = mutableUiState.value.room?.memberIds?.firstOrNull { it != userId }
         repository.sendImage(roomId, userId, recipientId, senderName.ifBlank { "You" }, senderAvatarUrl, uri) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+        }
+    }
+
+    fun selectDestination(taskId: String, taskTitle: String) {
+        if (mutableUiState.value.updatingTask) return
+        mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
+        repository.selectTask(roomId, userId, taskId, taskTitle) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+        }
+    }
+
+    fun startHunt(onStarted: () -> Unit) {
+        val state = mutableUiState.value
+        if (state.updatingTask || state.room?.creatorId != userId || state.room.memberIds.size != 2 || state.room.taskId.isBlank()) return
+        mutableUiState.value = state.copy(updatingTask = true, error = null)
+        repository.startHunt(roomId, userId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+            if (error == null) onStarted()
+        }
+    }
+
+    fun terminateHunt() {
+        val state = mutableUiState.value
+        if (state.updatingTask || state.room?.creatorId != userId || state.room.taskStatus != "hunting") return
+        mutableUiState.value = state.copy(updatingTask = true, error = null)
+        repository.terminateHunt(roomId, userId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+        }
+    }
+
+    fun completeHuntTask() {
+        if (mutableUiState.value.updatingTask) return
+        mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
+        repository.completeHuntTask(roomId, userId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
         }
     }
 

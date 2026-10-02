@@ -262,7 +262,7 @@ object FirebaseSocialService {
         .whereEqualTo("toUid", currentUid)
         .addSnapshotListener { snapshot, exception ->
             if (exception != null) {
-                onChange(emptyList(), exception.localizedMessage ?: "Unable to load friend requests")
+                onChange(emptyList(), "Incoming friend requests: ${exception.localizedMessage ?: "Unable to load"}")
                 return@addSnapshotListener
             }
             val requests = snapshot?.documents.orEmpty()
@@ -286,7 +286,7 @@ object FirebaseSocialService {
         .whereEqualTo("fromUid", currentUid)
         .addSnapshotListener { snapshot, exception ->
             if (exception != null) {
-                onChange(emptyList(), exception.localizedMessage ?: "Unable to load sent friend requests")
+                onChange(emptyList(), "Outgoing friend requests: ${exception.localizedMessage ?: "Unable to load"}")
                 return@addSnapshotListener
             }
             val requests = snapshot?.documents.orEmpty().mapNotNull { document ->
@@ -314,7 +314,7 @@ object FirebaseSocialService {
     ): ListenerRegistration = firestore.collection("users").document(currentUid).collection("friends")
         .addSnapshotListener { snapshot, exception ->
             if (exception != null) {
-                onChange(emptyList(), exception.localizedMessage ?: "Unable to load friends")
+                onChange(emptyList(), "Friends list: ${exception.localizedMessage ?: "Unable to load"}")
                 return@addSnapshotListener
             }
             val friends = snapshot?.documents.orEmpty().mapNotNull { document ->
@@ -340,7 +340,7 @@ object FirebaseSocialService {
         .whereArrayContains("memberIds", currentUid)
         .addSnapshotListener { snapshot, exception ->
             if (exception != null) {
-                onChange(emptyMap(), exception.localizedMessage ?: "Unable to load chat activity")
+                onChange(emptyMap(), "Direct-chat activity: ${exception.localizedMessage ?: "Unable to load"}")
                 return@addSnapshotListener
             }
             val activityByFriend = snapshot?.documents.orEmpty()

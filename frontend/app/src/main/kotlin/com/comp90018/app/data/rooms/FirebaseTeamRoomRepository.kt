@@ -43,6 +43,18 @@ class FirebaseTeamRoomRepository(
     override fun loadMembers(memberIds: List<String>, onComplete: (List<TeamRoomMember>) -> Unit) =
         FirebaseTeamRoomService.loadMembers(firestore, memberIds, onComplete)
 
+    override fun selectTask(roomId: String, userId: String, taskId: String, taskTitle: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.selectTask(firestore, roomId, userId, taskId, taskTitle, onComplete)
+
+    override fun startHunt(roomId: String, userId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.startHunt(firestore, roomId, userId, onComplete)
+
+    override fun terminateHunt(roomId: String, userId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.terminateHunt(firestore, roomId, userId, onComplete)
+
+    override fun completeHuntTask(roomId: String, userId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.completeHuntTask(firestore, roomId, userId, onComplete)
+
     override fun sendMessage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, recipientId, senderName, senderAvatarUrl, text, onComplete)
     override fun sendImage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
