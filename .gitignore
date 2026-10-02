@@ -10,6 +10,11 @@ local.properties
 .gradle/
 .gradle-user/
 .gradle-project-cache/
+.gradle-local/
+frontend/.gradle-verification/
+
+# Local build/test scratch data
+/tmp/
 .idea/claudeCodeEditorTabs.xml
 /.idea
 .idea/claudeCodeEditorTabs.xml
