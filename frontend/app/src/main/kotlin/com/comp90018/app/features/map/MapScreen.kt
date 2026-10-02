@@ -175,7 +175,7 @@ fun MapScreen(
             lastKnownLocation = userLocation.lastKnownLocation,
         )
     }
-    val isLocationStale = userLocation.permission == LocationPermissionState.GRANTED &&
+    val isLocationStale = userLocation.permission.isGranted &&
         locationOutput.currentLocation == null &&
         locationOutput.lastKnownLocation != null
     val markerTransition = rememberInfiniteTransition(label = "map_quest_marker")
@@ -265,7 +265,7 @@ fun MapScreen(
         }
 
         if (selectedRelic == null) {
-            if (userLocation.permission != LocationPermissionState.GRANTED) {
+            if (!userLocation.permission.isGranted) {
                 LocationPermissionPrompt(
                     onPermissionGranted = onEnableLocation,
                     modifier = Modifier
@@ -679,6 +679,7 @@ private fun TreasureDetailScreen(
                                 isFound = isFound,
                                 navigating = navigating,
                                 proximityStage = proximityStage,
+                                hasPreciseLocation = locationOutput.permission.canUnlockTreasure,
                                 onNavigate = { navigating = true },
                                 onArrived = onStartChallenge ?: if (relic.challengeConfig?.type in LOCAL_HUNT_CHALLENGE_TYPES) {
                                     { stage = TreasureHuntStage.SEARCHING }
@@ -778,6 +779,7 @@ private fun TreasureInformationPanel(
     isFound: Boolean,
     navigating: Boolean,
     proximityStage: HuntProximityStage,
+    hasPreciseLocation: Boolean,
     onNavigate: () -> Unit,
     onArrived: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -800,7 +802,7 @@ private fun TreasureInformationPanel(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Button(onClick = { onArrived?.invoke() },
-                enabled = onArrived != null && navigating && proximityStage == HuntProximityStage.HUNT_READY,
+                enabled = onArrived != null && hasPreciseLocation && navigating && proximityStage == HuntProximityStage.HUNT_READY,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                 Image(painterResource(R.drawable.map_arrived_symbol), null, modifier = Modifier.size(25.dp))
                 Spacer(Modifier.width(6.dp))
@@ -871,13 +873,13 @@ private fun TreasureInformationPanel(
                         colors = CardDefaults.cardColors(containerColor = BrandSoft),
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(if (onArrived == null) "Challenge not configured" else when (proximityStage) {
+                            Text(if (onArrived == null) "Challenge not configured" else if (!hasPreciseLocation) "Precise location required" else when (proximityStage) {
                                 HuntProximityStage.HUNT_READY -> "You've reached the search area"
                                 HuntProximityStage.NEARBY -> "Treasure signal detected nearby"
                                 HuntProximityStage.UNKNOWN -> "Waiting for a usable location"
                                 HuntProximityStage.FAR -> "The trail is awake"
                             }, color = Brand, style = MaterialTheme.typography.titleMedium)
-                            Text(if (onArrived == null) "This treasure has no challenge configuration in Firestore yet." else when (proximityStage) {
+                            Text(if (onArrived == null) "This treasure has no challenge configuration in Firestore yet." else if (!hasPreciseLocation) "Switch location permission to Precise before starting the hunt." else when (proximityStage) {
                                 HuntProximityStage.HUNT_READY -> "Start Hunt when you're ready."
                                 HuntProximityStage.NEARBY -> "Keep moving toward ${relic.locationName} to reach the search area."
                                 HuntProximityStage.UNKNOWN -> "Check location access and wait for a current position."

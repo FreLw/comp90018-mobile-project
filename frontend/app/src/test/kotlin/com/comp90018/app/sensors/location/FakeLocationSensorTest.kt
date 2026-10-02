@@ -98,4 +98,19 @@ class FakeLocationSensorTest {
 
         assertEquals(ProximityState.INSIDE, sensor.output.value.proximity)
     }
+
+    @Test
+    fun approximatePermissionReportsLocationButCannotUnlockTreasure() {
+        val sensor = FakeLocationSensor(permission = LocationPermissionState.APPROXIMATE)
+
+        sensor.setTargetLocation(target)
+        sensor.start()
+        sensor.updateCurrentLocation(nearbyUserLocation)
+
+        val output = sensor.output.value
+        assertEquals(LocationPermissionState.APPROXIMATE, output.permission)
+        assertEquals(true, output.permission.isGranted)
+        assertEquals(false, output.permission.canUnlockTreasure)
+        assertEquals(ProximityState.INSIDE, output.proximity)
+    }
 }

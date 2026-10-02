@@ -41,12 +41,12 @@ class LocationCalculatorTest {
             targetLocation = oldQuad,
             timestampNanos = 42_000L,
             config = LocationConfig(insideRadiusMeters = 15.0, nearbyRadiusMeters = 80.0),
-            permission = LocationPermissionState.GRANTED,
+            permission = LocationPermissionState.PRECISE,
             availability = LocationAvailabilityState.AVAILABLE,
             accuracyMeters = 7.5,
         )
 
-        assertEquals(LocationPermissionState.GRANTED, output.permission)
+        assertEquals(LocationPermissionState.PRECISE, output.permission)
         assertEquals(LocationAvailabilityState.AVAILABLE, output.availability)
         assertEquals(7.5, output.accuracyMeters)
         assertEquals(42_000L, output.timestampNanos)
