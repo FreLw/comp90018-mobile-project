@@ -3,6 +3,7 @@ package com.comp90018.app.sensors.location
 import com.comp90018.app.sensors.SensorValidity
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -17,10 +18,13 @@ object LocationCalculator {
         permission: LocationPermissionState = LocationPermissionState.UNKNOWN,
         availability: LocationAvailabilityState = LocationAvailabilityState.UNKNOWN,
         accuracyMeters: Double? = null,
+        lastKnownLocation: GeoCoordinate? = currentLocation,
+        previousProximity: ProximityState = ProximityState.UNKNOWN,
     ): LocationOutput {
         if (currentLocation == null || targetLocation == null) {
             return LocationOutput(
                 currentLocation = currentLocation,
+                lastKnownLocation = lastKnownLocation,
                 targetLocation = targetLocation,
                 validity = SensorValidity.UNKNOWN,
                 permission = permission,
@@ -32,6 +36,7 @@ object LocationCalculator {
         if (!currentLocation.isValid() || !targetLocation.isValid()) {
             return LocationOutput(
                 currentLocation = currentLocation,
+                lastKnownLocation = lastKnownLocation,
                 targetLocation = targetLocation,
                 validity = SensorValidity.UNRELIABLE,
                 permission = permission,
@@ -46,10 +51,11 @@ object LocationCalculator {
 
         return LocationOutput(
             currentLocation = currentLocation,
+            lastKnownLocation = lastKnownLocation,
             targetLocation = targetLocation,
             distanceToTargetMeters = distance,
             targetBearingDegrees = bearing,
-            proximity = proximityState(distance, config.insideRadiusMeters, config.nearbyRadiusMeters),
+            proximity = stabilizedProximityState(distance, config, previousProximity),
             validity = SensorValidity.VALID,
             permission = permission,
             availability = availability,
@@ -97,6 +103,37 @@ object LocationCalculator {
             distanceMeters <= insideRadiusMeters -> ProximityState.INSIDE
             distanceMeters <= nearbyRadiusMeters -> ProximityState.NEARBY
             else -> ProximityState.OUTSIDE
+        }
+    }
+
+    fun stabilizedProximityState(
+        distanceMeters: Double,
+        config: LocationConfig,
+        previousProximity: ProximityState,
+    ): ProximityState {
+        val raw = proximityState(distanceMeters, config.insideRadiusMeters, config.nearbyRadiusMeters)
+        val hysteresis = config.proximityHysteresisMeters
+        if (hysteresis == 0.0 || previousProximity == ProximityState.UNKNOWN) return raw
+
+        return when (previousProximity) {
+            ProximityState.INSIDE -> {
+                if (distanceMeters <= config.insideRadiusMeters + hysteresis) ProximityState.INSIDE else raw
+            }
+            ProximityState.NEARBY -> {
+                when {
+                    distanceMeters <= max(0.0, config.insideRadiusMeters - hysteresis) -> ProximityState.INSIDE
+                    distanceMeters <= config.nearbyRadiusMeters + hysteresis -> ProximityState.NEARBY
+                    else -> ProximityState.OUTSIDE
+                }
+            }
+            ProximityState.OUTSIDE -> {
+                if (raw == ProximityState.NEARBY && distanceMeters >= config.nearbyRadiusMeters - hysteresis) {
+                    ProximityState.OUTSIDE
+                } else {
+                    raw
+                }
+            }
+            ProximityState.UNKNOWN -> raw
         }
     }
 

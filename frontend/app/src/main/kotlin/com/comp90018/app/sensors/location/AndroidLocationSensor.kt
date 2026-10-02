@@ -54,6 +54,7 @@ class AndroidLocationSensor(
     private var activeConfig = config
     private var targetLocation: GeoCoordinate? = null
     private var lastReading: LocationReading? = null
+    private var lastStableProximity: ProximityState = ProximityState.UNKNOWN
     private var started = false
     private var providerAvailable: Boolean? = null
 
@@ -84,6 +85,9 @@ class AndroidLocationSensor(
     }
 
     override fun setTargetLocation(targetLocation: GeoCoordinate?) {
+        if (this.targetLocation != targetLocation) {
+            lastStableProximity = ProximityState.UNKNOWN
+        }
         this.targetLocation = targetLocation
         refreshOutput()
     }
@@ -97,17 +101,19 @@ class AndroidLocationSensor(
             insideRadiusMeters = insideRadiusMeters,
             nearbyRadiusMeters = nearbyRadiusMeters,
         )
+        lastStableProximity = ProximityState.UNKNOWN
         setTargetLocation(targetLocation)
     }
 
     @SuppressLint("MissingPermission")
     override fun start() {
-        if (permissionState() != LocationPermissionState.GRANTED) {
+        if (!permissionState().isGranted) {
             started = false
             providerAvailable = null
             handler.removeCallbacks(staleRefresh)
             fusedLocationClient.removeLocationUpdates(callback)
             resetStaleRecovery()
+            lastStableProximity = ProximityState.UNKNOWN
             refreshOutput()
             return
         }
@@ -137,16 +143,18 @@ class AndroidLocationSensor(
         handler.removeCallbacks(staleRefresh)
         fusedLocationClient.removeLocationUpdates(callback)
         resetStaleRecovery()
+        lastStableProximity = ProximityState.UNKNOWN
         refreshOutput()
     }
 
     fun refreshPermissionState() {
-        if (permissionState() != LocationPermissionState.GRANTED) {
+        if (!permissionState().isGranted) {
             started = false
             providerAvailable = null
             handler.removeCallbacks(staleRefresh)
             fusedLocationClient.removeLocationUpdates(callback)
             resetStaleRecovery()
+            lastStableProximity = ProximityState.UNKNOWN
         }
         refreshOutput()
     }
@@ -170,7 +178,7 @@ class AndroidLocationSensor(
     private fun refreshOutput() {
         val permission = permissionState()
         val now = SystemClock.elapsedRealtimeNanos()
-        val canUseReading = permission == LocationPermissionState.GRANTED && started
+        val canUseReading = permission.isGranted && started
         val reading = if (canUseReading) {
             LocationReadingFilter.accepted(lastReading, now, activeConfig)
         } else {
@@ -189,7 +197,7 @@ class AndroidLocationSensor(
         }
 
         val availability = when {
-            permission != LocationPermissionState.GRANTED -> LocationAvailabilityState.UNAVAILABLE
+            !permission.isGranted -> LocationAvailabilityState.UNAVAILABLE
             !started -> LocationAvailabilityState.UNKNOWN
             expired -> LocationAvailabilityState.EXPIRED
             staleRecoveryPending -> LocationAvailabilityState.RECOVERING
@@ -198,9 +206,13 @@ class AndroidLocationSensor(
             else -> LocationAvailabilityState.UNKNOWN
         }
 
+        if (reading == null) {
+            lastStableProximity = ProximityState.UNKNOWN
+        }
         _output.value = if (reading == null) {
             LocationOutput(
                 currentLocation = null,
+                lastKnownLocation = if (canUseReading) lastReading?.coordinate else null,
                 targetLocation = targetLocation,
                 proximity = ProximityState.UNKNOWN,
                 validity = readingValidity,
@@ -218,7 +230,11 @@ class AndroidLocationSensor(
                 permission = permission,
                 availability = availability,
                 accuracyMeters = reading.accuracyMeters,
-            )
+                lastKnownLocation = reading.coordinate,
+                previousProximity = lastStableProximity,
+            ).also { output ->
+                lastStableProximity = output.proximity
+            }
         }
     }
 
@@ -230,7 +246,7 @@ class AndroidLocationSensor(
 
     @SuppressLint("MissingPermission")
     private fun attemptStaleRecovery() {
-        if (permissionState() != LocationPermissionState.GRANTED) {
+        if (!permissionState().isGranted) {
             staleRecoveryPending = false
             return
         }
@@ -266,10 +282,10 @@ class AndroidLocationSensor(
     private fun permissionState(): LocationPermissionState {
         val fine = ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION)
         val coarse = ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION)
-        return if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) {
-            LocationPermissionState.GRANTED
-        } else {
-            LocationPermissionState.DENIED
+        return when {
+            fine == PackageManager.PERMISSION_GRANTED -> LocationPermissionState.PRECISE
+            coarse == PackageManager.PERMISSION_GRANTED -> LocationPermissionState.APPROXIMATE
+            else -> LocationPermissionState.DENIED
         }
     }
 

@@ -4,6 +4,8 @@ import com.comp90018.app.sensors.SensorValidity
 
 data class LocationOutput(
     val currentLocation: GeoCoordinate? = null,
+    /** Last raw fix, kept even once [currentLocation] is nulled out for being stale/inaccurate, so the map can fall back to an approximate dot instead of showing nothing. */
+    val lastKnownLocation: GeoCoordinate? = currentLocation,
     val targetLocation: GeoCoordinate? = null,
     val distanceToTargetMeters: Double? = null,
     val targetBearingDegrees: Double? = null,
