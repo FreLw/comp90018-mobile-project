@@ -6,9 +6,7 @@ import android.net.Uri
 import android.widget.ImageView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +15,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -58,25 +58,43 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.contextengine.challenge.ChallengeInstruction
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
+import com.comp90018.app.BuildConfig
 import com.comp90018.app.sensors.camera.CameraXCapture
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
 
 @Composable
 fun TreasureChallengeRoute(
     config: RelicChallengeConfig,
-    @DrawableRes historicalImageResId: Int? = null,
+    treasureId: String,
+    radarRadiusMeters: Double,
     preciseLocationEnabled: Boolean = true,
+    debugSimulationEnabled: Boolean = false,
+    onChallengeCompleted: ((String?) -> Unit) -> Unit,
+    onDiscoverySaved: (String?) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val simulation = remember(config.challengeId, debugSimulationEnabled) {
+        if (debugSimulationEnabled) ChallengeSimulationFactory.create(config) else null
+    }
     val viewModel: TreasureChallengeViewModel = viewModel(
-        key = "treasure_challenge_${config.challengeId}_$preciseLocationEnabled",
-        factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled),
+        key = "treasure_challenge_${config.challengeId}_${preciseLocationEnabled}_$debugSimulationEnabled",
+        factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled,
+            simulation?.let { session -> { _: kotlinx.coroutines.CoroutineScope -> session.engine } }),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val discoverySave = remember(config.challengeId) { ChallengeDiscoverySave() }
+
+    LaunchedEffect(config.challengeId, state.completed) {
+        if (state.completed) discoverySave.onChallengeCompleted(onChallengeCompleted)
+    }
+    LaunchedEffect(config.challengeId, state.completed, discoverySave.status) {
+        if (canOpenTreasureReveal(state.completed, discoverySave.status)) {
+            onDiscoverySaved(state.capturedPhotoUri)
+        }
+    }
 
     DisposableEffect(lifecycleOwner.lifecycle, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -96,7 +114,13 @@ fun TreasureChallengeRoute(
 
     TreasureChallengeScreen(
         state = state,
-        historicalImageResId = historicalImageResId,
+        saveStatus = discoverySave.status,
+        saveError = discoverySave.error,
+        onRetrySave = { discoverySave.retry(onChallengeCompleted) },
+        simulation = simulation,
+        debugCalibrationInfo = if (BuildConfig.DEBUG) {
+            { ChallengeSimulationFactory.CalibrationPanel(treasureId, config, radarRadiusMeters, state) }
+        } else null,
         onBack = onBack,
         onPhotoCaptureStarted = viewModel::onPhotoCaptureStarted,
         onPhotoCaptured = viewModel::onPhotoCaptured,
@@ -109,7 +133,11 @@ fun TreasureChallengeRoute(
 @Composable
 fun TreasureChallengeScreen(
     state: TreasureChallengeUiState,
-    @DrawableRes historicalImageResId: Int? = null,
+    saveStatus: DiscoverySaveStatus = DiscoverySaveStatus.WAITING,
+    saveError: String? = null,
+    onRetrySave: () -> Unit = {},
+    simulation: ChallengeSimulationSession? = null,
+    debugCalibrationInfo: (@Composable () -> Unit)? = null,
     onBack: () -> Unit,
     onPhotoCaptureStarted: () -> Unit,
     onPhotoCaptured: (String) -> Unit,
@@ -129,21 +157,21 @@ fun TreasureChallengeScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ChallengeStatusCard(state)
+            debugCalibrationInfo?.invoke()
             LinearProgressIndicator(
                 progress = { state.holdProgress.toFloat() },
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO &&
+            if (simulation == null && state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO &&
                 (state.actionReady || state.capturedPhotoUri != null)
             ) {
                 UnionPhotoPanel(
                     state = state,
-                    historicalImageResId = historicalImageResId,
                     onPhotoCaptureStarted = onPhotoCaptureStarted,
                     onPhotoCaptured = onPhotoCaptured,
                     onCameraError = onCameraError,
@@ -152,9 +180,23 @@ fun TreasureChallengeScreen(
             if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed) {
                 MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
             }
+            if (simulation != null && !state.completed) {
+                simulation.Controls(state = state, onPhotoCaptured = onPhotoCaptured)
+            }
             if (state.completed) {
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                    Text("Return to map")
+                when (saveStatus) {
+                    DiscoverySaveStatus.WAITING, DiscoverySaveStatus.SAVING -> {
+                        CircularProgressIndicator()
+                        Text("Saving discovery…")
+                    }
+                    DiscoverySaveStatus.SAVED -> Text("Discovery saved to your collection")
+                    DiscoverySaveStatus.FAILED -> {
+                        Text("Couldn't save discovery: ${saveError ?: "Please try again."}",
+                            color = MaterialTheme.colorScheme.error)
+                        Button(onClick = onRetrySave, modifier = Modifier.fillMaxWidth()) {
+                            Text("Retry Save")
+                        }
+                    }
                 }
             }
         }
@@ -228,7 +270,6 @@ private fun MicrophonePermissionPanel(onPermissionGranted: () -> Unit) {
 @Composable
 private fun UnionPhotoPanel(
     state: TreasureChallengeUiState,
-    @DrawableRes historicalImageResId: Int?,
     onPhotoCaptureStarted: () -> Unit,
     onPhotoCaptured: (String) -> Unit,
     onCameraError: (String) -> Unit,
@@ -237,8 +278,6 @@ private fun UnionPhotoPanel(
     if (capturedUri != null) {
         CapturedPhotoReveal(
             capturedPhotoUri = capturedUri,
-            completed = state.completed,
-            historicalImageResId = historicalImageResId,
         )
         return
     }
@@ -310,45 +349,19 @@ private fun UnionPhotoPanel(
 @Composable
 private fun CapturedPhotoReveal(
     capturedPhotoUri: String,
-    completed: Boolean,
-    @DrawableRes historicalImageResId: Int?,
 ) {
-    var revealHistorical by remember(capturedPhotoUri) { mutableStateOf(false) }
-    LaunchedEffect(completed, historicalImageResId, capturedPhotoUri) {
-        if (completed && historicalImageResId != null) {
-            delay(1_200L)
-            revealHistorical = true
-        }
-    }
     Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Crossfade(targetState = revealHistorical, label = "lost_lake_reveal") { showHistorical ->
-                Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
-                    if (showHistorical && historicalImageResId != null) {
-                        androidx.compose.foundation.Image(
-                            painter = painterResource(historicalImageResId),
-                            contentDescription = "Historical Lost Lake",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        AndroidView(
-                            factory = {
-                                ImageView(it).apply {
-                                    scaleType = ImageView.ScaleType.CENTER_CROP
-                                    setImageURI(Uri.parse(capturedPhotoUri))
-                                }
-                            },
-                            update = { it.setImageURI(Uri.parse(capturedPhotoUri)) },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-            }
-            if (completed && historicalImageResId == null) {
-                Text(
-                    "Historical Lost Lake image pending asset integration",
-                    style = MaterialTheme.typography.bodySmall,
+            Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
+                AndroidView(
+                    factory = {
+                        ImageView(it).apply {
+                            scaleType = ImageView.ScaleType.CENTER_CROP
+                            setImageURI(Uri.parse(capturedPhotoUri))
+                        }
+                    },
+                    update = { it.setImageURI(Uri.parse(capturedPhotoUri)) },
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }

@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.annotation.DrawableRes
 import com.comp90018.app.R
 import com.comp90018.app.features.map.MapRelic
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ fun RemoteTreasureImage(
     contentDescription: String,
     modifier: Modifier = Modifier,
     silhouette: Boolean = false,
+    @DrawableRes fallbackResId: Int = R.drawable.treasure_unknown,
 ) {
     val bitmap by produceState<ImageBitmap?>(initialValue = null, imageUrl) {
         value = withContext(Dispatchers.IO) {
@@ -45,7 +47,7 @@ fun RemoteTreasureImage(
         )
     } else {
         Image(
-            painter = painterResource(R.drawable.treasure_unknown),
+            painter = painterResource(fallbackResId),
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = ContentScale.Fit,
@@ -65,5 +67,18 @@ fun TreasurePrototypeImage(
         contentDescription = if (discovered) relic.name else "Locked ${relic.name} silhouette",
         modifier = modifier,
         silhouette = !discovered,
+        fallbackResId = treasureArtworkResource(relic.artworkKey),
     )
+}
+
+/** The same Firestore artwork key drives map, collection, and post-challenge artwork. */
+@DrawableRes
+fun treasureArtworkResource(artworkKey: String): Int = when (artworkKey) {
+    "treasure_postcard" -> R.drawable.treasure_postcard
+    "treasure_rosette" -> R.drawable.treasure_rosette
+    "treasure_fern" -> R.drawable.treasure_fern
+    "treasure_atlas" -> R.drawable.treasure_atlas
+    "treasure_glasshouse" -> R.drawable.treasure_glasshouse
+    "treasure_press" -> R.drawable.treasure_press
+    else -> R.drawable.treasure_unknown
 }

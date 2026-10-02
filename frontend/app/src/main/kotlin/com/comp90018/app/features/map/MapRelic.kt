@@ -15,6 +15,7 @@ data class MapRelic(
     val coordinateSource: String = "",
     val prototypeDesign: String = "",
     val prototypeImageUrl: String = "",
+    val artworkKey: String = "",
     val historicalImageUrl: String = "",
     val historicalImageCredit: String = "",
     val sourceTitle: String = "",
@@ -22,6 +23,7 @@ data class MapRelic(
     val treasureType: String = "",
     val coordinate: GeoCoordinate,
     val insideRadiusMeters: Double = 20.0,
+    val radarRadiusMeters: Double = 100.0,
     val nearbyRadiusMeters: Double = 120.0,
     val sortOrder: Int = Int.MAX_VALUE,
     val challengeConfig: RelicChallengeConfig? = null,
@@ -33,5 +35,3 @@ data class MapRelic(
             .filter { it.isNotBlank() }
             .joinToString(" ") { word -> word.replaceFirstChar(Char::uppercase) }
 }
-
-val sampleMapRelics: List<MapRelic> = NonFinalChallengeCatalog.relics

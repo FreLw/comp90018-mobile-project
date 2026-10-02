@@ -154,6 +154,24 @@ class TreasureChallengeViewModelTest {
         }
     }
 
+    @Test fun completedChallengeSurvivesLifecycleStopAndStartForSaveRetry() {
+        withHarness(wilsonConfig()) { viewModel, engine, clock ->
+            viewModel.start()
+            engine.emit(snapshot())
+            engine.emit(snapshot())
+            clock.now = 3_200_000_000L
+            engine.emit(snapshot(timestampNanos = clock.now))
+            assertTrue(viewModel.uiState.value.completed)
+
+            viewModel.stop()
+            assertTrue(viewModel.uiState.value.completed)
+            assertFalse(viewModel.uiState.value.active)
+            viewModel.start()
+            assertTrue(viewModel.uiState.value.completed)
+            assertFalse(engine.isStarted)
+        }
+    }
+
     @Test fun switchingChallengesCreatesFreshEvaluatorAndClearsPhotoReadiness() {
         withHarness(unionConfig()) { viewModel, engine, clock ->
             viewModel.start()
