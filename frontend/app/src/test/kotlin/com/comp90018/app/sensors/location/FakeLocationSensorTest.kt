@@ -80,4 +80,22 @@ class FakeLocationSensorTest {
 
         assertEquals(ProximityState.OUTSIDE, sensor.output.value.proximity)
     }
+
+    @Test
+    fun proximityHysteresisPreventsFlickerAroundInsideBoundary() {
+        val sensor = FakeLocationSensor(
+            LocationConfig(
+                insideRadiusMeters = 20.0,
+                nearbyRadiusMeters = 120.0,
+                proximityHysteresisMeters = 5.0,
+            ),
+        )
+
+        sensor.setTargetLocation(target)
+        sensor.start()
+        sensor.updateCurrentLocation(target)
+        sensor.updateCurrentLocation(GeoCoordinate(-37.798156, 144.96072))
+
+        assertEquals(ProximityState.INSIDE, sensor.output.value.proximity)
+    }
 }

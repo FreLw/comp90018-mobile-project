@@ -54,6 +54,7 @@ class AndroidLocationSensor(
     private var activeConfig = config
     private var targetLocation: GeoCoordinate? = null
     private var lastReading: LocationReading? = null
+    private var lastStableProximity: ProximityState = ProximityState.UNKNOWN
     private var started = false
     private var providerAvailable: Boolean? = null
 
@@ -84,6 +85,9 @@ class AndroidLocationSensor(
     }
 
     override fun setTargetLocation(targetLocation: GeoCoordinate?) {
+        if (this.targetLocation != targetLocation) {
+            lastStableProximity = ProximityState.UNKNOWN
+        }
         this.targetLocation = targetLocation
         refreshOutput()
     }
@@ -97,6 +101,7 @@ class AndroidLocationSensor(
             insideRadiusMeters = insideRadiusMeters,
             nearbyRadiusMeters = nearbyRadiusMeters,
         )
+        lastStableProximity = ProximityState.UNKNOWN
         setTargetLocation(targetLocation)
     }
 
@@ -108,6 +113,7 @@ class AndroidLocationSensor(
             handler.removeCallbacks(staleRefresh)
             fusedLocationClient.removeLocationUpdates(callback)
             resetStaleRecovery()
+            lastStableProximity = ProximityState.UNKNOWN
             refreshOutput()
             return
         }
@@ -137,6 +143,7 @@ class AndroidLocationSensor(
         handler.removeCallbacks(staleRefresh)
         fusedLocationClient.removeLocationUpdates(callback)
         resetStaleRecovery()
+        lastStableProximity = ProximityState.UNKNOWN
         refreshOutput()
     }
 
@@ -147,6 +154,7 @@ class AndroidLocationSensor(
             handler.removeCallbacks(staleRefresh)
             fusedLocationClient.removeLocationUpdates(callback)
             resetStaleRecovery()
+            lastStableProximity = ProximityState.UNKNOWN
         }
         refreshOutput()
     }
@@ -198,6 +206,9 @@ class AndroidLocationSensor(
             else -> LocationAvailabilityState.UNKNOWN
         }
 
+        if (reading == null) {
+            lastStableProximity = ProximityState.UNKNOWN
+        }
         _output.value = if (reading == null) {
             LocationOutput(
                 currentLocation = null,
@@ -220,7 +231,10 @@ class AndroidLocationSensor(
                 availability = availability,
                 accuracyMeters = reading.accuracyMeters,
                 lastKnownLocation = reading.coordinate,
-            )
+                previousProximity = lastStableProximity,
+            ).also { output ->
+                lastStableProximity = output.proximity
+            }
         }
     }
 

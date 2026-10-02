@@ -15,9 +15,13 @@ class FakeLocationSensor(
     private var targetLocation: GeoCoordinate? = null
     private var timestampNanos: Long? = null
     private var accuracyMeters: Double? = null
+    private var lastStableProximity: ProximityState = ProximityState.UNKNOWN
     private var started = false
 
     override fun setTargetLocation(targetLocation: GeoCoordinate?) {
+        if (this.targetLocation != targetLocation) {
+            lastStableProximity = ProximityState.UNKNOWN
+        }
         this.targetLocation = targetLocation
         refreshOutput()
     }
@@ -31,6 +35,7 @@ class FakeLocationSensor(
             insideRadiusMeters = insideRadiusMeters,
             nearbyRadiusMeters = nearbyRadiusMeters,
         )
+        lastStableProximity = ProximityState.UNKNOWN
         setTargetLocation(targetLocation)
     }
 
@@ -41,6 +46,7 @@ class FakeLocationSensor(
 
     override fun stop() {
         started = false
+        lastStableProximity = ProximityState.UNKNOWN
         refreshOutput()
     }
 
@@ -65,7 +71,10 @@ class FakeLocationSensor(
                 permission = LocationPermissionState.GRANTED,
                 availability = LocationAvailabilityState.AVAILABLE,
                 accuracyMeters = accuracyMeters,
-            )
+                previousProximity = lastStableProximity,
+            ).also { output ->
+                lastStableProximity = output.proximity
+            }
         } else {
             LocationOutput(
                 currentLocation = currentLocation,
