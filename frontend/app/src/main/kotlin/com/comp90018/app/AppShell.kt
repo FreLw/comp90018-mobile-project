@@ -120,6 +120,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     savingTreasureId = treasureCollectionState.savingTreasureId,
                     preciseLocationEnabled = preciseLocationEnabled,
+                    hapticsEnabled = settings?.haptics ?: true,
                     userLocation = userLocation,
                     onEnableLocation = userLocationViewModel::retryAfterPermissionGranted,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,

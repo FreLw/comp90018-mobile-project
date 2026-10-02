@@ -30,11 +30,23 @@ class TreasureCollectionViewModelTest {
         assertEquals(setOf("wilson_hall_rosette"), viewModel.uiState.value.discoveredIds)
         assertNull(viewModel.uiState.value.savingTreasureId)
     }
+
+    @Test
+    fun alreadyDiscoveredTreasureDoesNotCallRepositoryAgain() {
+        val repository = FakeTreasureCollectionRepository(setOf("union_lawn_lost_lake"))
+        val viewModel = TreasureCollectionViewModel(repository, "user-1")
+        var callbackCount = 0
+        viewModel.addDiscoveredTreasure("union_lawn_lost_lake") { callbackCount++ }
+        assertEquals(1, callbackCount)
+        assertEquals(0, repository.writeCount)
+    }
 }
 
 private class FakeTreasureCollectionRepository(
     initialIds: Set<String> = emptySet(),
 ) : TreasureCollectionRepository {
+    var writeCount = 0
+        private set
     private var ids = initialIds
     private var observer: ((Set<String>, String?) -> Unit)? = null
 
@@ -52,6 +64,7 @@ private class FakeTreasureCollectionRepository(
         treasureId: String,
         onComplete: (String?) -> Unit,
     ) {
+        writeCount++
         ids = ids + treasureId
         observer?.invoke(ids, null)
         onComplete(null)

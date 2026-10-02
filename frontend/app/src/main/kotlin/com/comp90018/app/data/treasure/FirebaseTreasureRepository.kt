@@ -2,6 +2,7 @@ package com.comp90018.app.data.treasure
 
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
+import com.comp90018.app.contextengine.challenge.CalibrationStatus
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.sensors.location.GeoCoordinate
@@ -58,6 +59,7 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
         coordinateSource = getString("coordinateSource")?.trim().orEmpty(),
         prototypeDesign = getString("prototypeDesign")?.trim().orEmpty(),
         prototypeImageUrl = getString("prototypeImageUrl")?.trim().orEmpty(),
+        artworkKey = getString("artworkKey")?.trim().orEmpty(),
         historicalImageUrl = getString("historicalImageUrl")?.trim().orEmpty(),
         historicalImageCredit = getString("historicalImageCredit")?.trim().orEmpty(),
         sourceTitle = getString("sourceTitle")?.trim().orEmpty(),
@@ -65,19 +67,20 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
         treasureType = getString("treasureType")?.trim().orEmpty(),
         coordinate = coordinate,
         insideRadiusMeters = insideRadiusMeters,
+        radarRadiusMeters = number("radarRadiusMeters")?.takeIf { it.isFinite() && it >= insideRadiusMeters } ?: 100.0,
         nearbyRadiusMeters = number("nearbyRadiusMeters") ?: 60.0,
         sortOrder = number("sortOrder")?.toInt() ?: Int.MAX_VALUE,
-        challengeConfig = toChallengeConfig(coordinate, insideRadiusMeters),
+        challengeConfig = parseChallengeConfig(get("challenge") as? Map<*, *>, coordinate, insideRadiusMeters),
     )
 }
 
-/** Parses the `challenge` map that Firestore treasure documents embed (see database/treasures.json). */
-@Suppress("UNCHECKED_CAST")
-private fun DocumentSnapshot.toChallengeConfig(
+/** Parses Firestore challenge data without manufacturing a challenge for a missing map. */
+internal fun parseChallengeConfig(
+    challenge: Map<*, *>?,
     targetLocation: GeoCoordinate,
     insideRadiusMeters: Double,
 ): RelicChallengeConfig? {
-    val challenge = get("challenge") as? Map<String, Any?> ?: return null
+    challenge ?: return null
     if (challenge["enabled"] == false) return null
     val challengeId = (challenge["challengeId"] as? String)?.trim().takeUnless { it.isNullOrBlank() } ?: return null
     val type = (challenge["type"] as? String)?.let { raw -> runCatching { RelicChallengeType.valueOf(raw) }.getOrNull() }
@@ -101,6 +104,12 @@ private fun DocumentSnapshot.toChallengeConfig(
             photoActionRequired = challenge["photoActionRequired"] as? Boolean ?: false,
             requiresSound = requiresSound,
             soundThresholdDecibels = soundThresholdDecibels,
+            calibrationStatus = when ((challenge["calibrationStatus"] as? String)?.lowercase()) {
+                "pending" -> CalibrationStatus.PENDING
+                "calibrated" -> CalibrationStatus.CALIBRATED
+                else -> CalibrationStatus.UNKNOWN
+            },
+            headingReference = (challenge["headingReference"] as? String)?.trim()?.takeIf(String::isNotBlank),
         )
     }.getOrNull()
 }

@@ -11,6 +11,7 @@ import com.comp90018.app.contextengine.DeviceContextSnapshot
 import com.comp90018.app.contextengine.challenge.ChallengeEvent
 import com.comp90018.app.contextengine.challenge.ChallengeInstruction
 import com.comp90018.app.contextengine.challenge.ChallengeProgress
+import com.comp90018.app.contextengine.challenge.ChallengeConditionState
 import com.comp90018.app.contextengine.challenge.ChallengeRuleEvaluator
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
@@ -49,6 +50,8 @@ data class TreasureChallengeUiState(
     val capturedPhotoUri: String? = null,
     val cameraError: String? = null,
     val active: Boolean = false,
+    val latestSnapshot: DeviceContextSnapshot? = null,
+    val conditionStates: List<ChallengeConditionState> = emptyList(),
 )
 
 /**
@@ -75,6 +78,8 @@ class TreasureChallengeViewModel(
 
     fun start() {
         if (isActive) return
+        // A completed physical challenge survives a temporary Activity stop while discovery saves.
+        if (mutableUiState.value.completed) return
         isActive = true
         evaluator.reset()
         clearTransientState()
@@ -88,13 +93,14 @@ class TreasureChallengeViewModel(
     }
 
     fun stop() {
+        val completedState = mutableUiState.value.takeIf { it.completed }
         collectionJob?.cancel()
         collectionJob = null
         isActive = false
         contextEngine.stop()
         evaluator.reset()
         clearTransientState()
-        mutableUiState.value = initialUiState(config)
+        mutableUiState.value = completedState?.copy(active = false) ?: initialUiState(config)
     }
 
     fun restart() {
@@ -173,6 +179,8 @@ class TreasureChallengeViewModel(
             actionReady = actionReady,
             completed = completed,
             angularErrorDegrees = snapshot.orientation.direction.angularErrorDegrees,
+            latestSnapshot = snapshot,
+            conditionStates = progress.requiredConditions,
             cameraState = when {
                 !config.photoActionRequired -> ChallengeCameraState.NOT_REQUIRED
                 completed && previous.capturedPhotoUri != null -> ChallengeCameraState.CAPTURED
@@ -194,11 +202,12 @@ class TreasureChallengeViewModel(
             context: Context,
             config: RelicChallengeConfig,
             preciseLocationEnabled: Boolean = true,
+            engineFactoryOverride: ((CoroutineScope) -> DeviceContextEngine)? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = TreasureChallengeViewModel(
                 initialConfig = config,
-                engineFactory = { scope ->
+                engineFactory = engineFactoryOverride ?: { scope ->
                     AndroidDeviceContextEngine(
                         context = context.applicationContext,
                         scope = scope,

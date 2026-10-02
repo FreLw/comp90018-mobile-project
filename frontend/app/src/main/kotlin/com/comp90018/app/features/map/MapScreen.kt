@@ -80,6 +80,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -106,6 +108,7 @@ import com.comp90018.app.GothicTreasureFontFamily
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.R
+import com.comp90018.app.BuildConfig
 import com.comp90018.app.RelicRed
 import com.comp90018.app.features.treasure.RemoteTreasureImage
 import com.comp90018.app.features.treasure.TreasurePrototypeImage
@@ -133,16 +136,17 @@ fun MapScreen(
     discoveredTreasureIds: Set<String>,
     savingTreasureId: String?,
     preciseLocationEnabled: Boolean,
+    hapticsEnabled: Boolean,
     userLocation: LocationOutput,
     onEnableLocation: () -> Unit,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
 ) {
-    val resolvedTreasures = remember(treasures) {
-        treasures.map(NonFinalChallengeCatalog::attachChallenge)
-    }
+    val resolvedTreasures = treasures
     var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
     var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var debugSimulationEnabled by remember { mutableStateOf(false) }
+    val revealCoordinator = remember { PostChallengeRevealCoordinator() }
     val foundRelicIds = discoveredTreasureIds
     val deviceHeading = rememberDeviceHeading()
     val activeRelic = detailRelic ?: selectedRelic
@@ -153,7 +157,7 @@ fun MapScreen(
             timestampNanos = userLocation.timestampNanos,
             config = LocationConfig(
                 insideRadiusMeters = activeRelic?.insideRadiusMeters ?: 20.0,
-                nearbyRadiusMeters = activeRelic?.nearbyRadiusMeters ?: 120.0,
+                nearbyRadiusMeters = activeRelic?.radarRadiusMeters ?: 100.0,
             ),
             permission = userLocation.permission,
             availability = userLocation.availability,
@@ -174,13 +178,30 @@ fun MapScreen(
         challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
     }
 
+    revealCoordinator.session?.let { session ->
+        PostChallengeRevealScreen(session) {
+            revealCoordinator.clear()
+            detailRelic = null
+            selectedRelic = null
+        }
+        return
+    }
+
     challengeRelic?.let { relic ->
         relic.challengeConfig?.let { config ->
             TreasureChallengeRoute(
                 config = config,
-                historicalImageResId = relic.historicalImageResId,
+                treasureId = relic.id,
+                radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                onBack = { challengeRelic = null },
+                debugSimulationEnabled = BuildConfig.DEBUG && debugSimulationEnabled,
+                onChallengeCompleted = { onComplete -> saveRelicDiscovery(relic, onCollectTreasure, onComplete) },
+                onDiscoverySaved = { capturedPhotoUri ->
+                    revealCoordinator.openAfterSave(relic, capturedPhotoUri)
+                    challengeRelic = null
+                    debugSimulationEnabled = false
+                },
+                onBack = { challengeRelic = null; debugSimulationEnabled = false },
             )
             return
         }
@@ -190,6 +211,8 @@ fun MapScreen(
         TreasureDetailScreen(
             relic = relic,
             locationOutput = locationOutput,
+            locationValidity = userLocation.validity,
+            hapticsEnabled = hapticsEnabled,
             deviceHeading = deviceHeading,
             isFound = relic.id in foundRelicIds,
             collecting = savingTreasureId == relic.id,
@@ -197,7 +220,7 @@ fun MapScreen(
             onCollected = { onComplete -> onCollectTreasure(relic.id, onComplete) },
             onStartChallenge = relic.challengeConfig
                 ?.takeUnless { it.type in LOCAL_HUNT_CHALLENGE_TYPES }
-                ?.let { { challengeRelic = relic } },
+                ?.let { { debugSimulationEnabled = false; challengeRelic = relic } },
             onBack = {
                 detailRelic = null
             },
@@ -246,6 +269,17 @@ fun MapScreen(
             }
         }
 
+        if (BuildConfig.DEBUG && selectedRelic == null) {
+            DebugChallengeLauncher(
+                relics = resolvedTreasures,
+                onLaunch = { relic ->
+                    debugSimulationEnabled = true
+                    challengeRelic = relic
+                },
+                modifier = Modifier.align(Alignment.TopCenter).padding(8.dp),
+            )
+        }
+
         AnimatedContent(
             targetState = selectedRelic,
             modifier = Modifier
@@ -276,6 +310,35 @@ fun MapScreen(
 
     }
 }
+
+private val DEBUG_SENSOR_CHALLENGES = setOf(
+    RelicChallengeType.UNION_LAWN_PHOTO,
+    RelicChallengeType.WILSON_HALL_OBSERVATION,
+    RelicChallengeType.OLD_QUAD_EXCAVATION,
+    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE,
+)
+
+@Composable
+private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) -> Unit, modifier: Modifier = Modifier) {
+    val challenges = relics.filter { it.challengeConfig?.type in DEBUG_SENSOR_CHALLENGES }
+    if (challenges.isEmpty()) return
+    ElevatedCard(modifier = modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("DEBUG · Challenge simulator", color = Brand, fontWeight = FontWeight.Bold)
+            challenges.forEach { relic ->
+                OutlinedButton(onClick = { onLaunch(relic) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(relic.locationName)
+                }
+            }
+        }
+    }
+}
+
+internal fun saveRelicDiscovery(
+    relic: MapRelic,
+    onCollectTreasure: (String, (String?) -> Unit) -> Unit,
+    onComplete: (String?) -> Unit,
+) = onCollectTreasure(relic.id, onComplete)
 
 @Composable
 private fun GoogleMapView(
@@ -447,6 +510,8 @@ private val REAL_SENSOR_HUNT_TYPES = setOf(
 private fun TreasureDetailScreen(
     relic: MapRelic,
     locationOutput: LocationOutput,
+    locationValidity: com.comp90018.app.sensors.SensorValidity,
+    hapticsEnabled: Boolean,
     deviceHeading: Float,
     isFound: Boolean,
     collecting: Boolean,
@@ -456,6 +521,29 @@ private fun TreasureDetailScreen(
     onBack: () -> Unit,
 ) {
     var navigating by remember(relic.id) { mutableStateOf(false) }
+    var nearbyNotified by remember(relic.id) { mutableStateOf(false) }
+    var huntReadyNotified by remember(relic.id) { mutableStateOf(false) }
+    val hapticFeedback = LocalHapticFeedback.current
+    val proximityStage = HuntProximityResolver.resolve(
+        locationOutput.distanceToTargetMeters,
+        locationValidity,
+        relic.radarRadiusMeters,
+        relic.insideRadiusMeters,
+    )
+    LaunchedEffect(relic.id, navigating, proximityStage) {
+        if (!navigating) return@LaunchedEffect
+        when (proximityStage) {
+            HuntProximityStage.HUNT_READY -> if (!huntReadyNotified) {
+                huntReadyNotified = true
+                if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
+            HuntProximityStage.NEARBY -> if (!nearbyNotified) {
+                nearbyNotified = true
+                if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+            else -> Unit
+        }
+    }
     var stage by remember(relic.id) { mutableStateOf(TreasureHuntStage.DETAILS) }
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }
@@ -545,8 +633,11 @@ private fun TreasureDetailScreen(
                                 locationOutput = locationOutput,
                                 isFound = isFound,
                                 navigating = navigating,
+                                proximityStage = proximityStage,
                                 onNavigate = { navigating = true },
-                                onArrived = onStartChallenge ?: { stage = TreasureHuntStage.SEARCHING },
+                                onArrived = onStartChallenge ?: if (relic.challengeConfig?.type in LOCAL_HUNT_CHALLENGE_TYPES) {
+                                    { stage = TreasureHuntStage.SEARCHING }
+                                } else null,
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -641,18 +732,21 @@ private fun TreasureInformationPanel(
     locationOutput: LocationOutput,
     isFound: Boolean,
     navigating: Boolean,
+    proximityStage: HuntProximityStage,
     onNavigate: () -> Unit,
-    onArrived: () -> Unit,
+    onArrived: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val huntStatus = when {
         isFound -> "Discovered"
-        locationOutput.proximity == ProximityState.NEARBY || locationOutput.proximity == ProximityState.INSIDE -> "Nearby"
+        onArrived == null -> "Not configured"
+        proximityStage == HuntProximityStage.HUNT_READY -> "Search area"
+        proximityStage == HuntProximityStage.NEARBY -> "Nearby"
         else -> "Locked"
     }
     val statusColor = when (huntStatus) {
         "Discovered" -> Color(0xFF3F7D4A)
-        "Nearby" -> Color(0xFFD07B2D)
+        "Nearby", "Search area" -> Color(0xFFD07B2D)
         else -> Color(0xFF76665B)
     }
     Column(modifier.fillMaxSize()) {
@@ -660,7 +754,9 @@ private fun TreasureInformationPanel(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Button(onClick = onArrived, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
+            Button(onClick = { onArrived?.invoke() },
+                enabled = onArrived != null && navigating && proximityStage == HuntProximityStage.HUNT_READY,
+                modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                 Image(painterResource(R.drawable.map_arrived_symbol), null, modifier = Modifier.size(25.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Start Hunt")
@@ -730,8 +826,18 @@ private fun TreasureInformationPanel(
                         colors = CardDefaults.cardColors(containerColor = BrandSoft),
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("The trail is awake", color = Brand, style = MaterialTheme.typography.titleMedium)
-                            Text("Follow the map glow toward ${relic.locationName}; the relic will call louder as you approach.", color = Ink)
+                            Text(if (onArrived == null) "Challenge not configured" else when (proximityStage) {
+                                HuntProximityStage.HUNT_READY -> "You've reached the search area"
+                                HuntProximityStage.NEARBY -> "Treasure signal detected nearby"
+                                HuntProximityStage.UNKNOWN -> "Waiting for a usable location"
+                                HuntProximityStage.FAR -> "The trail is awake"
+                            }, color = Brand, style = MaterialTheme.typography.titleMedium)
+                            Text(if (onArrived == null) "This treasure has no challenge configuration in Firestore yet." else when (proximityStage) {
+                                HuntProximityStage.HUNT_READY -> "Start Hunt when you're ready."
+                                HuntProximityStage.NEARBY -> "Keep moving toward ${relic.locationName} to reach the search area."
+                                HuntProximityStage.UNKNOWN -> "Check location access and wait for a current position."
+                                HuntProximityStage.FAR -> "Follow the map glow toward ${relic.locationName}; the relic will call louder as you approach."
+                            }, color = Ink)
                         }
                     }
                 }
@@ -1113,11 +1219,13 @@ private fun TreasureFoundPanel(relic: MapRelic, onViewStory: () -> Unit) {
 }
 
 @Composable
-private fun TreasureStoryPanel(
+internal fun TreasureStoryPanel(
     relic: MapRelic,
     collecting: Boolean,
     collectionError: String?,
-    onPutInBackpack: () -> Unit,
+    onPutInBackpack: (() -> Unit)?,
+    onBackToReveal: (() -> Unit)? = null,
+    onReturnToMap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     LazyColumn(
@@ -1125,6 +1233,13 @@ private fun TreasureStoryPanel(
         contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        if (onBackToReveal != null) {
+            item {
+                OutlinedButton(onClick = onBackToReveal, modifier = Modifier.fillMaxWidth()) {
+                    Text("Back to reveal")
+                }
+            }
+        }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TreasureArtwork(relic, discovered = true, modifier = Modifier.size(82.dp))
@@ -1189,7 +1304,7 @@ private fun TreasureStoryPanel(
         relic.buildingStory.takeIf { it.isNotBlank() }?.let { buildingStory ->
             item { DetailTextRow("About the landmark", buildingStory) }
         }
-        item {
+        if (onPutInBackpack != null) item {
             Button(
                 onClick = onPutInBackpack,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -1203,6 +1318,14 @@ private fun TreasureStoryPanel(
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(if (collecting) "Saving…" else "Put in backpack", fontWeight = FontWeight.Bold)
+            }
+        }
+        if (onPutInBackpack == null) item {
+            Text("Already in your collection", color = Brand, fontWeight = FontWeight.Bold)
+            onReturnToMap?.let { returnToMap ->
+                Button(onClick = returnToMap, modifier = Modifier.fillMaxWidth()) {
+                    Text("Return to map")
+                }
             }
         }
         collectionError?.let { message ->
