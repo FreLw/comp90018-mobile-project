@@ -11,6 +11,8 @@ enum class RelicChallengeType {
     GRAINGER_MUSEUM_TONE_TOOL,
 }
 
+enum class CalibrationStatus { PENDING, CALIBRATED, UNKNOWN }
+
 data class RelicChallengeConfig(
     val challengeId: String,
     val type: RelicChallengeType,
@@ -26,6 +28,9 @@ data class RelicChallengeConfig(
     val photoActionRequired: Boolean,
     val requiresSound: Boolean = false,
     val soundThresholdDecibels: Double? = null,
+    val calibrationStatus: CalibrationStatus = CalibrationStatus.UNKNOWN,
+    /** Metadata from Firestore; no north-reference correction is applied here. */
+    val headingReference: String? = null,
 ) {
     init {
         require(challengeId.isNotBlank())

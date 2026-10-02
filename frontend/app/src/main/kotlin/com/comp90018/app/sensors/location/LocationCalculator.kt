@@ -18,11 +18,13 @@ object LocationCalculator {
         permission: LocationPermissionState = LocationPermissionState.UNKNOWN,
         availability: LocationAvailabilityState = LocationAvailabilityState.UNKNOWN,
         accuracyMeters: Double? = null,
+        lastKnownLocation: GeoCoordinate? = currentLocation,
         previousProximity: ProximityState = ProximityState.UNKNOWN,
     ): LocationOutput {
         if (currentLocation == null || targetLocation == null) {
             return LocationOutput(
                 currentLocation = currentLocation,
+                lastKnownLocation = lastKnownLocation,
                 targetLocation = targetLocation,
                 validity = SensorValidity.UNKNOWN,
                 permission = permission,
@@ -34,6 +36,7 @@ object LocationCalculator {
         if (!currentLocation.isValid() || !targetLocation.isValid()) {
             return LocationOutput(
                 currentLocation = currentLocation,
+                lastKnownLocation = lastKnownLocation,
                 targetLocation = targetLocation,
                 validity = SensorValidity.UNRELIABLE,
                 permission = permission,
@@ -48,6 +51,7 @@ object LocationCalculator {
 
         return LocationOutput(
             currentLocation = currentLocation,
+            lastKnownLocation = lastKnownLocation,
             targetLocation = targetLocation,
             distanceToTargetMeters = distance,
             targetBearingDegrees = bearing,
