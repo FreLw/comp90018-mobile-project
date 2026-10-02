@@ -50,12 +50,18 @@ object FirebaseAuthService {
 			}
 			if (readTask.result.exists()) {
 				val updates = mutableMapOf<String, Any>()
+				// Keep legacy profiles compatible with the current rules and schema.
+				if (readTask.result.getString("uid").isNullOrBlank()) updates["uid"] = user.uid
+				if (readTask.result.getString("email").isNullOrBlank()) updates["email"] = user.email.orEmpty()
 				if (readTask.result.getString("username").isNullOrBlank()) {
 					updates["username"] = defaultUsername(user)
 				}
+				if (readTask.result.getString("displayName") == null) updates["displayName"] = ""
 				if (readTask.result.getString("gender").isNullOrBlank()) {
 					updates["gender"] = "unspecified"
 				}
+				if (readTask.result.getString("bio") == null) updates["bio"] = ""
+				if (readTask.result.getString("avatarUrl") == null) updates["avatarUrl"] = ""
 				if (readTask.result.get("phone") == null) updates["phone"] = ""
 				if (readTask.result.get("department") == null) updates["department"] = ""
 				if (readTask.result.get("major") == null) updates["major"] = ""

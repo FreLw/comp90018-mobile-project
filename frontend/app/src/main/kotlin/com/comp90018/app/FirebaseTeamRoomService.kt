@@ -211,6 +211,10 @@ object FirebaseTeamRoomService {
             val snapshot = transaction.get(room)
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
+            // Keep the hunt active after the second answer. MapScreen observes both member
+            // IDs, then gives *both* explorers the ready-to-dig screen and lets each save the
+            // treasure to their own collection. Clearing the hunt here would remove that screen
+            // before either explorer could dig.
             transaction.update(room, mapOf(
                 "taskCompletedMemberIds" to FieldValue.arrayUnion(userId),
                 "updatedAt" to FieldValue.serverTimestamp(),

@@ -58,8 +58,16 @@ class FirebaseProfileRepository(
             }
             if (readTask.result.exists()) {
                 val updates = mutableMapOf<String, Any>()
+                // Firestore validates the complete resulting document.  Fill
+                // fields absent from profiles created by earlier app versions
+                // before attempting later profile edits.
+                if (readTask.result.getString("uid").isNullOrBlank()) updates["uid"] = uid
+                if (readTask.result.getString("email").isNullOrBlank()) updates["email"] = email
                 if (readTask.result.getString("username").isNullOrBlank()) updates["username"] = defaultUsername(uid, email)
+                if (readTask.result.getString("displayName") == null) updates["displayName"] = ""
                 if (readTask.result.getString("gender").isNullOrBlank()) updates["gender"] = "unspecified"
+                if (readTask.result.getString("bio") == null) updates["bio"] = ""
+                if (readTask.result.getString("avatarUrl") == null) updates["avatarUrl"] = ""
                 if (readTask.result.get("phone") == null) updates["phone"] = ""
                 if (readTask.result.get("department") == null) updates["department"] = ""
                 if (readTask.result.get("major") == null) updates["major"] = ""
