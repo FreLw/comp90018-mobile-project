@@ -160,6 +160,7 @@ fun MapScreen(
     currentUserId: String = "",
     onCompleteActiveHuntTask: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
     val teamHuntActive = teamHuntTarget != null && activeHuntOwnerId != null
     val teamHuntIsOwner = activeHuntOwnerId == currentUserId
@@ -177,7 +178,26 @@ fun MapScreen(
     var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
     var memberQuizRelic by remember { mutableStateOf<MapRelic?>(null) }
-    var teamArrivalPromptedForId by remember { mutableStateOf<String?>(null) }
+    // This acknowledgement must survive leaving/re-entering MapScreen (and app restarts).
+    // Otherwise a location update can repeatedly reopen the arrival dialog after the explorer
+    // has already chosen either action. It is scoped to the signed-in explorer and destination.
+    val teamHuntArrivalPreferences = remember(context) {
+        context.getSharedPreferences("team_hunt_arrival_prompts", Context.MODE_PRIVATE)
+    }
+    val teamHuntArrivalPreferenceKey = remember(currentUserId, teamHuntTarget?.id) {
+        "seen_${currentUserId.ifBlank { "anonymous" }}_${teamHuntTarget?.id.orEmpty()}"
+    }
+    var showTeamHuntArrival by remember(teamHuntArrivalPreferenceKey) {
+        mutableStateOf(false)
+    }
+    fun acknowledgeTeamHuntArrival() {
+        // Hide this composable first. This is deliberately separate from navigation so the
+        // dialog cannot remain over the task screen while the next screen is being composed.
+        showTeamHuntArrival = false
+        teamHuntArrivalPreferences.edit()
+            .putBoolean(teamHuntArrivalPreferenceKey, true)
+            .apply()
+    }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
     val revealCoordinator = remember { PostChallengeRevealCoordinator() }
     val foundRelicIds = discoveredTreasureIds
@@ -216,7 +236,10 @@ fun MapScreen(
     val teamHuntProximity = teamHuntTarget?.let { target ->
         HuntProximityResolver.resolve(
             distanceMeters = teamHuntLocationOutput.distanceToTargetMeters,
-            locationValidity = userLocation.validity,
+            // Use the validity calculated for this hunt target.  The raw location sensor
+            // output has no target attached, so its validity can still be UNKNOWN while the
+            // target-specific output already has a valid distance (including 0 m).
+            locationValidity = teamHuntLocationOutput.validity,
             radarRadiusMeters = target.radarRadiusMeters,
             insideRadiusMeters = target.insideRadiusMeters,
         )
@@ -240,37 +263,13 @@ fun MapScreen(
     LaunchedEffect(teamHuntAllCompleted, teamHuntTarget?.id) {
         if (teamHuntAllCompleted) detailRelic = teamHuntTarget
     }
-    LaunchedEffect(teamHuntTarget?.id) {
-        teamArrivalPromptedForId = null
-    }
-    LaunchedEffect(teamHuntTarget?.id, teamHuntProximity, teamHuntTaskPendingForCurrentUser, teamArrivalPromptedForId) {
+    LaunchedEffect(teamHuntTarget?.id, teamHuntProximity, teamHuntTaskPendingForCurrentUser) {
         if (teamHuntTaskPendingForCurrentUser &&
             teamHuntProximity == HuntProximityStage.HUNT_READY &&
-            teamArrivalPromptedForId != teamHuntTarget?.id
+            !teamHuntArrivalPreferences.getBoolean(teamHuntArrivalPreferenceKey, false)
         ) {
-            teamArrivalPromptedForId = teamHuntTarget?.id
+            showTeamHuntArrival = true
         }
-    }
-
-    if (teamHuntTaskPendingForCurrentUser && teamArrivalPromptedForId == teamHuntTarget?.id) {
-        TeamHuntArrivalDialog(
-            isOwner = teamHuntIsOwner,
-            onDismiss = { teamArrivalPromptedForId = "dismissed:${teamHuntTarget?.id}" },
-            onContinue = {
-                val target = requireNotNull(teamHuntTarget)
-                teamArrivalPromptedForId = "dismissed:${target.id}"
-                // The owner always performs the treasure's normal individual challenge. This
-                // keeps the GPS/sensor rules and challenge examples identical in solo and team
-                // hunts; team mode only adds the shared completion update on success.
-                if (teamHuntIsOwner && target.challengeConfig != null) {
-                    challengeRelic = target
-                } else if (teamHuntIsOwner) {
-                    detailRelic = target
-                } else {
-                    memberQuizRelic = target
-                }
-            },
-        )
     }
 
     memberQuizRelic?.let { relic ->
@@ -337,7 +336,10 @@ fun MapScreen(
         TreasureDetailScreen(
             relic = relic,
             locationOutput = locationOutput,
-            locationValidity = userLocation.validity,
+            // Keep the Start Hunt gate on the same target-specific calculation that renders
+            // the distance.  Otherwise a displayed 0 m could still resolve to UNKNOWN and
+            // leave the button disabled.
+            locationValidity = locationOutput.validity,
             hapticsEnabled = hapticsEnabled,
             deviceHeading = deviceHeading,
             // Team hunts remain replayable even when this relic is already in the explorer's
@@ -356,6 +358,29 @@ fun MapScreen(
             },
         )
         return
+    }
+
+    // Keep the prompt in the map branch only. Challenge/detail routes return above, so an
+    // arrival prompt can never be left layered over a task screen during navigation.
+    if (showTeamHuntArrival) {
+        TeamHuntArrivalDialog(
+            isOwner = teamHuntIsOwner,
+            onDismiss = ::acknowledgeTeamHuntArrival,
+            onContinue = {
+                val target = requireNotNull(teamHuntTarget)
+                acknowledgeTeamHuntArrival()
+                // The owner always performs the treasure's normal individual challenge. This
+                // keeps the GPS/sensor rules and challenge examples identical in solo and team
+                // hunts; team mode only adds the shared completion update on success.
+                if (teamHuntIsOwner && target.challengeConfig != null) {
+                    challengeRelic = target
+                } else if (teamHuntIsOwner) {
+                    detailRelic = target
+                } else {
+                    memberQuizRelic = target
+                }
+            },
+        )
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -957,7 +982,11 @@ private fun TreasureDetailScreen(
                                 isFound = isFound,
                                 navigating = navigating,
                                 proximityStage = proximityStage,
-                                hasPreciseLocation = locationOutput.permission.canUnlockTreasure,
+                                // Proximity is calculated from the same live location reading.
+                                // Do not add a second FINE_LOCATION-only gate here: Android may
+                                // grant approximate location while still supplying a valid reading
+                                // that has already placed the explorer inside the search radius.
+                                hasUsableLocation = locationOutput.permission.isGranted,
                                 onNavigate = { navigating = true },
                                 onArrived = onStartChallenge ?: if (relic.challengeConfig?.type in LOCAL_HUNT_CHALLENGE_TYPES) {
                                     { stage = TreasureHuntStage.SEARCHING }
@@ -1057,7 +1086,7 @@ private fun TreasureInformationPanel(
     isFound: Boolean,
     navigating: Boolean,
     proximityStage: HuntProximityStage,
-    hasPreciseLocation: Boolean,
+    hasUsableLocation: Boolean,
     onNavigate: () -> Unit,
     onArrived: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -1083,7 +1112,7 @@ private fun TreasureInformationPanel(
             // its button to be tapped left an explorer at the destination with every action
             // appearing disabled.
             Button(onClick = { onArrived?.invoke() },
-                enabled = onArrived != null && hasPreciseLocation && proximityStage == HuntProximityStage.HUNT_READY,
+                enabled = onArrived != null && hasUsableLocation && proximityStage == HuntProximityStage.HUNT_READY,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                 Image(painterResource(R.drawable.map_arrived_symbol), null, modifier = Modifier.size(25.dp))
                 Spacer(Modifier.width(6.dp))
@@ -1154,13 +1183,13 @@ private fun TreasureInformationPanel(
                         colors = CardDefaults.cardColors(containerColor = BrandSoft),
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(if (onArrived == null) "Challenge not configured" else if (!hasPreciseLocation) "Precise location required" else when (proximityStage) {
+                            Text(if (onArrived == null) "Challenge not configured" else if (!hasUsableLocation) "Location access required" else when (proximityStage) {
                                 HuntProximityStage.HUNT_READY -> "You've reached the search area"
                                 HuntProximityStage.NEARBY -> "Treasure signal detected nearby"
                                 HuntProximityStage.UNKNOWN -> "Waiting for a usable location"
                                 HuntProximityStage.FAR -> "The trail is awake"
                             }, color = Brand, style = MaterialTheme.typography.titleMedium)
-                            Text(if (onArrived == null) "This treasure has no challenge configuration in Firestore yet." else if (!hasPreciseLocation) "Switch location permission to Precise before starting the hunt." else when (proximityStage) {
+                            Text(if (onArrived == null) "This treasure has no challenge configuration in Firestore yet." else if (!hasUsableLocation) "Enable location access before starting the hunt." else when (proximityStage) {
                                 HuntProximityStage.HUNT_READY -> "Start Hunt when you're ready."
                                 HuntProximityStage.NEARBY -> "Keep moving toward ${relic.locationName} to reach the search area."
                                 HuntProximityStage.UNKNOWN -> "Check location access and wait for a current position."

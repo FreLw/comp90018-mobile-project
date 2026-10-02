@@ -320,30 +320,36 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'updatedAt'])
-        && ((request.resource.data.taskStatus == 'assigned'
-          && request.resource.data.taskId is string
-          && request.resource.data.taskId.size() > 0
-          && request.resource.data.taskTitle is string
-          && request.resource.data.taskTitle.size() > 0)
+        && (
+          (request.resource.data.taskStatus == 'assigned'
+            && request.resource.data.taskId is string
+            && request.resource.data.taskId.size() > 0
+            && request.resource.data.taskTitle is string
+            && request.resource.data.taskTitle.size() > 0)
           || (request.resource.data.taskStatus == 'hunting'
             && resource.data.memberIds.size() == 2
             && resource.data.taskId is string
             && resource.data.taskId.size() > 0
             && request.resource.data.taskId == resource.data.taskId
             && request.resource.data.taskTitle == resource.data.taskTitle
-            && ((resource.data.taskStatus == 'assigned'
-              && request.auth.uid == resource.data.creatorId
-              && request.resource.data.taskCompletedMemberIds.size() == 0)
+            && (
+              (resource.data.taskStatus == 'assigned'
+                && request.auth.uid == resource.data.creatorId
+                && request.resource.data.taskCompletedMemberIds.size() == 0)
               || (resource.data.taskStatus == 'hunting'
                 && (!('taskCompletedMemberIds' in resource.data)
                   || request.resource.data.taskCompletedMemberIds.hasAll(resource.data.taskCompletedMemberIds))
-                && request.resource.data.taskCompletedMemberIds.size() <= 2)))
+                && request.resource.data.taskCompletedMemberIds.size() <= 2)
+            )
+          )
           || (request.resource.data.taskStatus == 'unassigned'
-            && request.auth.uid == resource.data.creatorId
             && resource.data.taskStatus == 'hunting'
+            && request.auth.uid == resource.data.creatorId
             && request.resource.data.taskId == ''
             && request.resource.data.taskTitle == ''
-            && request.resource.data.taskCompletedMemberIds.size() == 0));
+            && request.resource.data.taskCompletedMemberIds.size() == 0
+          )
+        );
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
 
       match /messages/{messageId} {
