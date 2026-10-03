@@ -30,9 +30,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
 import com.comp90018.app.R
+import com.comp90018.app.data.chat.ChatMessage
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
+import com.comp90018.app.data.rooms.TeamRoom
+import com.comp90018.app.data.rooms.TeamRoomMember
 import com.comp90018.app.data.social.FirebaseSocialRepository
+import com.comp90018.app.data.social.FriendshipStatus
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.features.chat.DirectChatScreen

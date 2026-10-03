@@ -2,9 +2,9 @@ package com.comp90018.app.features.rooms
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.comp90018.app.ChatMessage
-import com.comp90018.app.TeamRoom
-import com.comp90018.app.TeamRoomMember
+import com.comp90018.app.data.chat.ChatMessage
+import com.comp90018.app.data.rooms.TeamRoom
+import com.comp90018.app.data.rooms.TeamRoomMember
 import com.comp90018.app.data.rooms.TeamRoomRepository
 import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -1,12 +1,10 @@
 package com.comp90018.app.data.social
 
-import com.comp90018.app.FriendSummary
-import com.comp90018.app.FriendshipStatus
-import com.comp90018.app.IncomingFriendRequest
-import com.comp90018.app.OutgoingFriendRequest
-import com.comp90018.app.SearchUser
-
-/** Data boundary for social features. UI and ViewModels do not depend on Firebase SDK types. */
+/**
+ * Feature-facing boundary for friends and requests.
+ *
+ * ViewModels depend on this interface rather than Firebase, which keeps them testable.
+ */
 interface SocialRepository {
     fun searchUsers(currentUid: String, usernamePrefix: String, onComplete: (List<SearchUser>, String?) -> Unit)
     fun findUserByUsername(username: String, onComplete: (SearchUser?, String?) -> Unit)
@@ -19,6 +17,7 @@ interface SocialRepository {
     fun observeIncomingFriendRequests(currentUid: String, onChange: (List<IncomingFriendRequest>, String?) -> Unit): Subscription
     fun observeOutgoingFriendRequests(currentUid: String, onChange: (List<OutgoingFriendRequest>, String?) -> Unit): Subscription
     fun observeFriends(currentUid: String, onChange: (List<FriendSummary>, String?) -> Unit): Subscription
+    fun observeDirectChats(currentUid: String, onChange: (List<DirectChatSummary>, String?) -> Unit): Subscription
     fun migrateAcceptedFriendships(currentUid: String, currentUsername: String)
 }
 

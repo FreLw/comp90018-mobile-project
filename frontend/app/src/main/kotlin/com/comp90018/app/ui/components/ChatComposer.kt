@@ -3,6 +3,7 @@ package com.comp90018.app.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -10,8 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.comp90018.app.Brand
 import com.comp90018.app.BrandSoft
@@ -29,13 +34,23 @@ fun ChatComposer(
     sendEnabled: Boolean = value.isNotBlank(),
     sending: Boolean = false,
     showTreasureAction: Boolean = false,
+    ownedTreasureStickerIds: Set<String>? = null,
+    onTreasureStickerSelected: ((String) -> Unit)? = null,
 ) {
     var emojis by remember { mutableStateOf(false) }
     var attachments by remember { mutableStateOf(false) }
     var treasures by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
         if (emojis) Surface(Modifier.fillMaxWidth().padding(bottom = 8.dp), RoundedCornerShape(16.dp), color = BrandSoft) { Column { commonEmojis.chunked(8).forEach { row -> Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.SpaceEvenly) { row.forEach { emoji -> IconButton({ onValueChange(value + emoji) }, Modifier.size(38.dp)) { Text(emoji) } } } } } }
-        if (treasures) {
+        if (treasures && ownedTreasureStickerIds != null && onTreasureStickerSelected != null) {
+            TreasureStickerPicker(
+                ownedTreasureIds = ownedTreasureStickerIds,
+                onSelected = { treasureId ->
+                    onTreasureStickerSelected(treasureId)
+                    treasures = false
+                },
+            )
+        } else if (treasures) {
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable {
                     onValueChange(listOf(value.trim(), "[Treasure fragment]").filter { it.isNotBlank() }.joinToString(" "))
@@ -72,13 +87,77 @@ fun ChatComposer(
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton({ emojis = !emojis; treasures = false }) { Icon(Icons.Rounded.EmojiEmotions, "Choose emoji", tint = Brand) }
-            if (showTreasureAction) {
+            if (showTreasureAction || ownedTreasureStickerIds != null) {
                 IconButton({ treasures = !treasures; emojis = false }) {
-                    Image(painterResource(R.drawable.nav_treasure_symbol), "Send a treasure fragment", modifier = Modifier.size(28.dp))
+                    Image(painterResource(R.drawable.nav_treasure_symbol), "Open treasure stickers", modifier = Modifier.size(28.dp))
                 }
             }
             IconButton({ attachments = !attachments }) { Icon(Icons.Rounded.Add, "More options", tint = Ink) }
         }
     }
 }
+
+@Composable
+private fun TreasureStickerPicker(
+    ownedTreasureIds: Set<String>,
+    onSelected: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = BrandSoft,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Treasure stickers", color = Ink, fontWeight = FontWeight.Bold)
+            TreasureStickerCatalog.chunked(3).forEach { stickerRow ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    stickerRow.forEach { sticker ->
+                        val unlocked = sticker.treasureId in ownedTreasureIds
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(enabled = unlocked) { onSelected(sticker.treasureId) }
+                                .padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(sticker.drawableRes),
+                                    contentDescription = sticker.name,
+                                    modifier = Modifier.size(66.dp).alpha(if (unlocked) 1f else 0.35f),
+                                )
+                                if (!unlocked) {
+                                    Surface(shape = CircleShape, color = Ink.copy(alpha = 0.78f)) {
+                                        Icon(
+                                            Icons.Rounded.Lock,
+                                            contentDescription = "Locked until discovered",
+                                            tint = BrandSoft,
+                                            modifier = Modifier.padding(5.dp).size(16.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = sticker.name,
+                                color = if (unlocked) Ink else Ink.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+            if (ownedTreasureIds.none { id -> TreasureStickerCatalog.any { it.treasureId == id } }) {
+                Text(
+                    "Discover a treasure to unlock its sticker.",
+                    color = Brand,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
 @Composable private fun Attachment(icon: ImageVector, label: String, click: () -> Unit = {}) = Column(horizontalAlignment = Alignment.CenterHorizontally) { IconButton(click) { Icon(icon, label, tint = Brand) }; Text(label) }

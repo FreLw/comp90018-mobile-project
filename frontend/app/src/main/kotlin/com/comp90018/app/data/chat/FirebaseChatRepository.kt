@@ -1,7 +1,5 @@
 package com.comp90018.app.data.chat
 
-import com.comp90018.app.ChatMessage
-import com.comp90018.app.FirebaseSocialService
 import com.comp90018.app.data.social.Subscription
 import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
@@ -11,12 +9,12 @@ class FirebaseChatRepository(
     private val firestore: FirebaseFirestore,
 ) : ChatRepository {
     override fun observeMessages(roomId: String, onChange: (List<ChatMessage>, String?) -> Unit): Subscription {
-        val registration = FirebaseSocialService.observeMessages(firestore, roomId, onChange)
+        val registration = FirebaseDirectChatService.observeMessages(firestore, roomId, onChange)
         return Subscription { registration.remove() }
     }
 
     override fun markMessagesRead(currentUid: String, friendUid: String) =
-        FirebaseSocialService.markDirectMessagesRead(firestore, currentUid, friendUid)
+        FirebaseDirectChatService.markMessagesRead(firestore, currentUid, friendUid)
 
     override fun sendMessage(
         roomId: String,
@@ -25,7 +23,7 @@ class FirebaseChatRepository(
         senderAvatarUrl: String,
         text: String,
         onComplete: (String?) -> Unit,
-    ) = FirebaseSocialService.sendMessage(
+    ) = FirebaseDirectChatService.sendText(
         firestore,
         roomId,
         senderId,
@@ -35,5 +33,22 @@ class FirebaseChatRepository(
         onComplete,
     )
     override fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =
-        FirebaseSocialService.sendImage(firestore, roomId, senderId, senderName, senderAvatarUrl, imageUri, onComplete)
+        FirebaseDirectChatService.sendImage(firestore, roomId, senderId, senderName, senderAvatarUrl, imageUri, onComplete)
+
+    override fun sendTreasureSticker(
+        roomId: String,
+        senderId: String,
+        senderName: String,
+        senderAvatarUrl: String,
+        treasureId: String,
+        onComplete: (String?) -> Unit,
+    ) = FirebaseDirectChatService.sendTreasureSticker(
+        firestore,
+        roomId,
+        senderId,
+        senderName,
+        senderAvatarUrl,
+        treasureId,
+        onComplete,
+    )
 }

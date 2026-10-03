@@ -1,0 +1,50 @@
+[
+  {
+    "taskId": "union_lawn_lost_lake",
+    "resourceName": "historical_union_lake_1936",
+    "title": "Students in lake, University of Melbourne, 1936",
+    "sourceUrl": "https://omeka.cloud.unimelb.edu.au/constructing-change/files/show/36",
+    "credit": "Architecture, Building & Planning Library, University of Melbourne",
+    "rightsNote": "Confirm reuse terms with the holding institution before public release."
+  },
+  {
+    "taskId": "wilson_hall_rosette",
+    "resourceName": "historical_wilson_hall_fire_1952",
+    "title": "Wilson Hall Fire, 25 January 1952",
+    "sourceUrl": "https://omeka.cloud.unimelb.edu.au/constructing-change/exhibits/show/criticalmoments/wilsonhallfire",
+    "credit": "University of Melbourne Archives",
+    "rightsNote": "Confirm reuse terms with the holding institution before public release."
+  },
+  {
+    "taskId": "old_quad_fossil",
+    "resourceName": "historical_old_quad_fossil_1875",
+    "title": "Gangamopteris fossil lithograph, Plate XII",
+    "sourceUrl": "https://darwin-online.org.uk/converted/pdf/1875_McCoy_palaeontology_Victoria_A5103.pdf#page=24",
+    "credit": "Frederick McCoy, Prodromus of the Palaeontology of Victoria, 1875",
+    "rightsNote": "Public-domain historical work; image extracted from the digitised volume."
+  },
+  {
+    "taskId": "south_lawn_atlas",
+    "resourceName": "historical_south_lawn_atlas_1900",
+    "title": "Colonial Bank of Australasia, circa 1900",
+    "sourceUrl": "https://www.xmauboy.com/elizabeth-street",
+    "credit": "Royal Historical Society of Victoria, PC-0008",
+    "rightsNote": "Confirm reuse terms with the Royal Historical Society of Victoria before public release."
+  },
+  {
+    "taskId": "system_garden_glasshouse",
+    "resourceName": "historical_system_garden",
+    "title": "Botany: System Garden",
+    "sourceUrl": "https://omeka.cloud.unimelb.edu.au/constructing-change/files/show/14",
+    "credit": "University of Melbourne historical collection",
+    "rightsNote": "Confirm reuse terms with the holding institution before public release."
+  },
+  {
+    "taskId": "grainger_tone_tool",
+    "resourceName": "historical_grainger_tone_tool_1952",
+    "title": "Kangaroo-pouch tone-tool",
+    "sourceUrl": "https://omeka.cloud.unimelb.edu.au/grainger/items/show/91",
+    "credit": "Grainger Museum, University of Melbourne; Percy Grainger and Burnett Cross, 1952; object 00.0216",
+    "rightsNote": "Confirm reuse terms with the Grainger Museum before public release."
+  }
+]

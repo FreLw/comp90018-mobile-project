@@ -2,8 +2,8 @@ package com.comp90018.app.features.friends
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.comp90018.app.FriendshipStatus
-import com.comp90018.app.SearchUser
+import com.comp90018.app.data.social.FriendshipStatus
+import com.comp90018.app.data.social.SearchUser
 import com.comp90018.app.data.social.SocialRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

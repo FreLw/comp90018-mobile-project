@@ -16,7 +16,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.Build
 import android.os.Bundle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -2714,35 +2713,6 @@ private fun coordinateAhead(origin: GeoCoordinate, distanceMeters: Double, beari
 private fun coordinateAtDistance(target: GeoCoordinate, distanceMeters: Double): GeoCoordinate =
     coordinateAhead(target, distanceMeters, 180.0)
 
-internal enum class RadarSignalRange { OUT_OF_RANGE, NEARBY_HIDDEN, REVEALED, HUNT_READY }
-
-internal fun radarSignalForDistance(distanceMeters: Double): RadarSignalRange = when {
-    distanceMeters <= HUNT_READY_RADIUS_METERS -> RadarSignalRange.HUNT_READY
-    distanceMeters <= REVEAL_RADIUS_METERS -> RadarSignalRange.REVEALED
-    distanceMeters <= RADAR_SCAN_RADIUS_METERS -> RadarSignalRange.NEARBY_HIDDEN
-    else -> RadarSignalRange.OUT_OF_RANGE
-}
-
-private fun treasureProximityMessage(
-    distanceMeters: Double,
-    currentLocation: GeoCoordinate,
-    treasureLocation: GeoCoordinate,
-): String = when (radarSignalForDistance(distanceMeters)) {
-    RadarSignalRange.HUNT_READY -> "The treasure is right before your eyes — steady your compass and begin the hunt!"
-    RadarSignalRange.REVEALED -> {
-        val direction = bearingToCompassDirection(LocationCalculator.bearingDegrees(currentLocation, treasureLocation))
-        "Hot trail! A treasure is within 50 m, lurking to the $direction."
-    }
-    RadarSignalRange.NEARBY_HIDDEN -> "Your relic-sense is tingling… a treasure is hiding nearby!"
-    RadarSignalRange.OUT_OF_RANGE -> "The trail has gone quiet — no treasure within 100 m. Follow the hint and venture closer!"
-}
-
-internal fun bearingToCompassDirection(bearingDegrees: Double): String {
-    val directions = arrayOf("north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west")
-    val normalized = LocationCalculator.normalizeDegrees(bearingDegrees)
-    return directions[((normalized + 22.5) / 45.0).toInt() % directions.size]
-}
-
 private fun ProximitySimulation.next(): ProximitySimulation = when (this) {
     ProximitySimulation.OFF -> ProximitySimulation.HUNDRED_METRES
     ProximitySimulation.HUNDRED_METRES -> ProximitySimulation.FIFTY_METRES
@@ -2750,46 +2720,8 @@ private fun ProximitySimulation.next(): ProximitySimulation = when (this) {
     ProximitySimulation.TEN_METRES -> ProximitySimulation.OFF
 }
 
-internal fun signedBearingDifference(targetBearingDegrees: Double, deviceHeadingDegrees: Double): Double =
-    ((targetBearingDegrees - deviceHeadingDegrees + 540.0) % 360.0) - 180.0
-
-internal fun isProbablyEmulator(): Boolean =
-    Build.FINGERPRINT.startsWith("generic") ||
-        Build.FINGERPRINT.lowercase(Locale.US).contains("emulator") ||
-        Build.MODEL.lowercase(Locale.US).let {
-            "google_sdk" in it || "sdk_gphone" in it || "emulator" in it || "android sdk built for" in it
-        } ||
-        Build.MANUFACTURER.lowercase(Locale.US).contains("genymotion") ||
-        Build.PRODUCT.lowercase(Locale.US).let { it.startsWith("sdk") || "emulator" in it } ||
-        Build.HARDWARE.lowercase(Locale.US).let { "goldfish" in it || "ranchu" in it } ||
-        (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
-
-internal data class HuntReadiness(
-    val nearTreasure: Boolean,
-    val facingTreasure: Boolean,
-    val phoneHorizontal: Boolean,
-) {
-    val allReady: Boolean = nearTreasure && facingTreasure && phoneHorizontal
-}
-
-internal fun evaluateHuntReadiness(
-    distanceMeters: Double?,
-    signedTurnDegrees: Double?,
-    tiltDegrees: Float,
-): HuntReadiness = HuntReadiness(
-    nearTreasure = distanceMeters != null && distanceMeters <= HUNT_READY_RADIUS_METERS,
-    facingTreasure = signedTurnDegrees != null && abs(signedTurnDegrees) <= COMPASS_ALIGNMENT_TOLERANCE_DEGREES,
-    phoneHorizontal = tiltDegrees <= HORIZONTAL_TOLERANCE_DEGREES,
-)
-
 private fun GeoCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
 
-internal val DEFAULT_CAMPUS_CENTRE = GeoCoordinate(-37.7986, 144.9602)
-private const val RADAR_SCAN_RADIUS_METERS = 100.0
-internal const val REVEAL_RADIUS_METERS = 50.0
-private const val HUNT_READY_RADIUS_METERS = 10.0
-private const val COMPASS_ALIGNMENT_TOLERANCE_DEGREES = 15.0
-private const val HORIZONTAL_TOLERANCE_DEGREES = 12f
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val HUNT_CAMERA_LEAD_METERS = 80.0
 private const val HUNT_CAMERA_ZOOM = 18.5f

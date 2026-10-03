@@ -1,5 +1,7 @@
-package com.comp90018.app
+package com.comp90018.app.data.rooms
 
+import com.comp90018.app.data.chat.ChatMessage
+import com.comp90018.app.data.chat.FirebaseChatImageStorage
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
@@ -7,25 +9,7 @@ import android.net.Uri
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.MetadataChanges
 
-/** Separate persistence boundary for two-person treasure teams; never used for direct messages. */
-data class TeamRoom(
-    val id: String,
-    val creatorId: String,
-    val memberIds: List<String>,
-    val taskId: String,
-    val taskTitle: String,
-    val taskStatus: String,
-    val taskCompletedMemberIds: List<String> = emptyList(),
-    val foundFragmentIds: List<String> = emptyList(),
-    val taskClaimedMemberIds: List<String> = emptyList(),
-)
-
-data class TeamRoomMember(
-    val uid: String,
-    val name: String,
-    val avatarUrl: String,
-)
-
+/** Low-level Firestore operations for shared treasure-hunt rooms. */
 object FirebaseTeamRoomService {
     fun observeMembership(
         firestore: FirebaseFirestore,
@@ -363,8 +347,8 @@ object FirebaseTeamRoomService {
     }
 
     fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
-        FirebaseSocialService.uploadChatImage("teamRooms", roomId, senderId, imageUri) { url, error ->
-            if (url == null) return@uploadChatImage onComplete(error)
+        FirebaseChatImageStorage.upload("teamRooms", roomId, senderId, imageUri) { url, error ->
+            if (url == null) return@upload onComplete(error)
             val message = mapOf(
                 "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
                 "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp(),

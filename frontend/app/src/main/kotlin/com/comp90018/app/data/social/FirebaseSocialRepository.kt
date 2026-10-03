@@ -1,11 +1,5 @@
 package com.comp90018.app.data.social
 
-import com.comp90018.app.FriendSummary
-import com.comp90018.app.FriendshipStatus
-import com.comp90018.app.FirebaseSocialService
-import com.comp90018.app.IncomingFriendRequest
-import com.comp90018.app.OutgoingFriendRequest
-import com.comp90018.app.SearchUser
 import com.google.firebase.firestore.FirebaseFirestore
 
 /** Firebase-backed [SocialRepository]. This is the only social data class that knows Firestore. */
@@ -48,6 +42,11 @@ class FirebaseSocialRepository(
 
     override fun observeFriends(currentUid: String, onChange: (List<FriendSummary>, String?) -> Unit): Subscription {
         val registration = FirebaseSocialService.observeFriends(firestore, currentUid, onChange)
+        return Subscription { registration.remove() }
+    }
+
+    override fun observeDirectChats(currentUid: String, onChange: (List<DirectChatSummary>, String?) -> Unit): Subscription {
+        val registration = FirebaseSocialService.observeDirectChats(firestore, currentUid, onChange)
         return Subscription { registration.remove() }
     }
 
