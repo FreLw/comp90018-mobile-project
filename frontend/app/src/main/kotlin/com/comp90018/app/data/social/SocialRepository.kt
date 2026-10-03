@@ -19,7 +19,6 @@ interface SocialRepository {
     fun observeIncomingFriendRequests(currentUid: String, onChange: (List<IncomingFriendRequest>, String?) -> Unit): Subscription
     fun observeOutgoingFriendRequests(currentUid: String, onChange: (List<OutgoingFriendRequest>, String?) -> Unit): Subscription
     fun observeFriends(currentUid: String, onChange: (List<FriendSummary>, String?) -> Unit): Subscription
-    fun observeDirectChatActivity(currentUid: String, onChange: (Map<String, Long>, String?) -> Unit): Subscription
     fun migrateAcceptedFriendships(currentUid: String, currentUsername: String)
 }
 
