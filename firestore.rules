@@ -171,7 +171,22 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.memberIds == resource.data.memberIds
         && request.resource.data.title == resource.data.title
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'updatedAt', 'lastMessageText', 'lastMessageType', 'lastMessageTreasureId'
+        ])
+        && (!('lastMessageText' in request.resource.data)
+          || (request.resource.data.lastMessageText is string
+            && request.resource.data.lastMessageText.size() <= 1000))
+        && (!('lastMessageType' in request.resource.data)
+          || request.resource.data.lastMessageType in ['text', 'image', 'treasure_sticker'])
+        && (!('lastMessageTreasureId' in request.resource.data)
+          || (request.resource.data.lastMessageTreasureId is string
+            && request.resource.data.lastMessageTreasureId.size() <= 100))
+        && (!('lastMessageType' in request.resource.data)
+          || request.resource.data.lastMessageType != 'treasure_sticker'
+          || (request.resource.data.lastMessageTreasureId.size() > 0
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.lastMessageTreasureId))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.lastMessageTreasureId)).data.status == 'discovered'))
         && request.resource.data.updatedAt == request.time
       ) || (
         signedIn()
@@ -191,15 +206,37 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isRoomMember(roomId);
         allow create: if isRoomMember(roomId)
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'senderName', 'senderAvatarUrl', 'text', 'imageUrl',
+            'messageType', 'treasureId', 'createdAt'
+          ])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
           && request.resource.data.senderName.size() <= 30
           && request.resource.data.senderAvatarUrl is string
           && request.resource.data.senderAvatarUrl.size() <= 2000
           && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
+          && (!('imageUrl' in request.resource.data)
+            || (request.resource.data.imageUrl is string
+              && request.resource.data.imageUrl.size() <= 2000))
+          && (!('messageType' in request.resource.data)
+            || request.resource.data.messageType in ['text', 'image', 'treasure_sticker'])
+          && (!('treasureId' in request.resource.data)
+            || (request.resource.data.treasureId is string
+              && request.resource.data.treasureId.size() <= 100))
+          && (
+            ((!('messageType' in request.resource.data)
+                || request.resource.data.messageType == 'text')
+              && request.resource.data.text.size() > 0)
+            || (request.resource.data.messageType == 'image'
+              && request.resource.data.imageUrl.size() > 0)
+            || (request.resource.data.messageType == 'treasure_sticker'
+              && request.resource.data.treasureId.size() > 0
+              && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId))
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId)).data.ownerUid == request.auth.uid
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId)).data.status == 'discovered')
+          )
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }

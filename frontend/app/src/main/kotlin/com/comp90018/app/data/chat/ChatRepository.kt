@@ -1,10 +1,9 @@
 package com.comp90018.app.data.chat
 
-import com.comp90018.app.ChatMessage
 import com.comp90018.app.data.social.Subscription
 import android.net.Uri
 
-/** Data boundary for direct-message operations. */
+/** Feature-facing boundary for one-to-one messages. */
 interface ChatRepository {
     fun observeMessages(roomId: String, onChange: (List<ChatMessage>, String?) -> Unit): Subscription
     fun markMessagesRead(currentUid: String, friendUid: String)
@@ -18,4 +17,12 @@ interface ChatRepository {
         onComplete: (String?) -> Unit,
     )
     fun sendImage(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit)
+    fun sendTreasureSticker(
+        roomId: String,
+        senderId: String,
+        senderName: String,
+        senderAvatarUrl: String,
+        treasureId: String,
+        onComplete: (String?) -> Unit,
+    )
 }

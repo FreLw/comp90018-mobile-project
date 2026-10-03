@@ -1,14 +1,11 @@
 package com.comp90018.app.data.rooms
 
-import com.comp90018.app.FirebaseTeamRoomService
-import com.comp90018.app.ChatMessage
-import com.comp90018.app.TeamRoom
-import com.comp90018.app.TeamRoomMember
+import com.comp90018.app.data.chat.ChatMessage
 import com.comp90018.app.data.social.Subscription
 import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 
-/** Firebase implementation of [TeamRoomRepository]. */
+/** Firebase adapter for team-room state, messages, and shared-hunt progress. */
 class FirebaseTeamRoomRepository(
     private val firestore: FirebaseFirestore,
 ) : TeamRoomRepository {

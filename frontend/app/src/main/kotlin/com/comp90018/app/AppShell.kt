@@ -28,6 +28,8 @@ import com.comp90018.app.features.friends.FriendsScreen
 import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
 import com.comp90018.app.features.map.UserLocationViewModel
+import com.comp90018.app.features.map.DEFAULT_CAMPUS_CENTRE
+import com.comp90018.app.features.map.isProbablyEmulator
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.RoomsViewModel
@@ -47,12 +49,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> Unit) {
     var destination by remember { mutableStateOf(AppDestination.Friends) }
     var activeHuntTreasureId by remember { mutableStateOf<String?>(null) }
-    val repository = remember(firestore) { FirebaseProfileRepository(firestore) }
-    val viewModel: AppShellViewModel = viewModel(
+    var requestedMapTreasureId by remember { mutableStateOf<String?>(null) }
+    val profileRepository = remember(firestore) { FirebaseProfileRepository(firestore) }
+    val appShellViewModel: AppShellViewModel = viewModel(
         key = "app_shell_${user.uid}",
-        factory = AppShellViewModel.factory(repository, user.uid, user.email.orEmpty()),
+        factory = AppShellViewModel.factory(profileRepository, user.uid, user.email.orEmpty()),
     )
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val appState by appShellViewModel.uiState.collectAsStateWithLifecycle()
     val socialRepository = remember(firestore) { FirebaseSocialRepository(firestore) }
     val unreadMessagesViewModel: UnreadMessagesViewModel = viewModel(
         key = "unread_messages_${user.uid}",
@@ -100,7 +103,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = TreasureCollectionViewModel.factory(treasureCollectionRepository, user.uid),
     )
     val treasureCollectionState by treasureCollectionViewModel.uiState.collectAsStateWithLifecycle()
-    val settings = state.profile?.settings
+    val settings = appState.profile?.settings
     val notificationsEnabled = settings?.notifications ?: true
     val preciseLocationEnabled = settings?.preciseLocation ?: true
     val context = LocalContext.current
@@ -109,6 +112,11 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = UserLocationViewModel.factory(context, preciseLocationEnabled),
     )
     val userLocation by userLocationViewModel.output.collectAsStateWithLifecycle()
+    val treasurePageLocation = if (remember { isProbablyEmulator() }) {
+        DEFAULT_CAMPUS_CENTRE
+    } else {
+        userLocation.currentLocation ?: userLocation.lastKnownLocation
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, userLocationViewModel) {
@@ -134,23 +142,28 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         },
         snackbarHost = { SensorErrorHost() },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)) {
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .then(if (destination == AppDestination.Map) Modifier else Modifier.padding(horizontal = 20.dp))
+        Box(contentModifier) {
             when (destination) {
                 AppDestination.Treasure -> TreasureScreen(
                     treasures = treasureCatalogState.treasures,
                     loading = treasureCatalogState.loading,
                     error = treasureCatalogState.error,
                     onRetry = treasureCatalogViewModel::retry,
-                    onOpenMap = { destination = AppDestination.Map },
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
-                    collectionLoading = treasureCollectionState.loading,
-                    collectionError = treasureCollectionState.error,
-                    onRetryCollection = treasureCollectionViewModel::retry,
+                    currentLocation = treasurePageLocation,
+                    onOpenMap = { treasureId ->
+                        requestedMapTreasureId = treasureId
+                        destination = AppDestination.Map
+                    },
                 )
                 AppDestination.Rooms -> RoomsScreen(
                     user = user,
                     firestore = firestore,
-                    profile = state.profile,
+                    profile = appState.profile,
                     viewModel = roomsViewModel,
                     treasures = treasureCatalogState.treasures,
                     treasuresLoading = treasureCatalogState.loading,
@@ -183,16 +196,18 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
                     onClaimCompletedHuntTreasure = activeRoomHuntViewModel?.let { it::claimCompletedHuntTreasure } ?: {},
+                    requestedTreasureId = requestedMapTreasureId,
+                    onTreasureRequestConsumed = { requestedMapTreasureId = null },
                 )
-                AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
+                AppDestination.Friends -> FriendsScreen(user, firestore, appState.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
                 AppDestination.Profile -> ProfileScreen(
                     userUid = user.uid,
                     userEmail = user.email.orEmpty(),
-                    repository = repository,
-                    profile = state.profile,
-                    profileError = state.profileError,
+                    repository = profileRepository,
+                    profile = appState.profile,
+                    profileError = appState.profileError,
                     currentRoomId = roomsState.activeRoomId,
-                    onRetry = viewModel::retry,
+                    onRetry = appShellViewModel::retry,
                     onLogout = onLogout,
                 )
             }

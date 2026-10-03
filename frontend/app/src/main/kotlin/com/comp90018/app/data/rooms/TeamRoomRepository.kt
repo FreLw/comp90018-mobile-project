@@ -1,12 +1,11 @@
 package com.comp90018.app.data.rooms
 
-import com.comp90018.app.ChatMessage
-import com.comp90018.app.TeamRoom
-import com.comp90018.app.TeamRoomMember
+import com.comp90018.app.data.chat.ChatMessage
 import com.comp90018.app.data.social.Subscription
 import android.net.Uri
 
 /** Data boundary for team-room membership and entry operations. */
+/** Feature-facing boundary for room membership, room chat, and cooperative hunts. */
 interface TeamRoomRepository {
     fun observeMembership(userId: String, onChange: (String?, String?) -> Unit): Subscription
     fun observeUnreadMessages(userId: String, onChange: (Int, String?) -> Unit): Subscription

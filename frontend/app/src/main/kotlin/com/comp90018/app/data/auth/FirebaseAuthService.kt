@@ -1,4 +1,4 @@
-package com.comp90018.app
+package com.comp90018.app.data.auth
 
 import android.net.Uri
 import com.comp90018.app.features.profile.ProfileExtras
@@ -14,6 +14,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 
+/** Low-level Firebase Authentication and user-profile bootstrap operations. */
 object FirebaseAuthService {
 	fun login(
 		auth: FirebaseAuth,

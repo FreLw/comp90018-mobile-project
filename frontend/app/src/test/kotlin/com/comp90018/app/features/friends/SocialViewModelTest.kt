@@ -1,17 +1,32 @@
 package com.comp90018.app.features.friends
 
-import com.comp90018.app.FriendRequestStatus
-import com.comp90018.app.FriendSummary
-import com.comp90018.app.FriendshipStatus
-import com.comp90018.app.IncomingFriendRequest
-import com.comp90018.app.OutgoingFriendRequest
-import com.comp90018.app.SearchUser
+import com.comp90018.app.data.social.DirectChatSummary
+import com.comp90018.app.data.social.FriendRequestStatus
+import com.comp90018.app.data.social.FriendSummary
+import com.comp90018.app.data.social.FriendshipStatus
+import com.comp90018.app.data.social.IncomingFriendRequest
+import com.comp90018.app.data.social.OutgoingFriendRequest
+import com.comp90018.app.data.social.SearchUser
 import com.comp90018.app.data.social.SocialRepository
 import com.comp90018.app.data.social.Subscription
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SocialViewModelTest {
+    @Test
+    fun newExplorerReceivesTwentyMessageableStarterContacts() {
+        val viewModel = FriendsViewModel(FakeSocialRepository(), "current-user", "current_user")
+
+        assertEquals(20, viewModel.uiState.value.friends.size)
+        assertEquals(20, viewModel.uiState.value.friends.map { it.uid }.distinct().size)
+
+        val firstContact = viewModel.uiState.value.friends.first()
+        viewModel.openChat(firstContact)
+
+        assertEquals(firstContact.uid, viewModel.uiState.value.chatTarget?.friend?.uid)
+        assertEquals(firstContact.uid, viewModel.uiState.value.recentChatFriendIds.first())
+    }
+
     @Test
     fun friendRequestPersistsComposedMessageAndUpdatesStatus() {
         val repository = FakeSocialRepository()
@@ -45,10 +60,28 @@ class SocialViewModelTest {
 
         assertEquals(listOf(outgoing), viewModel.uiState.value.outgoingRequests)
     }
+
+    @Test
+    fun directChatKeepsLastMessageForTheChatsList() {
+        val chat = DirectChatSummary(
+            friendUid = "starter_contact_01",
+            updatedAtMillis = 123L,
+            lastMessageText = "Meet at the Old Quad?",
+        )
+
+        val viewModel = FriendsViewModel(
+            FakeSocialRepository(directChats = listOf(chat)),
+            "current-user",
+            "current_user",
+        )
+
+        assertEquals(listOf(chat), viewModel.uiState.value.recentChats)
+    }
 }
 
 private class FakeSocialRepository(
     private val outgoingRequests: List<OutgoingFriendRequest> = emptyList(),
+    private val directChats: List<DirectChatSummary> = emptyList(),
 ) : SocialRepository {
     var sentMessage: String? = null
 
@@ -113,6 +146,14 @@ private class FakeSocialRepository(
         onChange: (List<FriendSummary>, String?) -> Unit,
     ): Subscription {
         onChange(emptyList(), null)
+        return Subscription { }
+    }
+
+    override fun observeDirectChats(
+        currentUid: String,
+        onChange: (List<DirectChatSummary>, String?) -> Unit,
+    ): Subscription {
+        onChange(directChats, null)
         return Subscription { }
     }
 
