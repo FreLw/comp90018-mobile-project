@@ -739,13 +739,13 @@ private fun GoogleMapView(
                     if (focusSelectedRelic && selectedRelic != null) {
                         moveCameraToRelic(map, selectedRelic)
                     } else {
-                        moveCameraToCampus(map, relics, displayLocation)
+                        moveCameraToTreasureArea(map, relics, activeHuntTreasureId)
                     }
                     cameraInitialised = true
                     cameraSelectedRelicId = if (focusSelectedRelic) selectedRelic?.id else null
                     cameraRelicSignature = relicSignature
                 } else if (!focusSelectedRelic && relics.isNotEmpty() && cameraRelicSignature != relicSignature) {
-                    moveCameraToCampus(map, relics, displayLocation)
+                    moveCameraToTreasureArea(map, relics, activeHuntTreasureId)
                     cameraRelicSignature = relicSignature
                 } else if (
                     focusSelectedRelic &&
@@ -2001,6 +2001,8 @@ private const val CURRENT_LOCATION_Z_INDEX = 10f
 
 private const val STALE_LOCATION_ALPHA = 0.5f
 
+private const val MAX_INITIAL_TREASURE_AREA_SPAN_METERS = 3_000.0
+
 private fun questMarkerIcon(context: Context, selected: Boolean, pulseScale: Float = 1f): BitmapDescriptor {
     val density = context.resources.displayMetrics.density
     val baseSize = if (selected) 44f else 30f * pulseScale
@@ -2071,11 +2073,25 @@ private fun currentLocationIcon(context: Context): BitmapDescriptor {
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-private fun moveCameraToCampus(map: GoogleMap, relics: List<MapRelic>, currentLocation: GeoCoordinate?) {
-    val points = buildList {
-        addAll(relics.map { it.coordinate })
-        currentLocation?.let(::add)
+private fun moveCameraToTreasureArea(
+    map: GoogleMap,
+    relics: List<MapRelic>,
+    activeHuntTreasureId: String?,
+) {
+    relics.firstOrNull { it.id == activeHuntTreasureId }?.let { relic ->
+        moveCameraToRelic(map, relic)
+        return
     }
+
+    if (!isCompactTreasureArea(relics)) {
+        recommendedInitialRelic(relics)?.let { relic ->
+            moveCameraToRelic(map, relic)
+            return
+        }
+    }
+
+    val points = relics.map { it.coordinate }
+    if (points.isEmpty()) return
     val latitudeSpan = (points.maxOfOrNull { it.latitude } ?: 0.0) - (points.minOfOrNull { it.latitude } ?: 0.0)
     val longitudeSpan = (points.maxOfOrNull { it.longitude } ?: 0.0) - (points.minOfOrNull { it.longitude } ?: 0.0)
     if (points.isNotEmpty() && latitudeSpan < 0.0001 && longitudeSpan < 0.0001) {
@@ -2084,9 +2100,28 @@ private fun moveCameraToCampus(map: GoogleMap, relics: List<MapRelic>, currentLo
     }
     val bounds = LatLngBounds.builder().apply {
         relics.forEach { include(it.coordinate.toLatLng()) }
-        currentLocation?.let { include(it.toLatLng()) }
     }.build()
     map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 120))
+}
+
+internal fun recommendedInitialRelic(relics: List<MapRelic>): MapRelic? =
+    relics.minWithOrNull(compareBy<MapRelic> { it.sortOrder }.thenBy { it.name })
+
+internal fun isCompactTreasureArea(
+    relics: List<MapRelic>,
+    maxSpanMeters: Double = MAX_INITIAL_TREASURE_AREA_SPAN_METERS,
+): Boolean {
+    if (relics.size < 2) return true
+    return relics.indices.all { firstIndex ->
+        ((firstIndex + 1) until relics.size).all { secondIndex ->
+            runCatching {
+                LocationCalculator.distanceMeters(
+                    relics[firstIndex].coordinate,
+                    relics[secondIndex].coordinate,
+                ) <= maxSpanMeters
+            }.getOrDefault(false)
+        }
+    }
 }
 
 private fun moveCameraToRelic(map: GoogleMap, selectedRelic: MapRelic) {
