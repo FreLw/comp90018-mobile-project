@@ -177,8 +177,12 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     activeHuntOwnerId = activeRoomHuntState.room?.takeIf { it.taskStatus == "hunting" }?.creatorId,
                     activeHuntMemberIds = activeRoomHuntState.room?.memberIds.orEmpty(),
                     activeHuntCompletedMemberIds = activeRoomHuntState.room?.taskCompletedMemberIds.orEmpty(),
+                    activeHuntFoundFragmentIds = activeRoomHuntState.room?.foundFragmentIds.orEmpty(),
+                    activeHuntClaimedMemberIds = activeRoomHuntState.room?.taskClaimedMemberIds.orEmpty(),
                     currentUserId = user.uid,
                     onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
+                    onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
+                    onClaimCompletedHuntTreasure = activeRoomHuntViewModel?.let { it::claimCompletedHuntTreasure } ?: {},
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, state.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
                 AppDestination.Profile -> ProfileScreen(

@@ -20,6 +20,8 @@ interface TeamRoomRepository {
     fun startHunt(roomId: String, userId: String, onComplete: (String?) -> Unit)
     fun terminateHunt(roomId: String, userId: String, onComplete: (String?) -> Unit)
     fun completeHuntTask(roomId: String, userId: String, onComplete: (String?) -> Unit)
+    fun findHuntFragment(roomId: String, userId: String, fragmentId: String, onComplete: (String?) -> Unit)
+    fun claimCompletedHuntTreasure(roomId: String, userId: String, onComplete: (String?) -> Unit)
     fun sendMessage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit)
     fun sendImage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit)
     fun leaveRoom(roomId: String, userId: String, onComplete: (String?) -> Unit)

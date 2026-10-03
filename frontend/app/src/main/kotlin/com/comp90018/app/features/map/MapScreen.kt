@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.WbIncandescent
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -157,8 +158,12 @@ fun MapScreen(
     activeHuntOwnerId: String? = null,
     activeHuntMemberIds: List<String> = emptyList(),
     activeHuntCompletedMemberIds: List<String> = emptyList(),
+    activeHuntFoundFragmentIds: List<String> = emptyList(),
+    activeHuntClaimedMemberIds: List<String> = emptyList(),
     currentUserId: String = "",
     onCompleteActiveHuntTask: () -> Unit = {},
+    onFindActiveHuntFragment: (String) -> Unit = {},
+    onClaimCompletedHuntTreasure: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
@@ -172,6 +177,8 @@ fun MapScreen(
         completedMemberIds = activeHuntCompletedMemberIds,
         currentUserId = currentUserId,
     )
+    val isSouthLawnFragmentHunt = teamHuntActive && teamHuntTarget?.id == SOUTH_LAWN_ATLAS_ID &&
+        SouthLawnFragments.any { it.id !in activeHuntFoundFragmentIds }
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
     var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
@@ -260,8 +267,8 @@ fun MapScreen(
         detailRelic = detailRelic?.let { detail -> resolvedTreasures.firstOrNull { it.id == detail.id } }
         challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
     }
-    LaunchedEffect(teamHuntAllCompleted, teamHuntTarget?.id) {
-        if (teamHuntAllCompleted) detailRelic = teamHuntTarget
+    LaunchedEffect(teamHuntAllCompleted, teamHuntTarget?.id, activeHuntClaimedMemberIds, currentUserId) {
+        if (teamHuntAllCompleted && currentUserId !in activeHuntClaimedMemberIds) detailRelic = teamHuntTarget
     }
     LaunchedEffect(teamHuntTarget?.id, teamHuntProximity, teamHuntTaskPendingForCurrentUser) {
         if (teamHuntTaskPendingForCurrentUser &&
@@ -270,6 +277,30 @@ fun MapScreen(
         ) {
             showTeamHuntArrival = true
         }
+    }
+
+    // South Lawn replaces the original viewing-angle challenge with a shared four-fragment
+    // search. This branch happens after the common state/effect setup so the Compose call order
+    // remains stable as a room starts or ends a hunt.
+    if (isSouthLawnFragmentHunt) {
+        SouthLawnFragmentHuntScreen(
+            fragments = SouthLawnFragments,
+            foundFragmentIds = activeHuntFoundFragmentIds,
+            userLocation = userLocation,
+            deviceHeading = deviceHeading,
+            onFindFragment = onFindActiveHuntFragment,
+        )
+        return
+    }
+
+    if (teamHuntActive && teamHuntTarget?.id == SOUTH_LAWN_ATLAS_ID &&
+        currentUserId in activeHuntClaimedMemberIds
+    ) {
+        SouthLawnClaimWaitingScreen(
+            userLocation = userLocation,
+            deviceHeading = deviceHeading,
+        )
+        return
     }
 
     memberQuizRelic?.let { relic ->
@@ -347,7 +378,14 @@ fun MapScreen(
             isFound = relic.id in foundRelicIds && !teamHuntActive,
             collecting = savingTreasureId == relic.id,
             preciseLocationEnabled = preciseLocationEnabled,
-            onCollected = { onComplete -> onCollectTreasure(relic.id, onComplete) },
+            onCollected = { onComplete ->
+                onCollectTreasure(relic.id) { error ->
+                    if (error == null && teamHuntActive && relic.id == teamHuntTarget?.id && teamHuntAllCompleted) {
+                        onClaimCompletedHuntTreasure()
+                    }
+                    onComplete(error)
+                }
+            },
             onStartChallenge = relic.challengeConfig
                 ?.takeUnless { it.type in LOCAL_HUNT_CHALLENGE_TYPES }
                 ?.let { { debugSimulationEnabled = false; challengeRelic = relic } },
@@ -652,6 +690,108 @@ internal fun saveRelicDiscovery(
 ) = onCollectTreasure(relic.id, onComplete)
 
 @Composable
+private fun SouthLawnFragmentHuntScreen(
+    fragments: List<TeamHuntFragment>,
+    foundFragmentIds: List<String>,
+    userLocation: LocationOutput,
+    deviceHeading: Float,
+    onFindFragment: (String) -> Unit,
+) {
+    var selectedFragmentId by remember { mutableStateOf<String?>(null) }
+    val selectedFragment = fragments.firstOrNull { it.id == selectedFragmentId }
+    val currentLocation = userLocation.currentLocation ?: userLocation.lastKnownLocation
+    val selectedDistance = selectedFragment?.let { fragment ->
+        currentLocation?.let { LocationCalculator.distanceMeters(it, fragment.coordinate) }
+    }
+    val canCollect = userLocation.permission.isGranted && selectedDistance != null &&
+        selectedDistance <= SOUTH_LAWN_FRAGMENT_RADIUS_METERS
+
+    Box(Modifier.fillMaxSize()) {
+        GoogleMapView(
+            relics = emptyList(),
+            selectedRelic = null,
+            locationOutput = userLocation,
+            deviceHeading = deviceHeading,
+            huntFragments = fragments,
+            foundFragmentIds = foundFragmentIds.toSet(),
+            focusSelectedRelic = false,
+            onRelicSelected = {},
+            onFragmentSelected = { selectedFragmentId = it.id },
+            modifier = Modifier.fillMaxSize(),
+        )
+        Card(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("South Lawn Atlas fragments", color = Ink, fontWeight = FontWeight.Bold)
+                Text("${foundFragmentIds.size.coerceAtMost(fragments.size)}/${fragments.size} fragments found", color = Brand)
+                fragments.forEach { fragment ->
+                    val found = fragment.id in foundFragmentIds
+                    Text(
+                        "${if (found) "✓" else "○"} ${fragment.title}: ${if (found) "is found" else "not found"}",
+                        color = if (found) Brand else Muted,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+        selectedFragment?.takeIf { it.id !in foundFragmentIds }?.let { fragment ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(fragment.title, color = Ink, fontWeight = FontWeight.Bold)
+                    Text(selectedDistance.formatDistance() + " away", color = Muted)
+                    Button(
+                        onClick = { onFindFragment(fragment.id); selectedFragmentId = null },
+                        enabled = canCollect,
+                        colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                    ) { Text("Collect fragment") }
+                    if (!canCollect) Text("Move within 8 m to collect this fragment.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+/** Shown after this explorer has claimed the reconstructed Atlas, until their teammate does too. */
+@Composable
+private fun SouthLawnClaimWaitingScreen(
+    userLocation: LocationOutput,
+    deviceHeading: Float,
+) {
+    Box(Modifier.fillMaxSize()) {
+        GoogleMapView(
+            relics = emptyList(),
+            selectedRelic = null,
+            locationOutput = userLocation,
+            deviceHeading = deviceHeading,
+            focusSelectedRelic = false,
+            onRelicSelected = {},
+            modifier = Modifier.fillMaxSize(),
+        )
+        Card(
+            modifier = Modifier.align(Alignment.TopCenter).padding(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Atlas claimed", color = Ink, fontWeight = FontWeight.Bold)
+                Text("Waiting for your teammate to claim their Atlas.", color = Muted, textAlign = TextAlign.Center)
+            }
+        }
+    }
+}
+
+@Composable
 private fun GoogleMapView(
     relics: List<MapRelic>,
     selectedRelic: MapRelic?,
@@ -659,8 +799,11 @@ private fun GoogleMapView(
     deviceHeading: Float,
     markerPulse: Float = 1f,
     activeHuntTreasureId: String? = null,
+    huntFragments: List<TeamHuntFragment> = emptyList(),
+    foundFragmentIds: Set<String> = emptySet(),
     focusSelectedRelic: Boolean = true,
     onRelicSelected: (MapRelic) -> Unit,
+    onFragmentSelected: (TeamHuntFragment) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -695,6 +838,9 @@ private fun GoogleMapView(
                     relics.firstOrNull { it.id == marker.tag }?.let {
                         onRelicSelected(it)
                         true
+                    } ?: huntFragments.firstOrNull { "fragment:${it.id}" == marker.tag }?.let {
+                        onFragmentSelected(it)
+                        true
                     } ?: false
                 }
                 // Google Maps draws its blue location layer above overlapping treasure markers,
@@ -707,15 +853,19 @@ private fun GoogleMapView(
                 val relicSignature = relics.joinToString("|") { relic ->
                     "${relic.id}:${relic.coordinate.latitude}:${relic.coordinate.longitude}"
                 }
-                val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature"
+                val fragmentSignature = huntFragments.joinToString("|") { fragment ->
+                    "${fragment.id}:${fragment.coordinate.latitude}:${fragment.coordinate.longitude}:${fragment.id in foundFragmentIds}"
+                }
+                val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature|$fragmentSignature"
                 if (renderedMapKey != mapKey) {
                     map.clear()
                     currentLocationMarker = null
                     renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, activeHuntTreasureId, markerPulse)
+                    renderHuntFragments(context, map, huntFragments, foundFragmentIds)
                     renderedMapKey = mapKey
                 }
                 val pulseBucket = (markerPulse * 20).toInt()
-                if (renderedPulseBucket != pulseBucket) {
+                if (huntFragments.isEmpty() && renderedPulseBucket != pulseBucket) {
                     val pulseIcon = questMarkerIcon(context, selected = false, pulseScale = markerPulse)
                     renderedRelicMarkers.forEach { (relicId, marker) ->
                         when {
@@ -739,13 +889,13 @@ private fun GoogleMapView(
                     if (focusSelectedRelic && selectedRelic != null) {
                         moveCameraToRelic(map, selectedRelic)
                     } else {
-                        moveCameraToCampus(map, relics, displayLocation)
+                        moveCameraToCampus(map, relics.map { it.coordinate } + huntFragments.map { it.coordinate }, displayLocation)
                     }
                     cameraInitialised = true
                     cameraSelectedRelicId = if (focusSelectedRelic) selectedRelic?.id else null
                     cameraRelicSignature = relicSignature
                 } else if (!focusSelectedRelic && relics.isNotEmpty() && cameraRelicSignature != relicSignature) {
-                    moveCameraToCampus(map, relics, displayLocation)
+                    moveCameraToCampus(map, relics.map { it.coordinate } + huntFragments.map { it.coordinate }, displayLocation)
                     cameraRelicSignature = relicSignature
                 } else if (
                     focusSelectedRelic &&
@@ -1935,6 +2085,50 @@ private fun renderRelics(
     return markers
 }
 
+private fun renderHuntFragments(
+    context: Context,
+    map: GoogleMap,
+    fragments: List<TeamHuntFragment>,
+    foundFragmentIds: Set<String>,
+) {
+    fragments.forEach { fragment ->
+        val found = fragment.id in foundFragmentIds
+        map.addMarker(
+            MarkerOptions()
+                .position(fragment.coordinate.toLatLng())
+                .title(fragment.title)
+                .snippet(if (found) "Found" else "Not found")
+                .icon(fragmentMarkerIcon(context, found))
+                .anchor(0.5f, 0.5f)
+                .alpha(if (found) 0.42f else 1f),
+        )?.tag = "fragment:${fragment.id}"
+    }
+}
+
+private fun fragmentMarkerIcon(context: Context, found: Boolean): BitmapDescriptor {
+    val size = (38f * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = if (found) android.graphics.Color.rgb(102, 102, 102) else android.graphics.Color.rgb(102, 65, 175)
+    }
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.43f, paint)
+    val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        strokeWidth = size * 0.08f
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    if (found) {
+        canvas.drawLine(size * 0.27f, size * 0.51f, size * 0.44f, size * 0.67f, linePaint)
+        canvas.drawLine(size * 0.44f, size * 0.67f, size * 0.74f, size * 0.34f, linePaint)
+    } else {
+        canvas.drawLine(size * 0.31f, size * 0.36f, size * 0.69f, size * 0.64f, linePaint)
+        canvas.drawLine(size * 0.69f, size * 0.36f, size * 0.31f, size * 0.64f, linePaint)
+    }
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
 /** The team-selected destination has a gold halo which gently breathes during an active hunt. */
 private fun huntMarkerIcon(context: Context, pulseScale: Float): BitmapDescriptor {
     val density = context.resources.displayMetrics.density
@@ -2071,11 +2265,12 @@ private fun currentLocationIcon(context: Context): BitmapDescriptor {
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-private fun moveCameraToCampus(map: GoogleMap, relics: List<MapRelic>, currentLocation: GeoCoordinate?) {
+private fun moveCameraToCampus(map: GoogleMap, coordinates: List<GeoCoordinate>, currentLocation: GeoCoordinate?) {
     val points = buildList {
-        addAll(relics.map { it.coordinate })
+        addAll(coordinates)
         currentLocation?.let(::add)
     }
+    if (points.isEmpty()) return
     val latitudeSpan = (points.maxOfOrNull { it.latitude } ?: 0.0) - (points.minOfOrNull { it.latitude } ?: 0.0)
     val longitudeSpan = (points.maxOfOrNull { it.longitude } ?: 0.0) - (points.minOfOrNull { it.longitude } ?: 0.0)
     if (points.isNotEmpty() && latitudeSpan < 0.0001 && longitudeSpan < 0.0001) {
@@ -2083,7 +2278,7 @@ private fun moveCameraToCampus(map: GoogleMap, relics: List<MapRelic>, currentLo
         return
     }
     val bounds = LatLngBounds.builder().apply {
-        relics.forEach { include(it.coordinate.toLatLng()) }
+        coordinates.forEach { include(it.toLatLng()) }
         currentLocation?.let { include(it.toLatLng()) }
     }.build()
     map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 120))
