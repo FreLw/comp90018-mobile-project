@@ -55,6 +55,12 @@ class FirebaseTeamRoomRepository(
     override fun completeHuntTask(roomId: String, userId: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.completeHuntTask(firestore, roomId, userId, onComplete)
 
+    override fun findHuntFragment(roomId: String, userId: String, fragmentId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.findHuntFragment(firestore, roomId, userId, fragmentId, onComplete)
+
+    override fun claimCompletedHuntTreasure(roomId: String, userId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.claimCompletedHuntTreasure(firestore, roomId, userId, onComplete)
+
     override fun sendMessage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, text: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.sendMessage(firestore, roomId, senderId, recipientId, senderName, senderAvatarUrl, text, onComplete)
     override fun sendImage(roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) =

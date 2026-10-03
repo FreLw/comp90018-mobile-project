@@ -16,6 +16,8 @@ data class TeamRoom(
     val taskTitle: String,
     val taskStatus: String,
     val taskCompletedMemberIds: List<String> = emptyList(),
+    val foundFragmentIds: List<String> = emptyList(),
+    val taskClaimedMemberIds: List<String> = emptyList(),
 )
 
 data class TeamRoomMember(
@@ -81,6 +83,8 @@ object FirebaseTeamRoomService {
                         "taskTitle" to "",
                         "taskStatus" to "unassigned",
                         "taskCompletedMemberIds" to emptyList<String>(),
+                        "foundFragmentIds" to emptyList<String>(),
+                        "taskClaimedMemberIds" to emptyList<String>(),
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp(),
                     ))
@@ -134,6 +138,8 @@ object FirebaseTeamRoomService {
                     taskTitle = snapshot.getString("taskTitle").orEmpty(),
                     taskStatus = snapshot.getString("taskStatus").orEmpty(),
                     taskCompletedMemberIds = (snapshot.get("taskCompletedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+                    foundFragmentIds = (snapshot.get("foundFragmentIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+                    taskClaimedMemberIds = (snapshot.get("taskClaimedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                 ), null)
             }
         }
@@ -179,6 +185,8 @@ object FirebaseTeamRoomService {
             transaction.update(room, mapOf(
                 "taskStatus" to "hunting",
                 "taskCompletedMemberIds" to emptyList<String>(),
+                "foundFragmentIds" to emptyList<String>(),
+                "taskClaimedMemberIds" to emptyList<String>(),
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
         }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to start hunt") }
@@ -200,6 +208,8 @@ object FirebaseTeamRoomService {
                 "taskTitle" to "",
                 "taskStatus" to "unassigned",
                 "taskCompletedMemberIds" to emptyList<String>(),
+                "foundFragmentIds" to emptyList<String>(),
+                "taskClaimedMemberIds" to emptyList<String>(),
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
         }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to terminate hunt") }
@@ -220,6 +230,90 @@ object FirebaseTeamRoomService {
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
         }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to update hunt progress") }
+    }
+
+    /** Atomically records one shared South Lawn fragment. Duplicate taps are harmless. */
+    fun findHuntFragment(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        userId: String,
+        fragmentId: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        val validFragmentIds = setOf(
+            "south_lawn_north_west", "south_lawn_north_east",
+            "south_lawn_south_west", "south_lawn_south_east",
+        )
+        if (fragmentId !in validFragmentIds) return onComplete("Unknown fragment")
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
+            if (snapshot.getString("taskId") != "south_lawn_atlas") throw IllegalStateException("Fragments are only used for the South Lawn hunt")
+            val existingFragments = (snapshot.get("foundFragmentIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            val allFound = (existingFragments + fragmentId).toSet().containsAll(validFragmentIds)
+            transaction.update(room, mapOf(
+                "foundFragmentIds" to FieldValue.arrayUnion(fragmentId),
+                // Reuse the existing ready-to-dig transition once all four shared pieces have
+                // been recovered. Both explorers can then collect the reconstructed Atlas.
+                "taskCompletedMemberIds" to if (allFound) members else snapshot.get("taskCompletedMemberIds") ?: emptyList<String>(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to save fragment") }
+    }
+
+    /** Ends a completed room hunt only after both explorers have saved its treasure. */
+    fun claimCompletedHuntTreasure(
+        firestore: FirebaseFirestore,
+        roomId: String,
+        userId: String,
+        onComplete: (String?) -> Unit,
+    ) {
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            val taskId = snapshot.getString("taskId").orEmpty()
+            val completedMembers = (snapshot.get("taskCompletedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            val collectionItem = transaction.get(
+                firestore.collection("users").document(userId)
+                    .collection("treasureCollection").document(taskId),
+            )
+            val fragments = (snapshot.get("foundFragmentIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            val requiredFragments = setOf(
+                "south_lawn_north_west", "south_lawn_north_east",
+                "south_lawn_south_west", "south_lawn_south_east",
+            )
+            if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
+            if (taskId.isBlank() || !members.all { it in completedMembers }) {
+                throw IllegalStateException("Both explorers must complete the task before claiming the treasure")
+            }
+            if (taskId == "south_lawn_atlas" && !fragments.containsAll(requiredFragments)) {
+                throw IllegalStateException("Find all fragments before claiming the Atlas")
+            }
+            if (!collectionItem.exists() || collectionItem.getString("ownerUid") != userId) {
+                throw IllegalStateException("Add this treasure to your collection before claiming it")
+            }
+            val claimed = (snapshot.get("taskClaimedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            val allClaimed = (claimed + userId).toSet().containsAll(members)
+            if (allClaimed) {
+                transaction.update(room, mapOf(
+                    "taskId" to "",
+                    "taskTitle" to "",
+                    "taskStatus" to "unassigned",
+                    "taskCompletedMemberIds" to emptyList<String>(),
+                    "foundFragmentIds" to emptyList<String>(),
+                    "taskClaimedMemberIds" to emptyList<String>(),
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ))
+            } else {
+                transaction.update(room, mapOf(
+                    "taskClaimedMemberIds" to FieldValue.arrayUnion(userId),
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ))
+            }
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to confirm treasure claim") }
     }
 
     fun observeMessages(

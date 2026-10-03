@@ -32,8 +32,6 @@ class FriendsViewModel(
     private var requestsSubscription: Subscription? = null
     private var friendsSubscription: Subscription? = null
     private var outgoingRequestsSubscription: Subscription? = null
-    private var directChatSubscription: Subscription? = null
-    private var friendActivity: Map<String, Long> = emptyMap()
 
     init {
         repository.migrateAcceptedFriendships(currentUid, currentUsername)
@@ -48,14 +46,7 @@ class FriendsViewModel(
         }
         friendsSubscription = repository.observeFriends(currentUid) { friends, error ->
             mutableUiState.value = mutableUiState.value.copy(
-                friends = sortFriendsByActivity(friends),
-                message = error ?: mutableUiState.value.message,
-            )
-        }
-        directChatSubscription = repository.observeDirectChatActivity(currentUid) { activity, error ->
-            friendActivity = activity
-            mutableUiState.value = mutableUiState.value.copy(
-                friends = sortFriendsByActivity(mutableUiState.value.friends),
+                friends = friends.sortedBy { it.username.lowercase() },
                 message = error ?: mutableUiState.value.message,
             )
         }
@@ -114,14 +105,7 @@ class FriendsViewModel(
         requestsSubscription?.cancel()
         outgoingRequestsSubscription?.cancel()
         friendsSubscription?.cancel()
-        directChatSubscription?.cancel()
     }
-
-    private fun sortFriendsByActivity(friends: List<FriendSummary>): List<FriendSummary> =
-        friends.sortedWith(
-            compareByDescending<FriendSummary> { friendActivity[it.uid] ?: 0L }
-                .thenBy { it.username.lowercase() },
-        )
 
     companion object {
         fun factory(repository: SocialRepository, currentUid: String, currentUsername: String) = object : ViewModelProvider.Factory {

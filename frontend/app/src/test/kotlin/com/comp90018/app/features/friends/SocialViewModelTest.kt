@@ -116,13 +116,5 @@ private class FakeSocialRepository(
         return Subscription { }
     }
 
-    override fun observeDirectChatActivity(
-        currentUid: String,
-        onChange: (Map<String, Long>, String?) -> Unit,
-    ): Subscription {
-        onChange(emptyMap(), null)
-        return Subscription { }
-    }
-
     override fun migrateAcceptedFriendships(currentUid: String, currentUsername: String) = Unit
 }

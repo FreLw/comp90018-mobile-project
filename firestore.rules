@@ -272,7 +272,7 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'createdAt', 'updatedAt'])
         && request.resource.data.creatorId == request.auth.uid
         && request.resource.data.memberIds.size() == 1
         && request.auth.uid in request.resource.data.memberIds
@@ -280,6 +280,8 @@ service cloud.firestore {
         && request.resource.data.taskTitle is string
         && request.resource.data.taskStatus == 'unassigned'
         && request.resource.data.taskCompletedMemberIds.size() == 0
+        && request.resource.data.foundFragmentIds.size() == 0
+        && request.resource.data.taskClaimedMemberIds.size() == 0
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if signedIn()
@@ -296,6 +298,10 @@ service cloud.firestore {
         // field.  A join must still be able to update their member list.
         && (!('taskCompletedMemberIds' in resource.data)
           || request.resource.data.taskCompletedMemberIds == resource.data.taskCompletedMemberIds)
+        && (!('foundFragmentIds' in resource.data)
+          || request.resource.data.foundFragmentIds == resource.data.foundFragmentIds)
+        && (!('taskClaimedMemberIds' in resource.data)
+          || request.resource.data.taskClaimedMemberIds == resource.data.taskClaimedMemberIds)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
         && request.resource.data.updatedAt == request.time
@@ -313,6 +319,10 @@ service cloud.firestore {
         // Keep leave available for the same legacy room shape as well.
         && (!('taskCompletedMemberIds' in resource.data)
           || request.resource.data.taskCompletedMemberIds == resource.data.taskCompletedMemberIds)
+        && (!('foundFragmentIds' in resource.data)
+          || request.resource.data.foundFragmentIds == resource.data.foundFragmentIds)
+        && (!('taskClaimedMemberIds' in resource.data)
+          || request.resource.data.taskClaimedMemberIds == resource.data.taskClaimedMemberIds)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
         && request.resource.data.updatedAt == request.time;
@@ -324,7 +334,7 @@ service cloud.firestore {
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'updatedAt'])
         && (
           (request.resource.data.taskStatus == 'assigned'
             && request.resource.data.taskId is string
@@ -340,19 +350,43 @@ service cloud.firestore {
             && (
               (resource.data.taskStatus == 'assigned'
                 && request.auth.uid == resource.data.creatorId
-                && request.resource.data.taskCompletedMemberIds.size() == 0)
+                && request.resource.data.taskCompletedMemberIds.size() == 0
+                && request.resource.data.foundFragmentIds.size() == 0
+                && request.resource.data.taskClaimedMemberIds.size() == 0)
               || (resource.data.taskStatus == 'hunting'
                 && (!('taskCompletedMemberIds' in resource.data)
                   || request.resource.data.taskCompletedMemberIds.hasAll(resource.data.taskCompletedMemberIds))
-                && request.resource.data.taskCompletedMemberIds.size() <= 2)
+                && request.resource.data.taskCompletedMemberIds.size() <= 2
+                && request.resource.data.foundFragmentIds.hasAll(resource.data.foundFragmentIds)
+                && request.resource.data.foundFragmentIds.size() <= 4
+                && (request.resource.data.foundFragmentIds.size() == 0
+                  || request.resource.data.taskId == 'south_lawn_atlas')
+                && request.resource.data.foundFragmentIds.hasOnly([
+                  'south_lawn_north_west', 'south_lawn_north_east',
+                  'south_lawn_south_west', 'south_lawn_south_east'
+                ])
+                // A hunt already underway when claims were introduced has no claim field yet.
+                // Its first claim is allowed to initialise the field; later claims remain
+                // append-only.
+                && (!('taskClaimedMemberIds' in resource.data)
+                  || request.resource.data.taskClaimedMemberIds.hasAll(resource.data.taskClaimedMemberIds))
+                && request.resource.data.taskClaimedMemberIds.size() <= 2
+                && request.resource.data.taskClaimedMemberIds.hasOnly(resource.data.memberIds))
             )
           )
           || (request.resource.data.taskStatus == 'unassigned'
             && resource.data.taskStatus == 'hunting'
-            && request.auth.uid == resource.data.creatorId
+            && (
+              request.auth.uid == resource.data.creatorId
+              || (resource.data.taskClaimedMemberIds.size() == 1
+                && !(request.auth.uid in resource.data.taskClaimedMemberIds)
+                && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(resource.data.taskId)))
+            )
             && request.resource.data.taskId == ''
             && request.resource.data.taskTitle == ''
             && request.resource.data.taskCompletedMemberIds.size() == 0
+            && request.resource.data.foundFragmentIds.size() == 0
+            && request.resource.data.taskClaimedMemberIds.size() == 0
           )
         );
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;

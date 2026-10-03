@@ -165,6 +165,7 @@ private fun TeamRoomChatScreen(
                 updating = state.updatingTask,
                 onContinue = { onStartHunt(room.taskId) },
                 onTerminate = viewModel::terminateHunt,
+                onClaimAtlas = viewModel::claimCompletedHuntTreasure,
             )
         } else {
             RoomHuntControls(
@@ -255,7 +256,13 @@ private fun ActiveHuntHeader(
     updating: Boolean,
     onContinue: () -> Unit,
     onTerminate: () -> Unit,
+    onClaimAtlas: () -> Unit,
 ) {
+    val isFragmentHunt = room.taskId == "south_lawn_atlas"
+    val allFragmentsFound = listOf(
+        "south_lawn_north_west", "south_lawn_north_east",
+        "south_lawn_south_west", "south_lawn_south_east",
+    ).all { it in room.foundFragmentIds }
     val completed = currentUserId in room.taskCompletedMemberIds
     val allCompleted = room.memberIds.isNotEmpty() && room.memberIds.all { it in room.taskCompletedMemberIds }
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = BrandSoft)) {
@@ -263,6 +270,10 @@ private fun ActiveHuntHeader(
             Text("Targeting ${room.taskTitle}", color = Ink, fontWeight = FontWeight.Bold)
             Text(
                 when {
+                    isFragmentHunt && currentUserId in room.taskClaimedMemberIds -> "Your Atlas is claimed. Waiting for your teammate to claim theirs."
+                    currentUserId in room.taskClaimedMemberIds -> "Your treasure is claimed. Waiting for your teammate to claim theirs."
+                    isFragmentHunt && allFragmentsFound -> "All four fragments are found. Turn to the map to reconstruct the Atlas."
+                    isFragmentHunt -> "Find all four Atlas fragments together. Found fragments are shared with your teammate."
                     allCompleted -> "Both explorers are ready. Turn to the map to dig the treasure."
                     completed -> "Waiting for your teammate to finish. You can help them."
                     else -> "Go and hunt for the treasure."
@@ -270,14 +281,44 @@ private fun ActiveHuntHeader(
                 color = Muted,
                 style = MaterialTheme.typography.bodySmall,
             )
+            if (isFragmentHunt) SouthLawnFragmentStatus(room.foundFragmentIds)
+            if (allCompleted && currentUserId !in room.taskClaimedMemberIds) {
+                Button(
+                    onClick = onClaimAtlas,
+                    enabled = !updating,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Brand),
+                ) { Text(if (updating) "Claiming..." else "Claim Treasure") }
+            }
             Button(onClick = onContinue, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand)) {
-                Text(if (allCompleted) "Turn to map and dig" else "Turn to map to continue your hunt")
+                Text(if (isFragmentHunt && currentUserId in room.taskClaimedMemberIds) "View hunt status" else if (isFragmentHunt && allFragmentsFound) "Turn to map and reconstruct" else if (isFragmentHunt) "Turn to map to find fragments" else if (allCompleted) "Turn to map and dig" else "Turn to map to continue your hunt")
             }
             if (room.creatorId == currentUserId) {
                 OutlinedButton(onClick = onTerminate, enabled = !updating, modifier = Modifier.fillMaxWidth()) {
                     Text(if (updating) "Terminating..." else "Terminate Hunt", color = RelicRed)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SouthLawnFragmentStatus(foundFragmentIds: List<String>) {
+    val fragments = listOf(
+        "south_lawn_north_west" to "North-west fragment",
+        "south_lawn_north_east" to "North-east fragment",
+        "south_lawn_south_west" to "South-west fragment",
+        "south_lawn_south_east" to "South-east fragment",
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text("ROOM TASK STATUS", color = Muted, style = MaterialTheme.typography.labelMedium)
+        fragments.forEach { (id, label) ->
+            val found = id in foundFragmentIds
+            Text(
+                "${if (found) "✓" else "○"} $label: ${if (found) "is found" else "not found"}",
+                color = if (found) Brand else Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -531,6 +572,17 @@ private fun RoomDetailsDialog(
                 Column {
                     Text("HUNT STATUS", color = Muted, style = MaterialTheme.typography.labelMedium)
                     Text(activeHunt.taskTitle, color = Ink, fontWeight = FontWeight.Medium)
+                    if (activeHunt.taskId == "south_lawn_atlas") {
+                        SouthLawnFragmentStatus(activeHunt.foundFragmentIds)
+                        members.forEach { member ->
+                            val claimed = member.uid in activeHunt.taskClaimedMemberIds
+                            Text(
+                                "${if (claimed) "✓" else "○"} ${member.name}: ${if (claimed) "Atlas claimed" else "Atlas not claimed"}",
+                                color = if (claimed) Brand else Muted,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                     members.forEach { member ->
                         val done = member.uid in activeHunt.taskCompletedMemberIds
                         Text("${if (done) "✓" else "○"} ${member.name}: ${if (done) "Task complete" else "Still hunting"}", color = if (done) Brand else Muted)

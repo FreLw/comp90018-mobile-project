@@ -331,33 +331,6 @@ object FirebaseSocialService {
             onChange(friends, null)
         }
 
-    /** Observes the latest activity time for each of the user's direct-chat partners. */
-    fun observeDirectChatActivity(
-        firestore: FirebaseFirestore,
-        currentUid: String,
-        onChange: (Map<String, Long>, String?) -> Unit,
-    ): ListenerRegistration = firestore.collection("rooms")
-        .whereArrayContains("memberIds", currentUid)
-        .addSnapshotListener { snapshot, exception ->
-            if (exception != null) {
-                onChange(emptyMap(), "Direct-chat activity: ${exception.localizedMessage ?: "Unable to load"}")
-                return@addSnapshotListener
-            }
-            val activityByFriend = snapshot?.documents.orEmpty()
-                .asSequence()
-                .filter { it.id.startsWith("direct_") }
-                .mapNotNull { document ->
-                    val friendUid = (document.get("memberIds") as? List<*>)
-                        ?.filterIsInstance<String>()
-                        ?.firstOrNull { it != currentUid }
-                        ?: return@mapNotNull null
-                    friendUid to (document.getTimestamp("updatedAt")?.toDate()?.time ?: 0L)
-                }
-                .groupBy({ it.first }, { it.second })
-                .mapValues { (_, timestamps) -> timestamps.maxOrNull() ?: 0L }
-            onChange(activityByFriend, null)
-        }
-
     fun migrateAcceptedFriendships(
         firestore: FirebaseFirestore,
         currentUid: String,

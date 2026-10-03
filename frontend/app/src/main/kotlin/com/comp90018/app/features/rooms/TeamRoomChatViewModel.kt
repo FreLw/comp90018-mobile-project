@@ -114,6 +114,22 @@ class TeamRoomChatViewModel(
         }
     }
 
+    fun findHuntFragment(fragmentId: String) {
+        if (mutableUiState.value.updatingTask) return
+        mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
+        repository.findHuntFragment(roomId, userId, fragmentId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+        }
+    }
+
+    fun claimCompletedHuntTreasure() {
+        if (mutableUiState.value.updatingTask) return
+        mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
+        repository.claimCompletedHuntTreasure(roomId, userId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+        }
+    }
+
     fun leave(onExited: () -> Unit) = exit(onExited) { complete -> repository.leaveRoom(roomId, userId, complete) }
     fun dismiss(onExited: () -> Unit) = exit(onExited) { complete -> repository.dismissRoom(roomId, userId, complete) }
 
