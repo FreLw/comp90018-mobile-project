@@ -1,7 +1,9 @@
 # Shared treasure database
 
-Verified runtime export: `treasures.json`. Only six allowlisted treasure documents are exported.
+Verified runtime export: treasures.json.
 
-No service-account credentials, user profiles, chat messages, rooms or discovery history are copied.
+Contains only the six allowlisted treasure documents. No credentials or user/chat/room data are included.
 
-This JSON is a catalogue snapshot, not a managed Firestore export archive.
+Map-assisted simulated GPS/heading values are stored for Union Lawn, Wilson Hall and South Lawn Atlas. calibrationStatus remains pending for later real-device/on-site testing.
+
+prototypeImageUrl is intentionally removed; local artwork is selected through artworkKey.
