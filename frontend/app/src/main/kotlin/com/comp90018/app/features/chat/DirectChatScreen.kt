@@ -63,6 +63,7 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
                 items(state.messages, key = { it.id }) { msg -> ChatMessageRow(msg, currentUid, title, currentUsername, currentAvatarUrl) }
             }
         }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Spacer(Modifier.height(8.dp))
         ChatComposer(
             value = state.input,

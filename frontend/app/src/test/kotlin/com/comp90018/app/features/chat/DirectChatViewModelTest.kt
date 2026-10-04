@@ -48,6 +48,28 @@ class DirectChatViewModelTest {
         assertEquals("", viewModel.uiState.value.input)
     }
 
+    @Test
+    fun listenerFailureDoesNotEraseAnExistingTreasureMessage() {
+        val repository = FakeChatRepository()
+        val viewModel = createViewModel(repository)
+        val sticker = ChatMessage("sticker", "current", "explorer", "", "", 1L,
+            messageType = "treasure_sticker", treasureId = "south_lawn_atlas")
+        repository.emitMessages(listOf(sticker), null)
+        repository.emitMessages(emptyList(), "Permission denied")
+        assertEquals(listOf(sticker), viewModel.uiState.value.messages)
+        assertEquals("Permission denied", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun rejectedStickerSendShowsTheFailure() {
+        val repository = FakeChatRepository()
+        val viewModel = createViewModel(repository)
+        viewModel.sendTreasureSticker("south_lawn_atlas")
+        repository.completeSend("Permission denied")
+        assertEquals("Permission denied", viewModel.uiState.value.error)
+        assertEquals(false, viewModel.uiState.value.sending)
+    }
+
     private fun createViewModel(repository: ChatRepository) = DirectChatViewModel(
         repository = repository,
         roomId = "direct-current-friend",
@@ -59,12 +81,15 @@ class DirectChatViewModelTest {
 }
 
 private class FakeChatRepository : ChatRepository {
+    private var messagesObserver: ((List<ChatMessage>, String?) -> Unit)? = null
+    fun emitMessages(messages: List<ChatMessage>, error: String?) { requireNotNull(messagesObserver)(messages, error) }
     private var sendCompletion: ((String?) -> Unit)? = null
 
     override fun observeMessages(
         roomId: String,
         onChange: (List<ChatMessage>, String?) -> Unit,
     ): Subscription {
+        messagesObserver = onChange
         onChange(emptyList(), null)
         return Subscription { }
     }
@@ -103,5 +128,5 @@ private class FakeChatRepository : ChatRepository {
         senderAvatarUrl: String,
         treasureId: String,
         onComplete: (String?) -> Unit,
-    ) = onComplete(null)
+    ) { sendCompletion = onComplete }
 }

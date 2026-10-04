@@ -92,7 +92,7 @@ fun ChatComposer(
                     Image(painterResource(R.drawable.nav_treasure_symbol), "Open treasure stickers", modifier = Modifier.size(28.dp))
                 }
             }
-            IconButton({ attachments = !attachments }) { Icon(Icons.Rounded.Add, "More options", tint = Ink) }
+            IconButton({ attachments = !attachments }) { Icon(Icons.Rounded.PhotoCamera, "Photo", tint = Ink) }
         }
     }
 }

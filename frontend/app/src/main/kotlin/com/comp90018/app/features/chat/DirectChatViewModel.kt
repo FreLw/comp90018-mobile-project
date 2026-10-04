@@ -32,7 +32,7 @@ class DirectChatViewModel(
 
     init {
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
-            mutableUiState.value = mutableUiState.value.copy(messages = messages, error = error)
+            mutableUiState.value = mutableUiState.value.copy(messages = if (error == null) messages else mutableUiState.value.messages, error = error)
             if (isScreenVisible) repository.markMessagesRead(currentUid, friendUid)
         }
     }

@@ -15,9 +15,16 @@ class TeamHuntTaskEligibilityTest {
         assertFalse(TeamHuntTaskEligibility.isPendingFor(true, members, listOf("owner"), "owner"))
     }
 
-    @Test fun requiresAnActiveTwoPersonHuntAndAMemberIdentity() {
+    @Test fun requiresAnActiveTeamHuntAndAMemberIdentity() {
         assertFalse(TeamHuntTaskEligibility.isPendingFor(false, members, emptyList(), "owner"))
         assertFalse(TeamHuntTaskEligibility.isPendingFor(true, listOf("owner"), emptyList(), "owner"))
         assertFalse(TeamHuntTaskEligibility.isPendingFor(true, members, emptyList(), ""))
+    }
+    @Test fun largerRoomsAllowEachIncompleteExplorerToParticipate() {
+        for (size in 3..4) {
+            val team = (1..size).map { "explorer$it" }
+            assertTrue(TeamHuntTaskEligibility.isPendingFor(true, team, team.dropLast(1), team.last()))
+            assertFalse(TeamHuntTaskEligibility.isPendingFor(true, team, team, team.last()))
+        }
     }
 }

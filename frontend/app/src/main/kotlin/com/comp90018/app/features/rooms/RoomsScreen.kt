@@ -14,6 +14,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.foundation.border
+import com.comp90018.app.data.chat.ChatMessageTypes
+import com.comp90018.app.data.treasure.FirebaseTreasureCollectionRepository
+import com.comp90018.app.features.treasure.TreasureCollectionViewModel
+import com.comp90018.app.ui.components.treasureStickerFor
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.*
@@ -93,6 +101,12 @@ fun RoomsScreen(
 
 @Composable
 private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJoin: () -> Unit) {
+    var creating by remember { mutableStateOf(false) }
+    if (creating) {
+        RoomSettingsForm(title = "Create a room", working = state.working, error = state.actionError,
+            onCancel = { creating = false }, onSave = viewModel::createRoom)
+        return
+    }
     Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.size(86.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) {
             Image(painterResource(R.drawable.nav_rooms_symbol), null, modifier = Modifier.size(76.dp))
@@ -100,16 +114,15 @@ private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJo
         Text("You haven't joined a room yet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
         Text("Join an existing room or create a new one to hunt for treasure together.", color = Muted, textAlign = TextAlign.Center)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onJoin, enabled = state.roomIdInput.isNotBlank() && !state.working) {
-                Icon(Icons.Rounded.ChevronRight, "Find room", tint = Brand, modifier = Modifier.size(30.dp))
-            }
             Box(Modifier.weight(1f)) {
                 AppTextField("Enter room ID", state.roomIdInput, viewModel::updateRoomId)
             }
+            IconButton(onClick = onJoin, enabled = state.roomIdInput.isNotBlank() && !state.working) {
+                Icon(Icons.Rounded.ChevronRight, "Find room", tint = Brand, modifier = Modifier.size(30.dp))
+            }
         }
-        Text("Demo room ID: $DEMO_ROOM_ID", color = Muted, style = MaterialTheme.typography.bodySmall)
         (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
-        Button(onClick = viewModel::createRoom, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
+        Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
     }
 }
 
@@ -141,6 +154,14 @@ private fun TeamRoomChatScreen(
     val messages = state.messages
     val members = state.members
     val error = state.error
+    val treasureRepository = remember(firestore) { FirebaseTreasureCollectionRepository(firestore) }
+    val treasureViewModel: TreasureCollectionViewModel = viewModel(
+        key = "room_treasures_${user.uid}",
+        factory = TreasureCollectionViewModel.factory(treasureRepository, user.uid),
+    )
+    val treasureState by treasureViewModel.uiState.collectAsStateWithLifecycle()
+    var confirmDismiss by remember(roomId) { mutableStateOf(false) }
+    var editingSettings by remember(roomId) { mutableStateOf(false) }
     var showDetails by remember(roomId) { mutableStateOf(false) }
     var choosingDestination by remember(roomId) { mutableStateOf(false) }
     var viewingMember by remember(roomId) { mutableStateOf<TeamRoomMember?>(null) }
@@ -161,7 +182,40 @@ private fun TeamRoomChatScreen(
         )
         return
     }
+    if (editingSettings && room != null) {
+        RoomSettingsForm(title = "Room settings", initialName = room.name, initialCapacity = room.maxMembers,
+            initialDescription = room.description, minimumCapacity = room.memberIds.size.coerceAtLeast(2),
+            working = state.updatingTask, error = state.error, onCancel = { editingSettings = false },
+            onSave = { name, capacity, description -> viewModel.updateSettings(name, capacity, description) { editingSettings = false } })
+        return
+    }
     Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
+        Text(room?.name?.takeIf { it.isNotBlank() } ?: if (room == null) "Loading room…" else "Room ${room.id.takeLast(6)}", color = Ink, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val orderedIds = room?.let { listOf(it.creatorId) + it.memberIds.filter { id -> id != it.creatorId } }.orEmpty()
+            repeat(4) { index ->
+                Box(Modifier.padding(end = 8.dp), contentAlignment = Alignment.BottomEnd) {
+                    val memberId = orderedIds.getOrNull(index)
+                    val member = members.firstOrNull { it.uid == memberId }
+                    if (memberId != null) {
+                        Box(Modifier.clickable(enabled = member != null) { viewingMember = member }) {
+                            ProfileAvatar(member?.avatarUrl ?: if (memberId == user.uid) profile?.avatarUrl.orEmpty() else "",
+                                member?.name ?: if (memberId == user.uid) "You" else "Explorer", 46.dp)
+                        }
+                        if (index == 0) Surface(shape = CircleShape, color = BrandSoft) {
+                            Icon(Icons.Rounded.Star, "Room owner", tint = Brand, modifier = Modifier.size(16.dp))
+                        }
+                    } else {
+                        Box(Modifier.size(46.dp).border(1.dp, BrandSoft, CircleShape).background(BrandSoft.copy(alpha = 0.35f), CircleShape), contentAlignment = Alignment.Center) {
+                            if (index >= (room?.maxMembers ?: 4)) Icon(Icons.Rounded.Lock, "Unavailable member slot", tint = Muted, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = { showDetails = true }) { Icon(Icons.Rounded.Menu, "Room settings", tint = Brand) }
+        }
+
         if (room?.taskStatus == "hunting") {
             ActiveHuntHeader(
                 room = room,
@@ -195,24 +249,9 @@ private fun TeamRoomChatScreen(
             )
         }
         Spacer(Modifier.height(10.dp))
-        Row(
-            Modifier.fillMaxWidth().clickable { showDetails = true }.padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (members.isEmpty()) {
-                ProfileAvatar(profile?.avatarUrl.orEmpty(), profile?.username.orEmpty().ifBlank { "You" }, 46.dp)
-            } else {
-                members.take(4).forEachIndexed { index, member ->
-                    if (index > 0) Spacer(Modifier.width(8.dp))
-                    ProfileAvatar(member.avatarUrl, member.name, 46.dp)
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Rounded.Info, "Room details", tint = Brand, modifier = Modifier.padding(12.dp).size(24.dp))
-        }
         Spacer(Modifier.height(8.dp))
         Card(Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            if (messages.isEmpty()) Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) { Text(error ?: "Say hello to your teammate.", color = Muted, textAlign = TextAlign.Center) }
+            if (messages.isEmpty()) Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) { Text(error ?: "Say hello to your teammate.", color = Muted.copy(alpha = 0.45f), textAlign = TextAlign.Center) }
             else LazyColumn(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(messages, key = { it.id }) { TeamMessageRow(it, user.uid, profile) } }
         }
         Spacer(Modifier.height(10.dp))
@@ -225,7 +264,8 @@ private fun TeamRoomChatScreen(
             },
             sendEnabled = state.input.isNotBlank(),
             sending = state.sending,
-            showTreasureAction = true,
+            ownedTreasureStickerIds = treasureState.discoveredIds,
+            onTreasureStickerSelected = { viewModel.sendTreasureSticker(it, profile?.username.orEmpty(), profile?.avatarUrl.orEmpty()) },
         )
     }
     if (choosingDestination) DestinationPickerDialog(
@@ -244,13 +284,22 @@ private fun TeamRoomChatScreen(
         members = members,
         isOwner = room?.creatorId == user.uid,
         onMemberClick = { viewingMember = it; showDetails = false },
+        onEditSettings = { showDetails = false; editingSettings = true },
         onLeave = { viewModel.leave(onRoomExited) },
         onDismissRoom = {
             showDetails = false
-            viewModel.dismiss(onRoomExited)
+            confirmDismiss = true
         },
         onDismiss = { showDetails = false },
     )
+    if (confirmDismiss) AlertDialog(
+        onDismissRequest = { confirmDismiss = false },
+        title = { Text("Dismiss room?") },
+        text = { Text("Are you sure you want to close this room? You may lose your chat history.") },
+        confirmButton = { TextButton(enabled = !state.leaving, onClick = { viewModel.dismiss(onRoomExited) }) { Text(if (state.leaving) "Closing..." else "Dismiss room", color = RelicRed) } },
+        dismissButton = { TextButton(onClick = { confirmDismiss = false }) { Text("Cancel") } },
+    )
+
 }
 
 @Composable
@@ -278,7 +327,7 @@ private fun ActiveHuntHeader(
                     currentUserId in room.taskClaimedMemberIds -> "Your treasure is claimed. Waiting for your teammate to claim theirs."
                     isFragmentHunt && allFragmentsFound -> "All four fragments are found. Turn to the map to reconstruct the Atlas."
                     isFragmentHunt -> "Find all four Atlas fragments together. Found fragments are shared with your teammate."
-                    allCompleted -> "Both explorers are ready. Turn to the map to dig the treasure."
+                    allCompleted -> "All explorers are ready. Turn to the map to dig the treasure."
                     completed -> "Waiting for your teammate to finish. You can help them."
                     else -> "Go and hunt for the treasure."
                 },
@@ -340,7 +389,7 @@ private fun RoomHuntControls(
     onStartHunt: () -> Unit,
 ) {
     val hasDestination = !room?.taskId.isNullOrBlank()
-    val hasTwoMembers = memberCount == 2
+    val hasEnoughMembers = memberCount >= 2
     val destinationName = room?.taskTitle?.takeIf { it.isNotBlank() } ?: "Choose destination"
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -356,7 +405,7 @@ private fun RoomHuntControls(
             if (isOwner) {
                 Button(
                     onClick = onStartHunt,
-                    enabled = hasTwoMembers && hasDestination && !updating,
+                    enabled = hasEnoughMembers && hasDestination && !updating,
                     colors = ButtonDefaults.buttonColors(containerColor = Brand),
                 ) {
                     Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp))
@@ -365,11 +414,11 @@ private fun RoomHuntControls(
                 }
             }
         }
-        if (!isOwner || !hasTwoMembers || !hasDestination) {
+        if (!isOwner || !hasEnoughMembers || !hasDestination) {
             Text(
                 when {
                     !isOwner -> "Only the room owner can start a hunt."
-                    !hasTwoMembers -> "Start Hunt unlocks when 2 explorers are in the room."
+                    !hasEnoughMembers -> "Start Hunt unlocks when 2 explorers are in the room."
                     treasuresLoading -> "Loading the six treasure destinations…"
                     treasuresError != null -> "Treasure destinations are unavailable right now."
                     else -> "Choose one of the six treasures to unlock Start Hunt."
@@ -477,8 +526,13 @@ private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: Us
         if (!mine) { ProfileAvatar(message.senderAvatarUrl, name, 40.dp); Spacer(Modifier.width(8.dp)) }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
-                Text(message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+            val sticker = treasureStickerFor(message.treasureId)
+            if (message.messageType == ChatMessageTypes.TreasureSticker && sticker != null) {
+                Image(painterResource(sticker.drawableRes), sticker.name, Modifier.size(112.dp))
+            } else {
+                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
+                    Text(if (message.imageUrl.isNotBlank()) "[Img]" else message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+                }
             }
             formatMessageTimestamp(message.sentAtMillis)?.let { timestamp ->
                 Text(timestamp, color = Muted, style = MaterialTheme.typography.labelSmall)
@@ -548,6 +602,7 @@ private fun RoomDetailsDialog(
     members: List<TeamRoomMember>,
     isOwner: Boolean,
     onMemberClick: (TeamRoomMember) -> Unit,
+    onEditSettings: () -> Unit,
     onLeave: () -> Unit,
     onDismissRoom: () -> Unit,
     onDismiss: () -> Unit,
@@ -556,6 +611,9 @@ private fun RoomDetailsDialog(
     var copied by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Room details", fontWeight = FontWeight.Bold, color = Ink) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(room?.name?.takeIf { it.isNotBlank() } ?: if (room == null) "Loading room…" else "Room ${room.id.takeLast(6)}", color = Ink, fontWeight = FontWeight.Bold)
+            room?.description?.takeIf { it.isNotBlank() }?.let { Text(it, color = Muted) }
+            if (isOwner) TextButton(onClick = onEditSettings) { Text("Edit room settings") }
             Column {
                 Text("ROOM ID", color = Muted, style = MaterialTheme.typography.labelMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -568,9 +626,9 @@ private fun RoomDetailsDialog(
                 }
             }
             Column {
-                Text("MEMBERS (${members.size}/2)", color = Muted, style = MaterialTheme.typography.labelMedium); Spacer(Modifier.height(8.dp))
+                Text("MEMBERS (${members.size}/${room?.maxMembers ?: 4})", color = Muted, style = MaterialTheme.typography.labelMedium); Spacer(Modifier.height(8.dp))
                 members.forEach { member -> TextButton(onClick = { onMemberClick(member) }, contentPadding = PaddingValues(0.dp)) { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) { ProfileAvatar(member.avatarUrl, member.name, 36.dp); Spacer(Modifier.width(10.dp)); Text(member.name, color = Ink, fontWeight = FontWeight.Medium) } } }
-                if (members.size < 2) Text("Waiting for one more explorer to join.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                if (members.size < (room?.maxMembers ?: 4)) Text("Waiting for more explorers to join.", color = Muted, style = MaterialTheme.typography.bodySmall)
             }
             room?.takeIf { it.taskStatus == "hunting" }?.let { activeHunt ->
                 Column {
@@ -597,4 +655,37 @@ private fun RoomDetailsDialog(
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = Brand) } }, dismissButton = {
         TextButton(onClick = if (isOwner) onDismissRoom else onLeave) { Text(if (isOwner) "Dismiss room" else "Leave room", color = RelicRed) }
     })
+}
+
+
+@Composable
+private fun RoomSettingsForm(
+    title: String,
+    initialName: String = "",
+    initialCapacity: Int = 4,
+    initialDescription: String = "",
+    minimumCapacity: Int = 2,
+    working: Boolean,
+    error: String?,
+    onCancel: () -> Unit,
+    onSave: (String, Int, String) -> Unit,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var capacity by remember { mutableIntStateOf(initialCapacity) }
+    var description by remember { mutableStateOf(initialDescription) }
+    Column(Modifier.fillMaxSize().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onCancel, enabled = !working) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+            Text(title, style = MaterialTheme.typography.titleLarge, color = Ink, fontWeight = FontWeight.Bold)
+        }
+        OutlinedTextField(name, { name = it.take(80) }, label = { Text("Room name") }, singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
+        Text("Room capacity", color = Ink)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            (2..4).forEach { count -> FilterChip(selected = capacity == count, onClick = { capacity = count }, enabled = !working && count >= minimumCapacity, label = { Text("$count people") }) }
+        }
+        OutlinedTextField(description, { description = it.take(500) }, label = { Text("Room description") }, minLines = 3, enabled = !working, modifier = Modifier.fillMaxWidth())
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Button(onClick = { onSave(name.trim(), capacity, description.trim()) }, enabled = name.isNotBlank() && !working,
+            modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (working) "Saving..." else if (title == "Create a room") "Create room" else "Save settings") }
+    }
 }

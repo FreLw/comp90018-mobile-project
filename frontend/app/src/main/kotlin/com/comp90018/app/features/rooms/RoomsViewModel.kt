@@ -46,10 +46,10 @@ class RoomsViewModel(
         mutableUiState.value = mutableUiState.value.copy(actionError = null, membershipError = null, working = false)
     }
 
-    fun createRoom() {
+    fun createRoom(name: String, maxMembers: Int, description: String) {
         if (mutableUiState.value.working) return
         mutableUiState.value = mutableUiState.value.copy(working = true, actionError = null)
-        repository.createRoom(userId) { roomId, error ->
+        repository.createRoom(userId, name, maxMembers, description) { roomId, error ->
             mutableUiState.value = mutableUiState.value.copy(
                 activeRoomId = roomId ?: mutableUiState.value.activeRoomId,
                 working = false,

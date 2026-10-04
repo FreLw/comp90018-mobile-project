@@ -191,7 +191,7 @@ fun MapScreen(
     val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
     val teamHuntActive = teamHuntTarget != null && activeHuntOwnerId != null
     val teamHuntIsOwner = activeHuntOwnerId == currentUserId
-    val teamHuntAllCompleted = teamHuntActive && activeHuntMemberIds.size == 2 &&
+    val teamHuntAllCompleted = teamHuntActive && activeHuntMemberIds.size in 2..4 &&
         activeHuntMemberIds.all { it in activeHuntCompletedMemberIds }
     val teamHuntTaskPendingForCurrentUser = TeamHuntTaskEligibility.isPendingFor(
         huntActive = teamHuntActive,
@@ -595,7 +595,7 @@ fun MapScreen(
                         Spacer(Modifier.width(7.dp))
                         Text(
                             when {
-                                teamHuntAllCompleted -> "Both explorers are ready — dig the treasure!"
+                                teamHuntAllCompleted -> "All explorers are ready — dig the treasure!"
                                 currentUserId in activeHuntCompletedMemberIds -> "Waiting for your teammate — you can help them."
                                 else -> "Go and hunt for the treasure: ${relic.name}\nTap here to open the hunt"
                             },

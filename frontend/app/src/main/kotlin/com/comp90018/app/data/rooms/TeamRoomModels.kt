@@ -11,6 +11,9 @@ data class TeamRoom(
     val taskCompletedMemberIds: List<String> = emptyList(),
     val foundFragmentIds: List<String> = emptyList(),
     val taskClaimedMemberIds: List<String> = emptyList(),
+    val name: String = "",
+    val maxMembers: Int = 4,
+    val description: String = "",
 )
 
 /** Display information loaded for one room member. */
