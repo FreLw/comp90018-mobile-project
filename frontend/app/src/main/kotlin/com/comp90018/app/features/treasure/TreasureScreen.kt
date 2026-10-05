@@ -242,12 +242,11 @@ private fun TreasureRouteDetail(
             treasure.treasureTypeLabel.takeIf(String::isNotBlank)?.let { item { DetailSection("Treasure type", it) } }
             treasure.buildingStory.takeIf(String::isNotBlank)?.let { item { DetailSection("About the landmark", it) } }
             treasure.prototypeDesign.takeIf(String::isNotBlank)?.let { item { DetailSection("Relic design", it) } }
-            if (treasure.historicalImageUrl.isNotBlank()) {
+            if (treasure.historicalImageUrl.isNotBlank() || historicalArtworkResource(treasure) != null) {
                 item {
                     Card(Modifier.fillMaxWidth().height(220.dp), RoundedCornerShape(22.dp)) {
-                        RemoteTreasureImage(
-                            imageUrl = treasure.historicalImageUrl,
-                            contentDescription = "Historical reference for ${treasure.name}",
+                        HistoricalTreasureImage(
+                            relic = treasure,
                             modifier = Modifier.fillMaxSize().padding(10.dp),
                         )
                     }

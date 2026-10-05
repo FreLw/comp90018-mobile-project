@@ -90,6 +90,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -111,6 +115,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -241,7 +247,14 @@ fun MapScreen(
     }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
     val revealCoordinator = remember { PostChallengeRevealCoordinator() }
-    val foundRelicIds = discoveredTreasureIds
+    var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
+    var returningRelicId by remember { mutableStateOf<String?>(null) }
+    val foundRelicIds = discoveredTreasureIds + revealedIds
+    fun returnFromReveal(relic: MapRelic) {
+        returningRelicId = relic.id
+        huntRevealRelic = null
+        selectedRelic = null
+    }
     val deviceHeading = rememberDeviceHeading()
     val deviceMotion = rememberDeviceMotion()
     val runningInEmulator = remember { isProbablyEmulator() }
@@ -271,8 +284,9 @@ fun MapScreen(
             .sortedBy { it.second }
     }
     val nearestTreasure = treasureDistances.firstOrNull()
-    val visibleRelics = remember(treasureDistances) {
-        treasureDistances.filter { (_, distance) -> distance <= REVEAL_RADIUS_METERS }.map { it.first }
+    // Map visibility includes recovered treasures; only the hunt candidates exclude them.
+    val visibleRelics = remember(resolvedTreasures, currentCoordinate, foundRelicIds, returningRelicId) {
+        visibleMapRelics(resolvedTreasures, currentCoordinate, REVEAL_RADIUS_METERS, foundRelicIds, returningRelicId)
     }
     val huntReadyRelic = nearestTreasure?.takeIf { (_, distance) -> distance <= HUNT_READY_RADIUS_METERS }?.first
     val discoveryHaptics = LocalHapticFeedback.current
@@ -397,13 +411,13 @@ fun MapScreen(
                 collectionError = null,
                 onPutInBackpack = null,
                 onBackToReveal = { huntStoryVisible = false },
-                onReturnToMap = { huntRevealRelic = null; selectedRelic = null },
+                onReturnToMap = { returnFromReveal(relic) },
             )
         } else {
             TreasureDiscoveryReveal(
                 relic = relic,
                 onViewTreasure = { huntStoryVisible = true },
-                onReturnToMap = { huntRevealRelic = null; selectedRelic = null },
+                onReturnToMap = { returnFromReveal(relic) },
             )
         }
         return
@@ -417,7 +431,18 @@ fun MapScreen(
             motion = deviceMotion,
             hapticsEnabled = hapticsEnabled,
             soundEffectsEnabled = soundEffectsEnabled,
-            onSignalFound = {
+            onSignalFound = { complete ->
+                if (teamHuntTaskPendingForCurrentUser) {
+                    onCompleteActiveHuntTask()
+                    complete(null)
+                } else {
+                    onCollectTreasure(relic.id) { error ->
+                        if (error == null) revealedIds = revealedIds + relic.id
+                        complete(error)
+                    }
+                }
+            },
+            onReveal = {
                 compassRelic = null
                 huntStoryVisible = false
                 huntRevealRelic = relic
@@ -557,6 +582,8 @@ fun MapScreen(
             deviceHeading = deviceHeading,
             markerPulse = markerPulse,
             discoveredTreasureIds = foundRelicIds,
+            flippingRelicId = returningRelicId,
+            onFlipFinished = { returningRelicId = null },
             activeHuntTreasureId = activeHuntTreasureId,
             focusSelectedRelic = false,
             perspective = perspective,
@@ -1064,6 +1091,8 @@ private fun GoogleMapView(
     markerPulse: Float = 1f,
     discoveredTreasureIds: Set<String> = emptySet(),
     activeHuntTreasureId: String? = null,
+    flippingRelicId: String? = null,
+    onFlipFinished: () -> Unit = {},
     huntFragments: List<TeamHuntFragment> = emptyList(),
     foundFragmentIds: Set<String> = emptySet(),
     focusSelectedRelic: Boolean = true,
@@ -1086,6 +1115,13 @@ private fun GoogleMapView(
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
     var mapStyleConfigured by remember { mutableStateOf(false) }
     var cameraPerspective by remember { mutableStateOf(perspective) }
+    val flip = remember(flippingRelicId) { Animatable(if (flippingRelicId == null) 1f else 0f) }
+    LaunchedEffect(flippingRelicId, renderedRelicMarkers) {
+        if (flippingRelicId != null && renderedRelicMarkers.containsKey(flippingRelicId)) {
+            flip.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
+            onFlipFinished()
+        }
+    }
     MapLifecycle(mapView)
 
     AndroidView(
@@ -1146,6 +1182,16 @@ private fun GoogleMapView(
                         ))
                     }
                     renderedPulseBucket = pulseBucket
+                }
+                flippingRelicId?.let { id ->
+                    relics.firstOrNull { it.id == id }?.let { relic ->
+                        renderedRelicMarkers[id]?.setIcon(questMarkerIcon(
+                            context, relic, discovered = flip.value >= 0.5f,
+                            selected = relic.id == selectedRelic?.id,
+                            active = relic.id == activeHuntTreasureId,
+                            flipScale = abs(cos(Math.PI * flip.value).toFloat()).coerceAtLeast(0.025f),
+                        ))
+                    }
                 }
                 val displayLocation = locationOutput.currentLocation ?: locationOutput.lastKnownLocation
                 val isStaleDisplay = locationOutput.currentLocation == null && locationOutput.lastKnownLocation != null
@@ -1367,9 +1413,38 @@ private fun TreasureCompassGate(
     motion: DeviceMotionSample,
     hapticsEnabled: Boolean,
     soundEffectsEnabled: Boolean,
-    onSignalFound: () -> Unit,
+    onSignalFound: ((String?) -> Unit) -> Unit,
+    onReveal: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val compassEntrance = remember(relic.id) { Animatable(0f) }
+    val lampEntrance = remember(relic.id) { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var leaving by remember(relic.id) { mutableStateOf(false) }
+    var saving by remember(relic.id) { mutableStateOf(false) }
+    var saveError by remember(relic.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(relic.id) {
+        launch { compassEntrance.animateTo(1f, tween(1050, easing = FastOutSlowInEasing)) }
+        delay(380)
+        lampEntrance.animateTo(1f, tween(950, easing = FastOutSlowInEasing))
+    }
+    fun revealAfterSave() {
+        if (saving || leaving) return
+        saving = true
+        saveError = null
+        onSignalFound { error ->
+            saving = false
+            saveError = error
+            if (error == null) {
+                leaving = true
+                scope.launch {
+                    launch { lampEntrance.animateTo(0f, tween(420)) }
+                    compassEntrance.animateTo(0f, tween(700, easing = FastOutSlowInEasing))
+                    onReveal()
+                }
+            }
+        }
+    }
     var signalLocked by remember(relic.id) { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
     var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG) }
@@ -1451,10 +1526,21 @@ private fun TreasureCompassGate(
             pitchDegrees = effectiveMotion.pitchDegrees,
             rollDegrees = effectiveMotion.rollDegrees,
             signalLocked = signalLocked,
-            modifier = Modifier.fillMaxWidth().height(285.dp),
+            modifier = Modifier.fillMaxWidth().height(285.dp).graphicsLayer {
+                alpha = compassEntrance.value
+                scaleX = 0.35f + compassEntrance.value * 0.65f
+                scaleY = scaleX
+                rotationZ = (1f - compassEntrance.value) * -24f
+                translationY = (1f - compassEntrance.value) * 80.dp.toPx()
+            },
         )
         Card(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().graphicsLayer {
+                alpha = lampEntrance.value
+                scaleX = 0.7f + lampEntrance.value * 0.3f
+                scaleY = scaleX
+                translationY = (1f - lampEntrance.value) * 65.dp.toPx()
+            },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = if (signalLocked) BrandSoft else Color(0xFFFFF1C9)),
         ) {
@@ -1471,11 +1557,13 @@ private fun TreasureCompassGate(
                 AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("All lanterns are alight. The relic awaits.", color = Ink, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        DiscoveryHuntButton("Hunt", onSignalFound)
+                        if (saving) CircularProgressIndicator(Modifier.size(24.dp), color = Brand)
+                        else if (!leaving) DiscoveryHuntButton("Hunt", ::revealAfterSave)
                     }
                 }
             }
         }
+        saveError?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         if (BuildConfig.DEBUG) {
             Surface(color = Color(0xFFE8DDC6), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(12.dp)) {
@@ -1541,7 +1629,7 @@ private fun DivineCompassVisual(
     val distanceProgress = distanceMeters?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     val levelDegrees = maxOf(abs(pitchDegrees), abs(rollDegrees))
     Box(modifier.padding(4.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize().padding(bottom = 42.dp)) {
             val centre = Offset(size.width / 2, size.height / 2)
             val radius = size.minDimension * 0.37f
             fun point(angle: Double, length: Float): Offset = centre + Offset(cos(angle).toFloat() * length, sin(angle).toFloat() * length)
@@ -1650,36 +1738,58 @@ internal fun oracleStarCount(distanceMeters: Double?): Int = distanceMeters?.tak
 
 @Composable
 private fun OracleLamp(title: String, hint: String, detail: String, lit: Boolean, proximity: Float, color: Color, modifier: Modifier) {
-    val glow by animateFloatAsState(if (lit) 1f else proximity * 0.55f, tween(if (lit) 100 else 300), label = "lantern_brightness")
-    val burst = remember { androidx.compose.animation.core.Animatable(0f) }
+    val glow by animateFloatAsState(if (lit) 1f else proximity * 0.55f, tween(450), label = "lantern_brightness")
+    val flameTransition = rememberInfiniteTransition(label = "living_flame")
+    val flicker by flameTransition.animateFloat(0.82f, 1.08f, infiniteRepeatable(tween(620), RepeatMode.Reverse), label = "flame_flicker")
+    val sway by flameTransition.animateFloat(-2f, 2f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "lantern_sway")
+    val burst = remember { Animatable(0f) }
     LaunchedEffect(lit) {
-        if (lit) { burst.snapTo(1f); burst.animateTo(0f, tween(650)) } else burst.snapTo(0f)
+        if (lit) { burst.snapTo(1f); burst.animateTo(0f, tween(950)) } else burst.snapTo(0f)
     }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Canvas(Modifier.size(72.dp)) {
-            val c = Offset(size.width / 2f, size.height / 2f)
-            val r = size.minDimension * 0.23f
+        Canvas(Modifier.size(82.dp).graphicsLayer { rotationZ = if (lit) sway else 0f }) {
+            val w = size.width
+            val h = size.height
+            val c = Offset(w / 2f, h * 0.53f)
             val ink = Color(0xFF382B40)
-            if (glow > 0f) drawCircle(color.copy(alpha = glow * 0.18f), r * 1.8f, c)
+            val brass = Color(0xFFC69A52)
+            if (glow > 0f) drawCircle(Brush.radialGradient(listOf(color.copy(alpha = glow * flicker * 0.32f), Color.Transparent), c, w * 0.48f), w * 0.48f, c)
             if (burst.value > 0f) {
-                drawCircle(color.copy(alpha = burst.value), r * (1.4f + (1f - burst.value)), c, style = Stroke(2.dp.toPx()))
                 repeat(8) { i ->
                     val angle = Math.toRadians(i * 45.0)
                     val ray = Offset(cos(angle).toFloat(), sin(angle).toFloat())
-                    drawLine(color.copy(alpha = burst.value), c + ray * r * 1.6f, c + ray * r * 2.0f, 2.dp.toPx())
+                    val radius = w * (0.29f + (1f - burst.value) * 0.19f)
+                    drawLine(brass.copy(alpha = burst.value), c + ray * radius, c + ray * (radius + w * 0.06f), 2.dp.toPx())
                 }
             }
-            val body = androidx.compose.ui.graphics.Path().apply {
-                moveTo(c.x, c.y - r * 1.25f); lineTo(c.x + r, c.y - r * 0.65f)
-                lineTo(c.x + r * 0.75f, c.y + r); lineTo(c.x - r * 0.75f, c.y + r)
-                lineTo(c.x - r, c.y - r * 0.65f); close()
+            // Ring handle, sloping roof, glass chamber, side rails and broad pedestal.
+            drawOval(ink, Offset(w * 0.43f, h * 0.05f), Size(w * 0.14f, h * 0.18f), style = Stroke(2.5.dp.toPx()))
+            val roof = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.5f, h * 0.19f); lineTo(w * 0.74f, h * 0.34f)
+                lineTo(w * 0.26f, h * 0.34f); close()
             }
-            drawPath(body, ink)
-            drawPath(body, color.copy(alpha = glow), style = Stroke(2.dp.toPx()))
-            drawCircle(androidx.compose.ui.graphics.lerp(Color(0xFF777570), color, glow), r * 0.48f, c)
-            if (lit) drawCircle(Color(0xFFFFE8AD), r * 0.22f, c)
-            drawLine(ink, Offset(c.x - r * 0.85f, c.y + r * 1.2f), Offset(c.x + r * 0.85f, c.y + r * 1.2f), 3.dp.toPx())
-            drawArc(ink, 180f, 180f, false, Offset(c.x - r * 0.35f, c.y - r * 1.8f), Size(r * 0.7f, r * 0.7f), style = Stroke(2.dp.toPx()))
+            drawPath(roof, ink)
+            drawLine(brass, Offset(w * 0.3f, h * 0.33f), Offset(w * 0.7f, h * 0.33f), 2.dp.toPx())
+            drawRoundRect(androidx.compose.ui.graphics.lerp(Color(0xFFE2D7C6), Color(0xFFFFE4A0), glow), Offset(w * 0.33f, h * 0.36f), Size(w * 0.34f, h * 0.36f), androidx.compose.ui.geometry.CornerRadius(w * 0.04f))
+            drawLine(Color.White.copy(alpha = 0.65f), Offset(w * 0.39f, h * 0.4f), Offset(w * 0.39f, h * 0.6f), 2.dp.toPx())
+            for (x in listOf(0.3f, 0.7f)) drawLine(ink, Offset(w * x, h * 0.34f), Offset(w * x, h * 0.75f), 3.dp.toPx())
+            drawRoundRect(ink, Offset(w * 0.25f, h * 0.73f), Size(w * 0.5f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+            drawRoundRect(brass, Offset(w * 0.32f, h * 0.81f), Size(w * 0.36f, h * 0.05f), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+            drawLine(ink, Offset(w * 0.46f, h * 0.69f), Offset(w * 0.54f, h * 0.69f), 3.dp.toPx())
+            if (glow > 0f) {
+                val flame = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(c.x, h * (0.66f - 0.24f * flicker))
+                    cubicTo(w * 0.44f, h * 0.54f, w * 0.37f, h * 0.65f, c.x, h * 0.68f)
+                    cubicTo(w * 0.64f, h * 0.64f, w * 0.54f, h * 0.53f, c.x, h * (0.66f - 0.24f * flicker))
+                    close()
+                }
+                drawPath(flame, Color(0xFFE89A36).copy(alpha = glow))
+                drawOval(Color(0xFFFFF3CA).copy(alpha = glow), Offset(w * 0.47f, h * 0.57f), Size(w * 0.06f, h * 0.1f))
+                if (lit) repeat(3) { i ->
+                    val phase = (flicker + i * 0.33f) % 1f
+                    drawCircle(brass.copy(alpha = (1f - phase) * 0.7f), 1.5.dp.toPx(), Offset(w * (0.43f + i * 0.07f), h * (0.52f - phase * 0.18f)))
+                }
+            }
         }
         Text(title, color = if (lit) color else Ink, fontFamily = GothicTreasureFontFamily, fontSize = 17.sp, textAlign = TextAlign.Center)
         Text(if (lit) "FLAME AWAKENED" else hint, color = Muted, fontSize = 9.sp, textAlign = TextAlign.Center)
@@ -2455,6 +2565,8 @@ internal fun TreasureStoryPanel(
     onPutInBackpack: (() -> Unit)?,
     onBackToReveal: (() -> Unit)? = null,
     onReturnToMap: (() -> Unit)? = null,
+    headerArtworkVisible: Boolean = true,
+    onHeaderArtworkBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val context = LocalContext.current
     LazyColumn(
@@ -2462,20 +2574,22 @@ internal fun TreasureStoryPanel(
         contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        if (onBackToReveal != null) {
-            item {
-                OutlinedButton(onClick = onBackToReveal, modifier = Modifier.fillMaxWidth()) {
-                    Text("Back to reveal")
-                }
-            }
-        }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TreasureArtwork(relic, discovered = true, modifier = Modifier.size(82.dp))
+                TreasureArtwork(relic, discovered = true, modifier = Modifier.size(82.dp)
+                    .onGloballyPositioned { onHeaderArtworkBounds(it.boundsInRoot()) }
+                    .graphicsLayer { alpha = if (headerArtworkVisible) 1f else 0f })
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                     Text(relic.locationName, color = Muted)
+                }
+            }
+        }
+        if (onBackToReveal != null) {
+            item {
+                OutlinedButton(onClick = onBackToReveal, modifier = Modifier.fillMaxWidth()) {
+                    Text("Back to reveal")
                 }
             }
         }
@@ -2498,16 +2612,15 @@ internal fun TreasureStoryPanel(
                 }
             }
         }
-        if (relic.historicalImageUrl.isNotBlank()) {
+        if (relic.historicalImageUrl.isNotBlank() || com.comp90018.app.features.treasure.historicalArtworkResource(relic) != null) {
             item {
                 Card(
                     Modifier.fillMaxWidth().height(220.dp),
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = BrandSoft),
                 ) {
-                    RemoteTreasureImage(
-                        imageUrl = relic.historicalImageUrl,
-                        contentDescription = "Historical reference for ${relic.name}",
+                    com.comp90018.app.features.treasure.HistoricalTreasureImage(
+                        relic = relic,
                         modifier = Modifier.fillMaxSize().padding(10.dp),
                     )
                 }
@@ -2823,17 +2936,19 @@ private fun questMarkerIcon(
     selected: Boolean,
     active: Boolean = false,
     pulseScale: Float = 1f,
+    flipScale: Float = 1f,
 ): BitmapDescriptor {
     val density = context.resources.displayMetrics.density
     val artworkRes = treasureArtworkResource(relic.artworkKey)
     val pulseBucket = (pulseScale * 20).toInt()
-    val key = "$artworkRes:$density:$discovered:$selected:$active:$pulseBucket"
+    val key = "$artworkRes:$density:$discovered:$selected:$active:$pulseBucket:${(flipScale * 40).toInt()}"
     treasureMarkerIcons.get(key)?.let { return it }
     val scale = pulseBucket / 20f
     val size = (72f * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
     val center = size / 2f
+    canvas.scale(flipScale, 1f, center, center)
     val radius = size * (if (selected || active) 0.40f else 0.33f) * scale
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     paint.color = if (active) android.graphics.Color.argb(85, 242, 181, 67) else android.graphics.Color.argb(45, 126, 76, 42)

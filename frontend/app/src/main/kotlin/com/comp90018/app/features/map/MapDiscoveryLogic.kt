@@ -78,3 +78,15 @@ internal const val REVEAL_RADIUS_METERS = 50.0
 internal const val HUNT_READY_RADIUS_METERS = 10.0
 internal const val COMPASS_ALIGNMENT_TOLERANCE_DEGREES = 15.0
 internal const val HORIZONTAL_TOLERANCE_DEGREES = 12f
+
+/** Recovered relics stay on the map, including the relic whose return animation is playing. */
+internal fun visibleMapRelics(
+    relics: List<MapRelic>,
+    coordinate: GeoCoordinate,
+    radiusMeters: Double,
+    discoveredIds: Set<String> = emptySet(),
+    returningRelicId: String? = null,
+): List<MapRelic> = relics.filter {
+    it.id in discoveredIds || it.id == returningRelicId ||
+        LocationCalculator.distanceMeters(coordinate, it.coordinate) <= radiusMeters
+}
