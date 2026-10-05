@@ -770,7 +770,111 @@ private fun TeamHuntArrivalDialog(
     )
 }
 
-/** Member-only team-hunt checkpoint. Replace the template prompts with destination content later. */
+private data class MemberHuntQuestion(
+    val prompt: String,
+    val options: List<String>,
+    val correctAnswerIndex: Int,
+)
+
+private val MEMBER_HUNT_QUESTIONS = mapOf(
+    "union_lawn_lost_lake" to listOf(
+        MemberHuntQuestion(
+            prompt = "What occupied the site of today's Union Lawn before it became a lawn?",
+            options = listOf("A botanical garden", "An ornamental lake", "A railway platform", "A sports oval"),
+            correctAnswerIndex = 1,
+        ),
+        MemberHuntQuestion(
+            prompt = "What began the filling of the lake in the 1930s?",
+            options = listOf(
+                "Construction of the New Chemistry Building",
+                "Construction of Wilson Hall",
+                "Creation of the System Garden",
+                "Construction of the Grainger Museum",
+            ),
+            correctAnswerIndex = 0,
+        ),
+    ),
+    "wilson_hall_rosette" to listOf(
+        MemberHuntQuestion(
+            prompt = "When was the original Wilson Hall completed?",
+            options = listOf("1856", "1882", "1938", "1956"),
+            correctAnswerIndex = 1,
+        ),
+        MemberHuntQuestion(
+            prompt = "What was the original Wilson Hall built to host?",
+            options = listOf(
+                "Examinations and degree ceremonies",
+                "Botanical lectures and plant displays",
+                "Student accommodation and dining",
+                "Musical instrument workshops",
+            ),
+            correctAnswerIndex = 0,
+        ),
+    ),
+    "old_quad_fossil" to listOf(
+        MemberHuntQuestion(
+            prompt = "What do the drawings behind Towards a glass monument depict?",
+            options = listOf(
+                "Mesozoic ferns fossilised in sandstone",
+                "Birds native to the Parkville campus",
+                "The original University gardens",
+                "Early University buildings",
+            ),
+            correctAnswerIndex = 0,
+        ),
+        MemberHuntQuestion(
+            prompt = "Which artists created the original fern drawings?",
+            options = listOf(
+                "Tom Nicholson and Geoffrey Wallace",
+                "Arthur Bartholomew and Ludwig Becker",
+                "Frederick McCoy and Edward La Trobe Bateman",
+                "Percy Grainger and Burnett Cross",
+            ),
+            correctAnswerIndex = 1,
+        ),
+    ),
+    "system_garden_glasshouse" to listOf(
+        MemberHuntQuestion(
+            prompt = "In which year was the System Garden established?",
+            options = listOf("1826", "1856", "1882", "1916"),
+            correctAnswerIndex = 1,
+        ),
+        MemberHuntQuestion(
+            prompt = "What was the surviving central tower originally used as?",
+            options = listOf(
+                "A classroom for botany students",
+                "A potting shed for an octagonal conservatory",
+                "A water tower for the campus",
+                "An entrance gate to the garden",
+            ),
+            correctAnswerIndex = 1,
+        ),
+    ),
+    "grainger_tone_tool" to listOf(
+        MemberHuntQuestion(
+            prompt = "Who made the Kangaroo-pouch tone-tool in 1952?",
+            options = listOf(
+                "Percy Grainger and Burnett Cross",
+                "Percy Grainger and Arthur Bartholomew",
+                "Burnett Cross and Ludwig Becker",
+                "Frederick McCoy and Edward La Trobe Bateman",
+            ),
+            correctAnswerIndex = 0,
+        ),
+        MemberHuntQuestion(
+            prompt = "Which components were part of the Kangaroo-pouch tone-tool?",
+            options = listOf(
+                "Glass lenses and water pipes",
+                "Paper music rolls and sine-wave oscillators",
+                "Piano keys and brass bells",
+                "Stone fragments and wooden flutes",
+            ),
+            correctAnswerIndex = 1,
+        ),
+    ),
+)
+
+/** Member-only team-hunt checkpoint with history questions for each destination. */
 @Composable
 private fun MemberHuntQuiz(
     relic: MapRelic,
@@ -781,11 +885,7 @@ private fun MemberHuntQuiz(
     var questionIndex by remember(relic.id) { mutableIntStateOf(0) }
     var incorrect by remember(relic.id) { mutableStateOf(false) }
     val closeEnough = locationOutput.distanceToTargetMeters?.let { it <= relic.insideRadiusMeters } == true
-    val questions = listOf(
-        "Template Q1",
-        "Template Q2",
-    )
-    val answers = listOf(1, 2) // Temporary answer key: Q1=B, Q2=C.
+    val questions = MEMBER_HUNT_QUESTIONS[relic.id].orEmpty()
     Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Team hunt checkpoint", style = MaterialTheme.typography.headlineSmall, color = Ink, fontWeight = FontWeight.Bold)
         Text(relic.name, color = Brand, fontWeight = FontWeight.Medium)
@@ -793,19 +893,25 @@ private fun MemberHuntQuiz(
             Text("Reach the treasure location to unlock your two questions.", color = Muted)
             locationOutput.distanceToTargetMeters?.let { Text("${it.formatDistance()} away", color = Ink) }
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
+        } else if (questions.isEmpty()) {
+            Text("No questions are available for this destination yet.", color = Muted)
+            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
         } else {
             Text("Question ${questionIndex + 1} of 2", color = Muted)
-            Text(questions[questionIndex], style = MaterialTheme.typography.titleLarge, color = Ink)
-            listOf("A", "B", "C", "D").forEachIndexed { index, option ->
+            Text(questions[questionIndex].prompt, style = MaterialTheme.typography.titleLarge, color = Ink)
+            questions[questionIndex].options.forEachIndexed { index, option ->
                 OutlinedButton(onClick = {
-                    if (index == answers[questionIndex]) {
+                    if (index == questions[questionIndex].correctAnswerIndex) {
                         incorrect = false
                         if (questionIndex == questions.lastIndex) onCompleted() else questionIndex += 1
                     } else {
                         incorrect = true
                     }
                 }, modifier = Modifier.fillMaxWidth()) {
-                    Text(option)
+                    Text(
+                        "${'A' + index}. $option",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
             if (incorrect) Text("Not quite — try again.", color = RelicRed)
