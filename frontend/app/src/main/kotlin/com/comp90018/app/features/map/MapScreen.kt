@@ -399,15 +399,10 @@ fun MapScreen(
     memberQuizRelic?.let { relic ->
         MemberHuntQuiz(
             relic = relic,
-            locationOutput = LocationCalculator.buildOutput(
-                currentLocation = userLocation.currentLocation,
-                targetLocation = relic.coordinate,
-                timestampNanos = userLocation.timestampNanos,
-                config = LocationConfig(relic.insideRadiusMeters, relic.radarRadiusMeters),
-                permission = userLocation.permission,
-                availability = userLocation.availability,
-                accuracyMeters = userLocation.accuracyMeters,
-            ),
+            // Reuse the same target and effective coordinate used by the team-hunt arrival
+            // check. Re-reading only the live GPS fix here can lock the questions after arrival
+            // when the map is using a simulated or last-known coordinate.
+            locationOutput = teamHuntLocationOutput,
             onCompleted = { onCompleteActiveHuntTask(); memberQuizRelic = null },
             onBack = { memberQuizRelic = null },
         )
