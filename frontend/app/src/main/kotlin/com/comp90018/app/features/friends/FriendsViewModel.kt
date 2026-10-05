@@ -2,9 +2,10 @@ package com.comp90018.app.features.friends
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.comp90018.app.FriendSummary
-import com.comp90018.app.IncomingFriendRequest
-import com.comp90018.app.OutgoingFriendRequest
+import com.comp90018.app.data.social.DirectChatSummary
+import com.comp90018.app.data.social.FriendSummary
+import com.comp90018.app.data.social.IncomingFriendRequest
+import com.comp90018.app.data.social.OutgoingFriendRequest
 import com.comp90018.app.data.social.SocialRepository
 import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,13 +15,17 @@ import kotlinx.coroutines.flow.asStateFlow
 data class ChatTarget(val roomId: String, val friend: FriendSummary)
 
 data class FriendsUiState(
-    val friends: List<FriendSummary> = emptyList(),
+    val friends: List<FriendSummary> = StarterContacts,
+    val recentChats: List<DirectChatSummary> = emptyList(),
     val requests: List<IncomingFriendRequest> = emptyList(),
     val outgoingRequests: List<OutgoingFriendRequest> = emptyList(),
     val showRequests: Boolean = false,
     val message: String? = null,
     val chatTarget: ChatTarget? = null,
-)
+) {
+    val recentChatFriendIds: List<String>
+        get() = recentChats.map(DirectChatSummary::friendUid)
+}
 
 class FriendsViewModel(
     private val repository: SocialRepository,
@@ -32,6 +37,7 @@ class FriendsViewModel(
     private var requestsSubscription: Subscription? = null
     private var friendsSubscription: Subscription? = null
     private var outgoingRequestsSubscription: Subscription? = null
+    private var directChatsSubscription: Subscription? = null
 
     init {
         repository.migrateAcceptedFriendships(currentUid, currentUsername)
@@ -46,7 +52,13 @@ class FriendsViewModel(
         }
         friendsSubscription = repository.observeFriends(currentUid) { friends, error ->
             mutableUiState.value = mutableUiState.value.copy(
-                friends = friends.sortedBy { it.username.lowercase() },
+                friends = mergeWithStarterContacts(friends),
+                message = error ?: mutableUiState.value.message,
+            )
+        }
+        directChatsSubscription = repository.observeDirectChats(currentUid) { chats, error ->
+            mutableUiState.value = mutableUiState.value.copy(
+                recentChats = chats,
                 message = error ?: mutableUiState.value.message,
             )
         }
@@ -85,6 +97,10 @@ class FriendsViewModel(
                     },
                     message = null,
                     chatTarget = ChatTarget(roomId, openedFriend),
+                    recentChats = listOf(
+                        mutableUiState.value.recentChats.firstOrNull { it.friendUid == friend.uid }
+                            ?: DirectChatSummary(friendUid = friend.uid, updatedAtMillis = 0L),
+                    ) + mutableUiState.value.recentChats.filterNot { it.friendUid == friend.uid },
                 )
             }
         }
@@ -105,6 +121,7 @@ class FriendsViewModel(
         requestsSubscription?.cancel()
         outgoingRequestsSubscription?.cancel()
         friendsSubscription?.cancel()
+        directChatsSubscription?.cancel()
     }
 
     companion object {

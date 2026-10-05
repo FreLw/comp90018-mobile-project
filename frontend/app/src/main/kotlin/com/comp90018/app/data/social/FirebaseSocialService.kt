@@ -1,68 +1,11 @@
-package com.comp90018.app
+package com.comp90018.app.data.social
 
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import android.net.Uri
-import com.google.firebase.storage.FirebaseStorage
-import java.util.UUID
+import com.comp90018.app.data.chat.ChatMessageTypes
 
-data class SearchUser(
-    val uid: String,
-    val username: String,
-    val displayName: String,
-    val gender: String,
-    val bio: String,
-    val email: String = "",
-    val avatarUrl: String = "",
-    val department: String = "",
-    val major: String = "",
-)
-
-enum class FriendshipStatus {
-    None,
-    OutgoingPending,
-    IncomingPending,
-    Friends,
-}
-
-data class ChatMessage(
-    val id: String,
-    val senderId: String,
-    val senderName: String,
-    val senderAvatarUrl: String,
-    val text: String,
-    val sentAtMillis: Long,
-    val imageUrl: String = "",
-)
-
-data class ChatRoomSummary(
-    val id: String,
-    val title: String,
-    val updatedAtMillis: Long,
-)
-
-data class IncomingFriendRequest(
-    val fromUid: String,
-    val fromUsername: String,
-    val message: String = "",
-)
-
-enum class FriendRequestStatus { Pending, Accepted, Declined }
-
-data class OutgoingFriendRequest(
-    val toUid: String,
-    val toUsername: String,
-    val status: FriendRequestStatus,
-    val message: String = "",
-)
-
-data class FriendSummary(
-    val uid: String,
-    val username: String,
-    val unreadCount: Int = 0,
-)
-
+/** Low-level Firestore operations for profiles, friendships, and direct-room discovery. */
 object FirebaseSocialService {
     fun searchUsers(
         firestore: FirebaseFirestore,
@@ -331,6 +274,88 @@ object FirebaseSocialService {
             onChange(friends, null)
         }
 
+    fun observeDirectChats(
+        firestore: FirebaseFirestore,
+        currentUid: String,
+        onChange: (List<DirectChatSummary>, String?) -> Unit,
+    ): ListenerRegistration {
+        var snapshotGeneration = 0L
+        return firestore.collection("rooms")
+            .whereArrayContains("memberIds", currentUid)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    onChange(emptyList(), "Chats: ${exception.localizedMessage ?: "Unable to load"}")
+                    return@addSnapshotListener
+                }
+                val generation = ++snapshotGeneration
+                val directRooms = snapshot?.documents.orEmpty().mapNotNull { document ->
+                    if (!document.id.startsWith("direct_")) return@mapNotNull null
+                    val friendUid = (document.get("memberIds") as? List<*>)
+                        .orEmpty()
+                        .filterIsInstance<String>()
+                        .firstOrNull { it != currentUid }
+                        ?: return@mapNotNull null
+                    document to DirectChatSummary(
+                        friendUid = friendUid,
+                        updatedAtMillis = document.getTimestamp("updatedAt")?.toDate()?.time ?: 0L,
+                        lastMessageText = document.getString("lastMessageText").orEmpty(),
+                        lastMessageType = document.getString("lastMessageType") ?: ChatMessageTypes.Text,
+                        lastMessageTreasureId = document.getString("lastMessageTreasureId").orEmpty(),
+                    )
+                }
+                if (directRooms.isEmpty()) {
+                    onChange(emptyList(), null)
+                    return@addSnapshotListener
+                }
+
+                val chatsByRoomId = directRooms.associate { (document, summary) -> document.id to summary }.toMutableMap()
+                var remainingQueries = directRooms.size
+                var previewError: String? = null
+
+                fun finishQuery() {
+                    remainingQueries -= 1
+                    if (remainingQueries == 0 && generation == snapshotGeneration) {
+                        onChange(
+                            chatsByRoomId.values.sortedByDescending(DirectChatSummary::updatedAtMillis),
+                            previewError,
+                        )
+                    }
+                }
+
+                // Rooms created by older app versions have no denormalised preview.
+                // Read their actual newest message so existing conversations never look empty.
+                directRooms.forEach { (roomDocument, roomSummary) ->
+                    roomDocument.reference.collection("messages")
+                        .orderBy("createdAt")
+                        .limitToLast(1)
+                        .get()
+                        .addOnCompleteListener { messageTask ->
+                            if (generation != snapshotGeneration) return@addOnCompleteListener
+                            if (messageTask.isSuccessful) {
+                                messageTask.result.documents.lastOrNull()?.let { message ->
+                                    val imageUrl = message.getString("imageUrl").orEmpty()
+                                    val treasureId = message.getString("treasureId").orEmpty()
+                                    chatsByRoomId[roomDocument.id] = roomSummary.copy(
+                                        updatedAtMillis = message.getTimestamp("createdAt")?.toDate()?.time
+                                            ?: roomSummary.updatedAtMillis,
+                                        lastMessageText = message.getString("text").orEmpty(),
+                                        lastMessageType = message.getString("messageType") ?: when {
+                                            treasureId.isNotBlank() -> ChatMessageTypes.TreasureSticker
+                                            imageUrl.isNotBlank() -> ChatMessageTypes.Image
+                                            else -> ChatMessageTypes.Text
+                                        },
+                                        lastMessageTreasureId = treasureId,
+                                    )
+                                }
+                            } else if (roomSummary.lastMessageText.isBlank() && roomSummary.lastMessageTreasureId.isBlank()) {
+                                previewError = "Chat previews: ${messageTask.exception?.localizedMessage ?: "Unable to load"}"
+                            }
+                            finishQuery()
+                        }
+                }
+            }
+    }
+
     fun migrateAcceptedFriendships(
         firestore: FirebaseFirestore,
         currentUid: String,
@@ -477,175 +502,4 @@ object FirebaseSocialService {
         }
     }
 
-    fun createRoom(
-        firestore: FirebaseFirestore,
-        ownerUid: String,
-        ownerUsername: String,
-        onComplete: (String?, String?) -> Unit,
-    ) {
-        val room = mapOf(
-            "title" to "${ownerUsername.ifBlank { "New" }}'s room",
-            "creatorId" to ownerUid,
-            "memberIds" to listOf(ownerUid),
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp(),
-        )
-        firestore.collection("rooms").add(room).addOnCompleteListener { task ->
-            if (task.isSuccessful) onComplete(task.result.id, null)
-            else onComplete(null, task.exception?.localizedMessage ?: "Unable to create room")
-        }
-    }
-
-    fun joinRoom(
-        firestore: FirebaseFirestore,
-        roomId: String,
-        currentUid: String,
-        onComplete: (String?) -> Unit,
-    ) {
-        val cleanRoomId = roomId.trim()
-        if (cleanRoomId.isBlank()) {
-            onComplete("Enter a room ID")
-            return
-        }
-        val reference = firestore.collection("rooms").document(cleanRoomId)
-        reference.get().addOnCompleteListener { readTask ->
-            if (!readTask.isSuccessful) {
-                onComplete(readTask.exception?.localizedMessage ?: "Unable to find room")
-            } else if (!readTask.result.exists()) {
-                onComplete("Room not found")
-            } else if (currentUid in (readTask.result.get("memberIds") as? List<*>).orEmpty()) {
-                onComplete(null)
-            } else {
-                reference.update(
-                    "memberIds", FieldValue.arrayUnion(currentUid),
-                    "updatedAt", FieldValue.serverTimestamp(),
-                ).addOnCompleteListener { updateTask ->
-                    onComplete(if (updateTask.isSuccessful) null else updateTask.exception?.localizedMessage ?: "Unable to join room")
-                }
-            }
-        }
-    }
-
-    fun observeRooms(
-        firestore: FirebaseFirestore,
-        currentUid: String,
-        onChange: (List<ChatRoomSummary>, String?) -> Unit,
-    ): ListenerRegistration = firestore.collection("rooms")
-        .whereArrayContains("memberIds", currentUid)
-        .addSnapshotListener { snapshot, exception ->
-            if (exception != null) {
-                onChange(emptyList(), exception.localizedMessage ?: "Unable to load chats")
-                return@addSnapshotListener
-            }
-            val rooms = snapshot?.documents.orEmpty().map { document ->
-                ChatRoomSummary(
-                    id = document.id,
-                    title = document.getString("title").orEmpty().ifBlank { "Chat" },
-                    updatedAtMillis = document.getTimestamp("updatedAt")?.toDate()?.time ?: 0L,
-                )
-            }.sortedByDescending { it.updatedAtMillis }
-            onChange(rooms, null)
-        }
-
-    fun observeMessages(
-        firestore: FirebaseFirestore,
-        roomId: String,
-        onChange: (List<ChatMessage>, String?) -> Unit,
-    ): ListenerRegistration = firestore.collection("rooms").document(roomId)
-        .collection("messages")
-        .orderBy("createdAt")
-        .limitToLast(100)
-        .addSnapshotListener { snapshot, exception ->
-            if (exception != null) {
-                onChange(emptyList(), exception.localizedMessage ?: "Unable to load messages")
-                return@addSnapshotListener
-            }
-            val messages = snapshot?.documents.orEmpty().mapNotNull { document ->
-                val senderId = document.getString("senderId") ?: return@mapNotNull null
-                ChatMessage(
-                    id = document.id,
-                    senderId = senderId,
-                    senderName = document.getString("senderName").orEmpty(),
-                    senderAvatarUrl = document.getString("senderAvatarUrl").orEmpty(),
-                    text = document.getString("text").orEmpty(),
-                    sentAtMillis = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
-                    imageUrl = document.getString("imageUrl").orEmpty(),
-                )
-            }
-            onChange(messages, null)
-        }
-
-    fun sendMessage(
-        firestore: FirebaseFirestore,
-        roomId: String,
-        senderId: String,
-        senderName: String,
-        senderAvatarUrl: String,
-        text: String,
-        onComplete: (String?) -> Unit,
-    ) {
-        val cleanText = text.trim()
-        if (cleanText.isBlank()) return
-        val message = mapOf(
-            "senderId" to senderId,
-            "senderName" to senderName.trim().take(30),
-            "senderAvatarUrl" to senderAvatarUrl,
-            "text" to cleanText.take(1000),
-            "createdAt" to FieldValue.serverTimestamp(),
-        )
-        sendDirectMessage(firestore, roomId, senderId, message, onComplete)
-    }
-
-    fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
-        uploadChatImage("rooms", roomId, senderId, imageUri) { url, error ->
-            if (url == null) return@uploadChatImage onComplete(error)
-            val message = mapOf("senderId" to senderId, "senderName" to senderName.trim().take(30), "senderAvatarUrl" to senderAvatarUrl, "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp())
-            sendDirectMessage(firestore, roomId, senderId, message, onComplete)
-        }
-    }
-
-    fun markDirectMessagesRead(firestore: FirebaseFirestore, currentUid: String, friendUid: String) {
-        firestore.collection("users").document(currentUid).collection("friends").document(friendUid)
-            .update("unreadCount", 0)
-    }
-
-    private fun sendDirectMessage(
-        firestore: FirebaseFirestore,
-        roomId: String,
-        senderId: String,
-        message: Map<String, Any>,
-        onComplete: (String?) -> Unit,
-    ) {
-        val room = firestore.collection("rooms").document(roomId)
-        room.get().addOnCompleteListener { roomTask ->
-            if (!roomTask.isSuccessful) {
-                onComplete(roomTask.exception?.localizedMessage ?: "Unable to send message")
-                return@addOnCompleteListener
-            }
-            val recipientUid = (roomTask.result.get("memberIds") as? List<*>)
-                ?.filterIsInstance<String>()
-                ?.firstOrNull { it != senderId }
-            if (recipientUid == null) {
-                onComplete("Unable to find message recipient")
-                return@addOnCompleteListener
-            }
-            val recipientFriend = firestore.collection("users").document(recipientUid)
-                .collection("friends").document(senderId)
-            firestore.batch().apply {
-                set(room.collection("messages").document(), message)
-                update(room, "updatedAt", FieldValue.serverTimestamp())
-                update(recipientFriend, "unreadCount", FieldValue.increment(1))
-            }.commit().addOnCompleteListener { task ->
-                onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
-            }
-        }
-    }
-
-    internal fun uploadChatImage(chatType: String, roomId: String, senderId: String, imageUri: Uri, onComplete: (String?, String?) -> Unit) {
-        val ref = FirebaseStorage.getInstance().reference.child("chatImages/$chatType/$roomId/$senderId/${UUID.randomUUID()}.jpg")
-        ref.putFile(imageUri).continueWithTask { upload ->
-            if (!upload.isSuccessful) throw (upload.exception ?: IllegalStateException("Photo upload failed"))
-            ref.downloadUrl
-        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) task.result.toString() else null, task.exception?.localizedMessage ?: "Unable to upload photo") }
-    }
 }

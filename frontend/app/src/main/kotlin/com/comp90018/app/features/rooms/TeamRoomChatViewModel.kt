@@ -2,9 +2,9 @@ package com.comp90018.app.features.rooms
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.comp90018.app.ChatMessage
-import com.comp90018.app.TeamRoom
-import com.comp90018.app.TeamRoomMember
+import com.comp90018.app.data.chat.ChatMessage
+import com.comp90018.app.data.rooms.TeamRoom
+import com.comp90018.app.data.rooms.TeamRoomMember
 import com.comp90018.app.data.rooms.TeamRoomRepository
 import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +79,23 @@ class TeamRoomChatViewModel(
         }
     }
 
+    fun sendTreasureSticker(treasureId: String, senderName: String, senderAvatarUrl: String) {
+        if (mutableUiState.value.sending) return
+        mutableUiState.value = mutableUiState.value.copy(sending = true, error = null)
+        repository.sendTreasureSticker(roomId, userId, senderName.ifBlank { "You" }, senderAvatarUrl, treasureId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+        }
+    }
+
+    fun updateSettings(name: String, maxMembers: Int, description: String, onSaved: () -> Unit) {
+        if (mutableUiState.value.updatingTask) return
+        mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
+        repository.updateSettings(roomId, userId, name, maxMembers, description) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+            if (error == null) onSaved()
+        }
+    }
+
     fun selectDestination(taskId: String, taskTitle: String) {
         if (mutableUiState.value.updatingTask) return
         mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
@@ -89,7 +106,7 @@ class TeamRoomChatViewModel(
 
     fun startHunt(onStarted: () -> Unit) {
         val state = mutableUiState.value
-        if (state.updatingTask || state.room?.creatorId != userId || state.room.memberIds.size != 2 || state.room.taskId.isBlank()) return
+        if (state.updatingTask || state.room?.creatorId != userId || state.room.memberIds.size < 2 || state.room.taskId.isBlank()) return
         mutableUiState.value = state.copy(updatingTask = true, error = null)
         repository.startHunt(roomId, userId) { error ->
             mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)

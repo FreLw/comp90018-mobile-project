@@ -171,7 +171,24 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.memberIds == resource.data.memberIds
         && request.resource.data.title == resource.data.title
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'updatedAt', 'lastMessageText', 'lastMessageType', 'lastMessageTreasureId'
+        ])
+        && (!('lastMessageText' in request.resource.data)
+          || (request.resource.data.lastMessageText is string
+            && request.resource.data.lastMessageText.size() <= 1000))
+        && (!('lastMessageType' in request.resource.data)
+          || request.resource.data.lastMessageType in ['text', 'image', 'treasure_sticker'])
+        && (!('lastMessageTreasureId' in request.resource.data)
+          || (request.resource.data.lastMessageTreasureId is string
+            && request.resource.data.lastMessageTreasureId.size() <= 100))
+        // Updating only updatedAt must not revalidate ownership of the previous sender's sticker.
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageType', 'lastMessageTreasureId'])
+          || !('lastMessageType' in request.resource.data)
+          || request.resource.data.lastMessageType != 'treasure_sticker'
+          || (request.resource.data.lastMessageTreasureId.size() > 0
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.lastMessageTreasureId))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.lastMessageTreasureId)).data.status == 'discovered'))
         && request.resource.data.updatedAt == request.time
       ) || (
         signedIn()
@@ -191,15 +208,37 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isRoomMember(roomId);
         allow create: if isRoomMember(roomId)
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'senderName', 'senderAvatarUrl', 'text', 'imageUrl',
+            'messageType', 'treasureId', 'createdAt'
+          ])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
           && request.resource.data.senderName.size() <= 30
           && request.resource.data.senderAvatarUrl is string
           && request.resource.data.senderAvatarUrl.size() <= 2000
           && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
+          && (!('imageUrl' in request.resource.data)
+            || (request.resource.data.imageUrl is string
+              && request.resource.data.imageUrl.size() <= 2000))
+          && (!('messageType' in request.resource.data)
+            || request.resource.data.messageType in ['text', 'image', 'treasure_sticker'])
+          && (!('treasureId' in request.resource.data)
+            || (request.resource.data.treasureId is string
+              && request.resource.data.treasureId.size() <= 100))
+          && (
+            ((!('messageType' in request.resource.data)
+                || request.resource.data.messageType == 'text')
+              && request.resource.data.text.size() > 0)
+            || (request.resource.data.messageType == 'image'
+              && request.resource.data.imageUrl.size() > 0)
+            || (request.resource.data.messageType == 'treasure_sticker'
+              && request.resource.data.treasureId.size() > 0
+              && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId))
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId)).data.ownerUid == request.auth.uid
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId)).data.status == 'discovered')
+          )
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }
@@ -272,8 +311,16 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'maxMembers', 'description', 'creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'createdAt', 'updatedAt'])
         && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 500
+        && request.resource.data.maxMembers is int
+        && request.resource.data.maxMembers >= 2
+        && request.resource.data.maxMembers <= 4
         && request.resource.data.memberIds.size() == 1
         && request.auth.uid in request.resource.data.memberIds
         && request.resource.data.taskId is string
@@ -289,7 +336,7 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.memberIds
         && request.resource.data.memberIds.hasAll(resource.data.memberIds)
         && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
-        && request.resource.data.memberIds.size() <= 2
+        && request.resource.data.memberIds.size() <= resource.data.get('maxMembers', 4)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.taskId == resource.data.taskId
         && request.resource.data.taskTitle == resource.data.taskTitle
@@ -342,7 +389,7 @@ service cloud.firestore {
             && request.resource.data.taskTitle is string
             && request.resource.data.taskTitle.size() > 0)
           || (request.resource.data.taskStatus == 'hunting'
-            && resource.data.memberIds.size() == 2
+            && resource.data.memberIds.size() >= 2
             && resource.data.taskId is string
             && resource.data.taskId.size() > 0
             && request.resource.data.taskId == resource.data.taskId
@@ -356,7 +403,7 @@ service cloud.firestore {
               || (resource.data.taskStatus == 'hunting'
                 && (!('taskCompletedMemberIds' in resource.data)
                   || request.resource.data.taskCompletedMemberIds.hasAll(resource.data.taskCompletedMemberIds))
-                && request.resource.data.taskCompletedMemberIds.size() <= 2
+                && request.resource.data.taskCompletedMemberIds.size() <= resource.data.memberIds.size()
                 && request.resource.data.foundFragmentIds.hasAll(resource.data.foundFragmentIds)
                 && request.resource.data.foundFragmentIds.size() <= 4
                 && (request.resource.data.foundFragmentIds.size() == 0
@@ -370,7 +417,7 @@ service cloud.firestore {
                 // append-only.
                 && (!('taskClaimedMemberIds' in resource.data)
                   || request.resource.data.taskClaimedMemberIds.hasAll(resource.data.taskClaimedMemberIds))
-                && request.resource.data.taskClaimedMemberIds.size() <= 2
+                && request.resource.data.taskClaimedMemberIds.size() <= resource.data.memberIds.size()
                 && request.resource.data.taskClaimedMemberIds.hasOnly(resource.data.memberIds))
             )
           )
@@ -378,7 +425,7 @@ service cloud.firestore {
             && resource.data.taskStatus == 'hunting'
             && (
               request.auth.uid == resource.data.creatorId
-              || (resource.data.taskClaimedMemberIds.size() == 1
+              || (resource.data.taskClaimedMemberIds.size() == resource.data.memberIds.size() - 1
                 && !(request.auth.uid in resource.data.taskClaimedMemberIds)
                 && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(resource.data.taskId)))
             )
@@ -389,20 +436,55 @@ service cloud.firestore {
             && request.resource.data.taskClaimedMemberIds.size() == 0
           )
         );
+      allow update: if signedIn()
+        && resource.data.creatorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'maxMembers', 'description', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 500
+        && request.resource.data.maxMembers is int
+        && request.resource.data.maxMembers >= 2
+        && request.resource.data.maxMembers <= 4
+        && request.resource.data.maxMembers >= resource.data.memberIds.size()
+        && request.resource.data.updatedAt == request.time;
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
 
       match /messages/{messageId} {
         allow read: if isTeamRoomMember(roomId);
         allow create: if isTeamRoomMember(roomId)
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderAvatarUrl', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'senderName', 'senderAvatarUrl', 'text', 'imageUrl',
+            'messageType', 'treasureId', 'createdAt'
+          ])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
           && request.resource.data.senderName.size() <= 30
           && request.resource.data.senderAvatarUrl is string
           && request.resource.data.senderAvatarUrl.size() <= 2000
           && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
+          && (!('imageUrl' in request.resource.data)
+            || (request.resource.data.imageUrl is string
+              && request.resource.data.imageUrl.size() <= 2000))
+          && (!('messageType' in request.resource.data)
+            || request.resource.data.messageType in ['text', 'image', 'treasure_sticker'])
+          && (!('treasureId' in request.resource.data)
+            || (request.resource.data.treasureId is string
+              && request.resource.data.treasureId.size() <= 100))
+          && (
+            ((!('messageType' in request.resource.data)
+                || request.resource.data.messageType == 'text')
+              && request.resource.data.text.size() > 0)
+            || (request.resource.data.messageType == 'image'
+              && request.resource.data.imageUrl.size() > 0)
+            || (request.resource.data.messageType == 'treasure_sticker'
+              && request.resource.data.treasureId.size() > 0
+              && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId))
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId)).data.ownerUid == request.auth.uid
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(request.resource.data.treasureId)).data.status == 'discovered')
+          )
           && request.resource.data.createdAt == request.time;
         allow update: if false;
         allow delete: if signedIn()

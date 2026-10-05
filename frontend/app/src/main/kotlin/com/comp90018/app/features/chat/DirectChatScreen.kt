@@ -1,27 +1,33 @@
 package com.comp90018.app.features.chat
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
+import com.comp90018.app.data.chat.ChatMessage
+import com.comp90018.app.data.chat.ChatMessageTypes
 import com.comp90018.app.data.chat.FirebaseChatRepository
+import com.comp90018.app.data.treasure.FirebaseTreasureCollectionRepository
 import com.comp90018.app.features.profile.ProfileAvatar
+import com.comp90018.app.features.treasure.TreasureCollectionViewModel
 import com.comp90018.app.ui.components.ChatComposer
 import com.comp90018.app.ui.components.formatMessageTimestamp
+import com.comp90018.app.ui.components.treasureStickerFor
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
@@ -32,6 +38,12 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
         factory = DirectChatViewModel.factory(repository, roomId, currentUid, friendUid, currentUsername, currentAvatarUrl),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val treasureRepository = remember(firestore) { FirebaseTreasureCollectionRepository(firestore) }
+    val treasureViewModel: TreasureCollectionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        key = "direct_chat_treasures_$currentUid",
+        factory = TreasureCollectionViewModel.factory(treasureRepository, currentUid),
+    )
+    val treasureState by treasureViewModel.uiState.collectAsStateWithLifecycle()
     DisposableEffect(viewModel) {
         viewModel.setScreenVisible(true)
         onDispose { viewModel.setScreenVisible(false) }
@@ -51,8 +63,17 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
                 items(state.messages, key = { it.id }) { msg -> ChatMessageRow(msg, currentUid, title, currentUsername, currentAvatarUrl) }
             }
         }
-        ChatComposer(state.input, viewModel::updateInput)
-        Button(onClick = viewModel::send, modifier = Modifier.fillMaxWidth(), enabled = state.input.isNotBlank() && !state.sending) { Icon(Icons.AutoMirrored.Rounded.Send, null); Text(if (state.sending) "Sending..." else "Send") }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        Spacer(Modifier.height(8.dp))
+        ChatComposer(
+            value = state.input,
+            onValueChange = viewModel::updateInput,
+            onSend = viewModel::send,
+            sendEnabled = state.input.isNotBlank(),
+            sending = state.sending,
+            ownedTreasureStickerIds = treasureState.discoveredIds,
+            onTreasureStickerSelected = viewModel::sendTreasureSticker,
+        )
     }
 }
 
@@ -61,12 +82,26 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
         if (!mine) { ProfileAvatar(msg.senderAvatarUrl, name, 40.dp); Spacer(Modifier.width(8.dp)) }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-            Text(name, color = Muted, style = MaterialTheme.typography.labelMedium)
-            Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
-                Text(msg.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
-            }
+            Text(name, color = Ink, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             formatMessageTimestamp(msg.sentAtMillis)?.let { timestamp ->
                 Text(timestamp, color = Muted, style = MaterialTheme.typography.labelSmall)
+            }
+            Spacer(Modifier.height(3.dp))
+            val sticker = treasureStickerFor(msg.treasureId)
+            if (msg.messageType == ChatMessageTypes.TreasureSticker && sticker != null) {
+                Image(
+                    painter = painterResource(sticker.drawableRes),
+                    contentDescription = sticker.name,
+                    modifier = Modifier.size(112.dp),
+                )
+            } else {
+                Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
+                    Text(
+                        text = if (msg.messageType == ChatMessageTypes.Image || msg.imageUrl.isNotBlank()) "[Img]" else msg.text,
+                        modifier = Modifier.padding(14.dp),
+                        color = if (mine) Color.White else Ink,
+                    )
+                }
             }
         }
         if (mine) { Spacer(Modifier.width(8.dp)); ProfileAvatar(msg.senderAvatarUrl.ifBlank { myAvatar }, name, 40.dp) }

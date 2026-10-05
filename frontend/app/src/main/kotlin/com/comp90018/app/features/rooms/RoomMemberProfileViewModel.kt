@@ -2,8 +2,8 @@ package com.comp90018.app.features.rooms
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.comp90018.app.FriendshipStatus
 import com.comp90018.app.data.profile.ProfileRepository
+import com.comp90018.app.data.social.FriendshipStatus
 import com.comp90018.app.data.social.SocialRepository
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.profile.UserProfile

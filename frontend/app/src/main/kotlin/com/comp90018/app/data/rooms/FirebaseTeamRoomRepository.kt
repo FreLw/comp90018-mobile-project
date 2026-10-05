@@ -1,14 +1,11 @@
 package com.comp90018.app.data.rooms
 
-import com.comp90018.app.FirebaseTeamRoomService
-import com.comp90018.app.ChatMessage
-import com.comp90018.app.TeamRoom
-import com.comp90018.app.TeamRoomMember
+import com.comp90018.app.data.chat.ChatMessage
 import com.comp90018.app.data.social.Subscription
 import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 
-/** Firebase implementation of [TeamRoomRepository]. */
+/** Firebase adapter for team-room state, messages, and shared-hunt progress. */
 class FirebaseTeamRoomRepository(
     private val firestore: FirebaseFirestore,
 ) : TeamRoomRepository {
@@ -22,8 +19,14 @@ class FirebaseTeamRoomRepository(
         return Subscription { registration.remove() }
     }
 
-    override fun createRoom(userId: String, onComplete: (String?, String?) -> Unit) =
-        FirebaseTeamRoomService.createRoom(firestore, userId, onComplete)
+    override fun createRoom(userId: String, name: String, maxMembers: Int, description: String, onComplete: (String?, String?) -> Unit) =
+        FirebaseTeamRoomService.createRoom(firestore, userId, name, maxMembers, description, onComplete)
+
+    override fun updateSettings(roomId: String, userId: String, name: String, maxMembers: Int, description: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.updateSettings(firestore, roomId, userId, name, maxMembers, description, onComplete)
+
+    override fun sendTreasureSticker(roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, treasureId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.sendTreasureSticker(firestore, roomId, senderId, senderName, senderAvatarUrl, treasureId, onComplete)
 
     override fun joinRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) =
         FirebaseTeamRoomService.joinRoom(firestore, roomId, userId, onComplete)

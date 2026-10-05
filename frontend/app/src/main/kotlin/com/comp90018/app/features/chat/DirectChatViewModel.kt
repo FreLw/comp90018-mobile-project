@@ -2,7 +2,7 @@ package com.comp90018.app.features.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.comp90018.app.ChatMessage
+import com.comp90018.app.data.chat.ChatMessage
 import com.comp90018.app.data.chat.ChatRepository
 import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +32,7 @@ class DirectChatViewModel(
 
     init {
         messagesSubscription = repository.observeMessages(roomId) { messages, error ->
-            mutableUiState.value = mutableUiState.value.copy(messages = messages, error = error)
+            mutableUiState.value = mutableUiState.value.copy(messages = if (error == null) messages else mutableUiState.value.messages, error = error)
             if (isScreenVisible) repository.markMessagesRead(currentUid, friendUid)
         }
     }
@@ -57,15 +57,36 @@ class DirectChatViewModel(
     fun send() {
         val text = mutableUiState.value.input.trim()
         if (text.isBlank() || mutableUiState.value.sending) return
-        mutableUiState.value = mutableUiState.value.copy(input = "", error = null, sending = true)
+        // Keep the draft visible until Firestore confirms the write. This prevents
+        // permission/network errors from making the user's message disappear.
+        mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
         repository.sendMessage(roomId, currentUid, currentUsername.ifBlank { "You" }, currentAvatarUrl, text) { error ->
-            mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+            val currentState = mutableUiState.value
+            mutableUiState.value = currentState.copy(
+                input = if (error == null && currentState.input.trim() == text) "" else currentState.input,
+                sending = false,
+                error = error,
+            )
         }
     }
     fun sendImage(uri: Uri) {
         if (mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
         repository.sendImage(roomId, currentUid, currentUsername.ifBlank { "You" }, currentAvatarUrl, uri) { error ->
+            mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
+        }
+    }
+
+    fun sendTreasureSticker(treasureId: String) {
+        if (mutableUiState.value.sending) return
+        mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)
+        repository.sendTreasureSticker(
+            roomId,
+            currentUid,
+            currentUsername.ifBlank { "You" },
+            currentAvatarUrl,
+            treasureId,
+        ) { error ->
             mutableUiState.value = mutableUiState.value.copy(sending = false, error = error)
         }
     }

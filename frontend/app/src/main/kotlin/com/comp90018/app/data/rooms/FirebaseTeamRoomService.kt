@@ -1,5 +1,8 @@
-package com.comp90018.app
+package com.comp90018.app.data.rooms
 
+import com.comp90018.app.data.chat.ChatMessageTypes
+import com.comp90018.app.data.chat.ChatMessage
+import com.comp90018.app.data.chat.FirebaseChatImageStorage
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
@@ -7,25 +10,7 @@ import android.net.Uri
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.MetadataChanges
 
-/** Separate persistence boundary for two-person treasure teams; never used for direct messages. */
-data class TeamRoom(
-    val id: String,
-    val creatorId: String,
-    val memberIds: List<String>,
-    val taskId: String,
-    val taskTitle: String,
-    val taskStatus: String,
-    val taskCompletedMemberIds: List<String> = emptyList(),
-    val foundFragmentIds: List<String> = emptyList(),
-    val taskClaimedMemberIds: List<String> = emptyList(),
-)
-
-data class TeamRoomMember(
-    val uid: String,
-    val name: String,
-    val avatarUrl: String,
-)
-
+/** Low-level Firestore operations for shared treasure-hunt rooms. */
 object FirebaseTeamRoomService {
     fun observeMembership(
         firestore: FirebaseFirestore,
@@ -63,8 +48,12 @@ object FirebaseTeamRoomService {
     fun createRoom(
         firestore: FirebaseFirestore,
         userId: String,
+        name: String,
+        maxMembers: Int,
+        description: String,
         onComplete: (String?, String?) -> Unit,
     ) {
+        if (name.trim().isBlank() || name.trim().length > 80 || maxMembers !in 2..4 || description.length > 500) return onComplete(null, "Enter a room name (up to 80 characters), capacity of 2–4, and description up to 500 characters")
         val membership = firestore.collection("teamMemberships").document(userId)
         membership.get().addOnCompleteListener { membershipTask ->
             if (!membershipTask.isSuccessful) {
@@ -78,6 +67,9 @@ object FirebaseTeamRoomService {
                 firestore.batch().apply {
                     set(room, mapOf(
                         "creatorId" to userId,
+                        "name" to name.trim(),
+                        "maxMembers" to maxMembers,
+                        "description" to description.trim(),
                         "memberIds" to listOf(userId),
                         "taskId" to "",
                         "taskTitle" to "",
@@ -94,7 +86,7 @@ object FirebaseTeamRoomService {
                         "unreadCount" to 0,
                     ))
                 }.commit().addOnCompleteListener { task ->
-                    onComplete(if (task.isSuccessful) room.id else null, task.exception?.localizedMessage ?: "Unable to create room")
+                    onComplete(if (task.isSuccessful) room.id else null, if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to create room")
                 }
             }
         }
@@ -110,7 +102,7 @@ object FirebaseTeamRoomService {
             val roomSnapshot = transaction.get(room)
             if (!roomSnapshot.exists()) throw IllegalStateException("Room not found")
             val members = roomSnapshot.get("memberIds") as? List<*> ?: emptyList<String>()
-            if (members.size >= 2) throw IllegalStateException("This room already has two members")
+            if (members.size >= (roomSnapshot.getLong("maxMembers") ?: 4L)) throw IllegalStateException("This room is full")
             transaction.update(room, mapOf(
                 "memberIds" to FieldValue.arrayUnion(userId),
                 "updatedAt" to FieldValue.serverTimestamp(),
@@ -132,6 +124,9 @@ object FirebaseTeamRoomService {
             } else {
                 onChange(TeamRoom(
                     id = snapshot.id,
+                    name = snapshot.getString("name").orEmpty().trim(),
+                    maxMembers = (snapshot.getLong("maxMembers") ?: 4L).toInt().coerceIn(2, 4),
+                    description = snapshot.getString("description").orEmpty(),
                     creatorId = snapshot.getString("creatorId").orEmpty(),
                     memberIds = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     taskId = snapshot.getString("taskId").orEmpty(),
@@ -179,7 +174,7 @@ object FirebaseTeamRoomService {
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             if (userId !in members) throw IllegalStateException("You are not a member of this room")
             if (snapshot.getString("creatorId") != userId) throw IllegalStateException("Only the room owner can start a hunt")
-            if (members.size != 2) throw IllegalStateException("Start Hunt requires two room members")
+            if (members.size < 2) throw IllegalStateException("Start Hunt requires at least two room members")
             if (snapshot.getString("taskStatus") != "assigned") throw IllegalStateException("Choose a destination before starting")
             if (snapshot.getString("taskId").isNullOrBlank()) throw IllegalStateException("Choose a destination before starting")
             transaction.update(room, mapOf(
@@ -287,7 +282,7 @@ object FirebaseTeamRoomService {
             )
             if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
             if (taskId.isBlank() || !members.all { it in completedMembers }) {
-                throw IllegalStateException("Both explorers must complete the task before claiming the treasure")
+                throw IllegalStateException("All explorers must complete the task before claiming the treasure")
             }
             if (taskId == "south_lawn_atlas" && !fragments.containsAll(requiredFragments)) {
                 throw IllegalStateException("Find all fragments before claiming the Atlas")
@@ -335,6 +330,8 @@ object FirebaseTeamRoomService {
                         text = document.getString("text").orEmpty(),
                         sentAtMillis = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
                         imageUrl = document.getString("imageUrl").orEmpty(),
+                        messageType = document.getString("messageType") ?: ChatMessageTypes.Text,
+                        treasureId = document.getString("treasureId").orEmpty(),
                     )
                 }, null)
             }
@@ -363,8 +360,8 @@ object FirebaseTeamRoomService {
     }
 
     fun sendImage(firestore: FirebaseFirestore, roomId: String, senderId: String, recipientId: String?, senderName: String, senderAvatarUrl: String, imageUri: Uri, onComplete: (String?) -> Unit) {
-        FirebaseSocialService.uploadChatImage("teamRooms", roomId, senderId, imageUri) { url, error ->
-            if (url == null) return@uploadChatImage onComplete(error)
+        FirebaseChatImageStorage.upload("teamRooms", roomId, senderId, imageUri) { url, error ->
+            if (url == null) return@upload onComplete(error)
             val message = mapOf(
                 "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
                 "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp(),
@@ -385,14 +382,42 @@ object FirebaseTeamRoomService {
         onComplete: (String?) -> Unit,
     ) {
         val room = firestore.collection("teamRooms").document(roomId)
-        firestore.batch().apply {
-            set(room.collection("messages").document(), message)
-            recipientId?.let { recipient ->
-                update(firestore.collection("teamMemberships").document(recipient), "unreadCount", FieldValue.increment(1))
+        room.get().addOnCompleteListener { roomTask ->
+            if (!roomTask.isSuccessful) {
+                onComplete(roomTask.exception?.localizedMessage ?: "Unable to load room")
+                return@addOnCompleteListener
             }
-        }.commit().addOnCompleteListener { task ->
-            onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
+            val recipients = (roomTask.result.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty().filter { it != message["senderId"] }
+            firestore.batch().apply {
+                set(room.collection("messages").document(), message)
+                recipients.forEach { recipient ->
+                    update(firestore.collection("teamMemberships").document(recipient), "unreadCount", FieldValue.increment(1))
+                }
+            }.commit().addOnCompleteListener { task ->
+                onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to send message")
+            }
         }
+    }
+
+    fun updateSettings(firestore: FirebaseFirestore, roomId: String, userId: String, name: String, maxMembers: Int, description: String, onComplete: (String?) -> Unit) {
+        if (name.trim().isBlank() || name.trim().length > 80 || maxMembers !in 2..4 || description.length > 500) return onComplete("Check the room name, capacity, and description")
+        val room = firestore.collection("teamRooms").document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            if (snapshot.getString("creatorId") != userId) throw IllegalStateException("Only the room owner can edit settings")
+            val members = snapshot.get("memberIds") as? List<*> ?: emptyList<String>()
+            if (maxMembers < members.size) throw IllegalStateException("Capacity cannot be lower than the current member count")
+            transaction.update(room, mapOf("name" to name.trim(), "maxMembers" to maxMembers, "description" to description.trim(), "updatedAt" to FieldValue.serverTimestamp()))
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to save settings") }
+    }
+
+    fun sendTreasureSticker(firestore: FirebaseFirestore, roomId: String, senderId: String, senderName: String, senderAvatarUrl: String, treasureId: String, onComplete: (String?) -> Unit) {
+        if (treasureId.isBlank()) return onComplete("Choose a treasure sticker")
+        sendTeamMessage(firestore, roomId, null, mapOf(
+            "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
+            "text" to "", "messageType" to ChatMessageTypes.TreasureSticker, "treasureId" to treasureId,
+            "createdAt" to FieldValue.serverTimestamp(),
+        ), onComplete)
     }
 
     fun loadMembers(

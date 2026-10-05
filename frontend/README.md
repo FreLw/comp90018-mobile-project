@@ -8,13 +8,19 @@ and Firebase Storage; no Spring Boot server is required.
 
 The app separates UI state from Firebase operations:
 
-- `features/` contains Compose screens and ViewModels.
-- `data/` contains repository interfaces plus Firebase implementations for
-  authentication, profiles, social features, direct chat, and team rooms.
+- `features/` contains Compose screens, sizeable `Content` sections, and
+  ViewModels grouped by user-facing feature.
+- `data/` contains domain models, repository interfaces, Firebase adapters,
+  and small Firebase service objects grouped by data domain.
+- `sensors/` wraps Android hardware APIs behind testable interfaces.
+- `contextengine/` combines sensor values and evaluates challenge rules.
+- `ui/components/` contains reusable UI with no feature ownership.
 - The ViewModels own snapshot-listener cleanup and expose `StateFlow` UI state.
 
-Firebase service calls are contained in data-layer adapters; feature screens do
-not directly invoke Firebase services or Firestore/Storage APIs.
+The dependency direction is `Screen → ViewModel → Repository → Firebase
+adapter/service`. Feature screens do not directly invoke Firebase services or
+Firestore/Storage APIs. See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete
+package tree, naming convention, data flow, and presentation talking points.
 
 ## Run in Android Studio
 
@@ -48,11 +54,11 @@ To build a debug APK from PowerShell instead:
 
 | Bottom tab | Current behaviour |
 | --- | --- |
-| `treasure` | Placeholder for future treasure gameplay |
-| `Rooms` | Create/join a two-person room, room details, and room chat |
-| `Map` | Google Map with campus relic markers and GPS/location status |
-| `friend` | Friend lookup, requests, friend list, and private chat |
-| `profile` | Profile view/edit and sign out |
+| `Treasure` | Hunt route and discovered/undiscovered treasure details |
+| `Rooms` | Team-room chat and cooperative treasure hunts |
+| `Map` | Proximity discovery, compass hunt and treasure challenges |
+| `Friends` | Chats, contacts, requests, profiles and collectible stickers |
+| `Profile` | Profile/settings editing, About and sign out |
 
 For end-user instructions, Firebase setup, the data model, and detailed
 acceptance criteria, see the repository [README](../README.md) and

@@ -12,11 +12,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.comp90018.app.FriendSummary
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.RelicRed
 import com.comp90018.app.data.profile.FirebaseProfileRepository
+import com.comp90018.app.data.social.FriendSummary
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable

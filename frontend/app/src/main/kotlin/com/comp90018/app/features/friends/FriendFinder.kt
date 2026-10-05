@@ -28,6 +28,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.*
 import com.comp90018.app.data.social.FirebaseSocialRepository
+import com.comp90018.app.data.social.FriendshipStatus
+import com.comp90018.app.data.social.SearchUser
 import com.comp90018.app.features.chat.DirectChatScreen
 import com.comp90018.app.features.profile.ProfileAvatar
 import com.comp90018.app.ui.components.AppTextField

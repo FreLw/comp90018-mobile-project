@@ -1,7 +1,7 @@
 package com.comp90018.app.data.profile
 
 import android.net.Uri
-import com.comp90018.app.FirebaseAuthService
+import com.comp90018.app.data.auth.FirebaseAuthService
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.profile.AppSettings
 import com.comp90018.app.features.profile.ProfileExtras
