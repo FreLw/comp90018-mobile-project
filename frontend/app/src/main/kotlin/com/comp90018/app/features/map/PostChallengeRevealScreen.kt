@@ -110,25 +110,5 @@ private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onRetur
 
 @Composable
 private fun TreasureRevealPanel(relic: MapRelic, onViewStory: () -> Unit, onReturnToMap: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Text("Relic discovered", style = MaterialTheme.typography.headlineMedium)
-        TreasurePrototypeImage(relic = relic, discovered = true, modifier = Modifier.size(240.dp))
-        Text(relic.name, style = MaterialTheme.typography.headlineSmall)
-        Text(relic.locationName, style = MaterialTheme.typography.titleMedium)
-        if (relic.treasureType.isNotBlank()) Text(relic.treasureTypeLabel)
-        Text(relic.description, style = MaterialTheme.typography.bodyLarge)
-        Text("Saved to your collection", color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(4.dp))
-        Button(onClick = onViewStory, modifier = Modifier.fillMaxWidth()) {
-            Text("View story / historical reference")
-        }
-        OutlinedButton(onClick = onReturnToMap, modifier = Modifier.fillMaxWidth()) {
-            Text("Return to map")
-        }
-    }
+    TreasureDiscoveryReveal(relic, onViewStory, onReturnToMap)
 }

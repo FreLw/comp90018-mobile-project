@@ -213,6 +213,8 @@ fun MapScreen(
     var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
     var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var huntRevealRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var huntStoryVisible by remember { mutableStateOf(false) }
     var compassRelic by remember { mutableStateOf<MapRelic?>(null) }
     var memberQuizRelic by remember { mutableStateOf<MapRelic?>(null) }
     var perspective by remember { mutableStateOf(MapPerspective.GOD) }
@@ -387,6 +389,26 @@ fun MapScreen(
         return
     }
 
+    huntRevealRelic?.let { relic ->
+        if (huntStoryVisible) {
+            TreasureStoryPanel(
+                relic = relic,
+                collecting = false,
+                collectionError = null,
+                onPutInBackpack = null,
+                onBackToReveal = { huntStoryVisible = false },
+                onReturnToMap = { huntRevealRelic = null; selectedRelic = null },
+            )
+        } else {
+            TreasureDiscoveryReveal(
+                relic = relic,
+                onViewTreasure = { huntStoryVisible = true },
+                onReturnToMap = { huntRevealRelic = null; selectedRelic = null },
+            )
+        }
+        return
+    }
+
     compassRelic?.let { relic ->
         TreasureCompassGate(
             relic = relic,
@@ -397,7 +419,8 @@ fun MapScreen(
             soundEffectsEnabled = soundEffectsEnabled,
             onSignalFound = {
                 compassRelic = null
-                detailRelic = relic
+                huntStoryVisible = false
+                huntRevealRelic = relic
             },
             onBack = {
                 compassRelic = null
@@ -577,7 +600,7 @@ fun MapScreen(
                             when {
                                 teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner -> memberQuizRelic = relic
                                 relic.challengeConfig != null -> compassRelic = relic
-                                else -> detailRelic = relic
+                                else -> { huntStoryVisible = false; huntRevealRelic = relic }
                             }
                         }
                     },
@@ -678,7 +701,7 @@ fun MapScreen(
                             when {
                                 teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner -> memberQuizRelic = relic
                                 relic.challengeConfig != null -> compassRelic = relic
-                                else -> detailRelic = relic
+                                else -> { huntStoryVisible = false; huntRevealRelic = relic }
                             }
                         },
                     )
@@ -2348,6 +2371,11 @@ internal fun TreasureStoryPanel(
                     Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                     Text(relic.locationName, color = Muted)
                 }
+            }
+        }
+        if (relic.description.isNotBlank()) {
+            item {
+                Text(relic.description, color = Ink, style = MaterialTheme.typography.bodyLarge)
             }
         }
         if (relic.story.isNotBlank()) {
