@@ -178,6 +178,7 @@ fun MapScreen(
     preciseLocationEnabled: Boolean,
     hapticsEnabled: Boolean,
     userLocation: LocationOutput,
+    soundEffectsEnabled: Boolean = true,
     onEnableLocation: () -> Unit,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
     activeHuntTreasureId: String? = null,
@@ -393,14 +394,10 @@ fun MapScreen(
             deviceHeading = deviceHeading,
             motion = deviceMotion,
             hapticsEnabled = hapticsEnabled,
+            soundEffectsEnabled = soundEffectsEnabled,
             onSignalFound = {
                 compassRelic = null
-                if (relic.challengeConfig != null) {
-                    debugSimulationEnabled = false
-                    challengeRelic = relic
-                } else {
-                    detailRelic = relic
-                }
+                detailRelic = relic
             },
             onBack = {
                 compassRelic = null
@@ -1240,6 +1237,7 @@ private fun TreasureCompassGate(
     deviceHeading: Float,
     motion: DeviceMotionSample,
     hapticsEnabled: Boolean,
+    soundEffectsEnabled: Boolean,
     onSignalFound: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -1260,6 +1258,24 @@ private fun TreasureCompassGate(
     val facingTreasure = readiness.facingTreasure
     val phoneHorizontal = readiness.phoneHorizontal
     val allReady = readiness.allReady
+
+    val proximityGlow = distance?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / 165.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val levelGlow = ((45f - effectiveMotion.tiltDegrees) / 33f).coerceIn(0f, 1f)
+    val stars = oracleStarCount(distance)
+    val tone = remember { runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 55) }.getOrNull() }
+    DisposableEffect(tone) { onDispose { tone?.release() } }
+    var previousStars by remember(relic.id) { mutableIntStateOf(stars) }
+    LaunchedEffect(stars, soundEffectsEnabled) {
+        val newlyLit = stars - previousStars
+        previousStars = stars
+        if (soundEffectsEnabled && newlyLit > 0) {
+            repeat(newlyLit) {
+                tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 85)
+                delay(110)
+            }
+        }
+    }
 
     LaunchedEffect(allReady, signalLocked, hapticsEnabled) {
         if (!allReady) signalLocked = false
@@ -1299,7 +1315,7 @@ private fun TreasureCompassGate(
             )
         }
         DivineCompassVisual(
-            relic = relic,
+            readiness = readiness,
             turnDegrees = turnDegrees?.toFloat() ?: 0f,
             signalAvailable = turnDegrees != null,
             distanceMeters = distance,
@@ -1318,17 +1334,17 @@ private fun TreasureCompassGate(
                 verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 Text(instruction, modifier = Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                HuntConditionRow("Near the treasure", "${distance.formatDistance()} · need 10 m or less", nearTreasure)
-                HuntConditionRow(
-                    "Facing the treasure",
-                    turnDegrees?.let { "${abs(it).formatDegrees()} from the signal" } ?: "Waiting for heading sensor",
-                    facingTreasure,
-                )
-                HuntConditionRow(
-                    "Phone flat and level",
-                    String.format(Locale.US, "Tilt %.1f° · keep within %.0f°", effectiveMotion.tiltDegrees, HORIZONTAL_TOLERANCE_DEGREES),
-                    phoneHorizontal,
-                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OracleLamp("The Trail", "Draw nearer", distance.formatDistance(), nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
+                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / 15°" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
+                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / 12°", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
+                }
+                AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("All lanterns are alight. The relic awaits.", color = Ink, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        DiscoveryHuntButton("Hunt", onSignalFound)
+                    }
+                }
             }
         }
         if (BuildConfig.DEBUG) {
@@ -1339,33 +1355,27 @@ private fun TreasureCompassGate(
                         Switch(simulateSensors, { simulateSensors = it })
                     }
                     if (simulateSensors) {
-                        SensorTestSlider("Distance · GPS", testDistance, 0f..30f, "m") { testDistance = it }
-                        SensorTestSlider("Heading · rotation", testHeading, 0f..360f, "°") { testHeading = it }
-                        SensorTestSlider("Pitch · accelerometer", testPitch, -45f..45f, "°") { testPitch = it }
-                        SensorTestSlider("Roll · accelerometer", testRoll, -45f..45f, "°") { testRoll = it }
+                        SensorTestSlider("Distance · GPS", testDistance, 0f..30f, "m", if (nearTreasure) Color(0xFFB58A42) else Color(0xFF8D8984)) { testDistance = it }
+                        SensorTestSlider("Heading · rotation", testHeading, 0f..360f, "°", if (facingTreasure) Color(0xFFA44736) else Color(0xFF8D8984)) { testHeading = it }
+                        SensorTestSlider("Pitch · accelerometer", testPitch, -45f..45f, "°", if (phoneHorizontal) Color(0xFF507052) else Color(0xFF8D8984)) { testPitch = it }
+                        SensorTestSlider("Roll · accelerometer", testRoll, -45f..45f, "°", if (phoneHorizontal) Color(0xFF507052) else Color(0xFF8D8984)) { testRoll = it }
                     }
                 }
             }
         }
-        if (signalLocked) {
-            Button(onClick = onSignalFound, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(18.dp)) {
-                Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(26.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Begin treasure challenge", fontWeight = FontWeight.Bold)
-            }
-        }
+
     }
 }
 
 @Composable
-private fun SensorTestSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, unit: String, onChange: (Float) -> Unit) {
+private fun SensorTestSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, unit: String, color: Color, onChange: (Float) -> Unit) {
     Text("$label  ${String.format(Locale.US, "%.1f", value)}$unit", color = Ink, style = MaterialTheme.typography.labelMedium)
-    Slider(value = value, onValueChange = onChange, valueRange = range)
+    Slider(value = value, onValueChange = onChange, valueRange = range, colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = color, activeTrackColor = color))
 }
 
 @Composable
 private fun DivineCompassVisual(
-    relic: MapRelic,
+    readiness: HuntReadiness,
     turnDegrees: Float,
     signalAvailable: Boolean,
     distanceMeters: Double?,
@@ -1382,22 +1392,37 @@ private fun DivineCompassVisual(
     val shimmer by orbit.animateFloat(0.25f, 0.9f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "oracle_shimmer")
     val parchment = Color(0xFFF5ECD9)
     val plum = Color(0xFF382B40)
-    val gold = Color(0xFFB58A42)
-    val rust = Color(0xFFA44736)
-    val distanceProgress = distanceMeters?.let { (1f - (it / 30.0).toFloat()).coerceIn(0f, 1f) } ?: 0f
+    val grey = Color(0xFF8D8984)
+    val gold = if (readiness.nearTreasure) Color(0xFFB58A42) else grey
+    val rust = if (readiness.facingTreasure) Color(0xFFA44736) else grey
+    val compassInk = if (readiness.facingTreasure) plum else Color(0xFF777570)
+    val levelColor = if (readiness.phoneHorizontal) Color(0xFF507052) else grey
+    val starCount = oracleStarCount(distanceMeters)
+    val starFlash = remember { androidx.compose.animation.core.Animatable(0f) }
+    var lastStarCount by remember { mutableIntStateOf(starCount) }
+    var flashingStars by remember { mutableStateOf(0 until 0) }
+    LaunchedEffect(starCount) {
+        if (starCount > lastStarCount) {
+            flashingStars = lastStarCount until starCount
+            lastStarCount = starCount
+            starFlash.snapTo(1f)
+            starFlash.animateTo(0f, tween(700))
+        } else lastStarCount = starCount
+    }
+    val distanceProgress = distanceMeters?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     val levelDegrees = maxOf(abs(pitchDegrees), abs(rollDegrees))
     Box(modifier.padding(4.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val centre = Offset(size.width / 2, size.height / 2)
             val radius = size.minDimension * 0.37f
             fun point(angle: Double, length: Float): Offset = centre + Offset(cos(angle).toFloat() * length, sin(angle).toFloat() * length)
-            drawCircle(plum, radius, centre)
+            drawCircle(compassInk, radius, centre)
             drawCircle(gold, radius * 0.96f, centre, style = Stroke(3.dp.toPx()))
             drawCircle(parchment, radius * 0.86f, centre)
             drawCircle(gold, radius * 0.76f, centre, style = Stroke(1.dp.toPx()))
             repeat(48) { i ->
                 val angle = Math.toRadians(i * 7.5 - 90)
-                drawLine(plum, point(angle, radius * 0.78f), point(angle, radius * if (i % 4 == 0) 0.86f else 0.82f), if (i % 4 == 0) 3f else 1.5f)
+                drawLine(compassInk, point(angle, radius * 0.78f), point(angle, radius * if (i % 4 == 0) 0.86f else 0.82f), if (i % 4 == 0) 3f else 1.5f)
             }
             // Eight flat heraldic points form a compass rose beneath the sensor needle.
             repeat(8) { i ->
@@ -1409,14 +1434,40 @@ private fun DivineCompassVisual(
                     val right = point(angle + 0.22, radius * 0.23f)
                     lineTo(left.x, left.y); lineTo(tip.x, tip.y); lineTo(right.x, right.y); close()
                 }
-                drawPath(rose, if (i % 2 == 0) gold.copy(alpha = 0.5f) else plum.copy(alpha = 0.18f))
+                drawPath(rose, if (i % 2 == 0) gold.copy(alpha = 0.5f) else compassInk.copy(alpha = 0.18f))
             }
+            val trackRadius = radius * 1.12f
+            drawCircle(Color(0xFFD2CEC5), trackRadius, centre, style = Stroke(18.dp.toPx()))
             drawArc(gold, -90f, 360f * distanceProgress, false,
-                Offset(centre.x - radius * 1.08f, centre.y - radius * 1.08f), Size(radius * 2.16f, radius * 2.16f), style = Stroke(2.dp.toPx()))
+                Offset(centre.x - trackRadius, centre.y - trackRadius), Size(trackRadius * 2, trackRadius * 2), style = Stroke(18.dp.toPx()))
+            repeat(10) { i ->
+                val position = point(Math.toRadians(-72.0 + i * 36.0), trackRadius)
+                val lit = i < starCount
+                val flash = if (i in flashingStars && lit) starFlash.value else 0f
+                if (flash > 0f) {
+                    drawCircle(Color(0xFFECC86F).copy(alpha = flash * 0.6f), (10f + (1f - flash) * 16f).dp.toPx(), position, style = Stroke(2.dp.toPx()))
+                    repeat(6) { ray ->
+                        val angle = Math.toRadians(ray * 60.0)
+                        val offset = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+                        drawLine(Color(0xFFFFD978).copy(alpha = flash), position + offset * 11.dp.toPx(), position + offset * (16f + (1f - flash) * 8f).dp.toPx(), 2.dp.toPx())
+                    }
+                }
+                val star = androidx.compose.ui.graphics.Path().apply {
+                    repeat(10) { vertex ->
+                        val angle = Math.toRadians(vertex * 36.0 - 90)
+                        val r = (if (vertex % 2 == 0) 6f else 2.7f).dp.toPx() * (1f + flash * 0.4f)
+                        val x = position.x + cos(angle).toFloat() * r
+                        val y = position.y + sin(angle).toFloat() * r
+                        if (vertex == 0) moveTo(x, y) else lineTo(x, y)
+                    }
+                    close()
+                }
+                drawPath(star, if (lit) Color(0xFFFFE5A0) else Color(0xFF777570))
+            }
             rotate(orbitDegrees, centre) {
                 repeat(12) { i ->
                     val angle = Math.toRadians(i * 30.0)
-                    val position = point(angle, radius * 1.19f)
+                    val position = point(angle, radius * 1.34f)
                     val extent = if (signalLocked) 6.dp.toPx() else 3.dp.toPx()
                     drawLine(gold.copy(alpha = shimmer), position - Offset(extent, 0f), position + Offset(extent, 0f), 2f)
                     drawLine(gold.copy(alpha = shimmer), position - Offset(0f, extent), position + Offset(0f, extent), 2f)
@@ -1429,43 +1480,81 @@ private fun DivineCompassVisual(
                     lineTo(centre.x, centre.y + radius * 0.52f)
                     lineTo(centre.x - radius * 0.12f, centre.y); close()
                 }
-                drawPath(needle, plum)
+                drawPath(needle, compassInk)
                 val tip = androidx.compose.ui.graphics.Path().apply {
                     moveTo(centre.x, centre.y - radius * 0.73f)
                     lineTo(centre.x + radius * 0.12f, centre.y)
                     lineTo(centre.x - radius * 0.12f, centre.y); close()
                 }
-                drawPath(tip, if (signalLocked) gold else rust)
+                drawPath(tip, rust)
             }
             drawCircle(gold, radius * 0.095f, centre)
             drawCircle(plum, radius * 0.045f, centre)
-            val levelCentre = centre + Offset(0f, radius * 0.48f)
-            drawCircle(plum.copy(alpha = 0.5f), radius * 0.14f, levelCentre, style = Stroke(2f))
-            drawCircle(if (levelDegrees <= HORIZONTAL_TOLERANCE_DEGREES) Color(0xFF507052) else rust,
-                radius * 0.045f, levelCentre + Offset(animatedRoll / 30f, animatedPitch / 30f) * (radius * 0.09f))
         }
-        Text("N", Modifier.align(Alignment.TopCenter).padding(top = 6.dp), color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 22.sp)
-        Text("W", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 20.sp)
-        Text("E", Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 20.sp)
+        // A separate inset instrument keeps the tilt gauge clear of the needle and star trail.
+        Column(Modifier.align(Alignment.TopEnd).background(parchment, CircleShape).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Canvas(Modifier.size(76.dp)) {
+                val c = Offset(size.width / 2f, size.height / 2f)
+                val r = size.minDimension * 0.43f
+                drawCircle(compassInk, r, c)
+                drawCircle(levelColor, r * 0.91f, c, style = Stroke(2.dp.toPx()))
+                drawCircle(parchment, r * 0.78f, c)
+                drawCircle(levelColor, r * 0.36f, c, style = Stroke(1.dp.toPx()))
+                drawLine(levelColor.copy(alpha = 0.5f), c - Offset(r * 0.65f, 0f), c + Offset(r * 0.65f, 0f), 1.dp.toPx())
+                drawLine(levelColor.copy(alpha = 0.5f), c - Offset(0f, r * 0.65f), c + Offset(0f, r * 0.65f), 1.dp.toPx())
+                val bubble = c + Offset(animatedRoll / 30f, animatedPitch / 30f) * (r * 0.45f)
+                drawCircle(levelColor, r * 0.19f, bubble)
+                drawCircle(parchment.copy(alpha = 0.8f), r * 0.055f, bubble - Offset(2.dp.toPx(), 2.dp.toPx()))
+            }
+            Text("LIBELLA", color = levelColor, fontFamily = GothicTreasureFontFamily, fontSize = 11.sp)
+        }
         Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (signalLocked) "✦ SIGNAL AWAKENED ✦" else "S · ${distanceMeters.formatDistance()}", color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp)
+            Text(if (signalLocked) "✦ SIGNAL AWAKENED ✦" else "${distanceMeters.formatDistance()} · $starCount / 10 stars", color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp)
             Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (levelDegrees <= HORIZONTAL_TOLERANCE_DEGREES) Color(0xFF507052) else rust, fontSize = 10.sp)
         }
     }
 }
 
+internal fun oracleStarCount(distanceMeters: Double?): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
+    kotlin.math.floor(((30.0 - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
+} ?: 0
+
 @Composable
-private fun HuntConditionRow(label: String, detail: String, satisfied: Boolean) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (satisfied) {
-            Icon(Icons.Rounded.CheckCircle, null, tint = Brand, modifier = Modifier.size(25.dp))
-        } else {
-            Text("○", color = Muted, fontSize = 28.sp, lineHeight = 28.sp)
+private fun OracleLamp(title: String, hint: String, detail: String, lit: Boolean, proximity: Float, color: Color, modifier: Modifier) {
+    val glow by animateFloatAsState(if (lit) 1f else proximity * 0.55f, tween(if (lit) 100 else 300), label = "lantern_brightness")
+    val burst = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(lit) {
+        if (lit) { burst.snapTo(1f); burst.animateTo(0f, tween(650)) } else burst.snapTo(0f)
+    }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(Modifier.size(72.dp)) {
+            val c = Offset(size.width / 2f, size.height / 2f)
+            val r = size.minDimension * 0.23f
+            val ink = Color(0xFF382B40)
+            if (glow > 0f) drawCircle(color.copy(alpha = glow * 0.18f), r * 1.8f, c)
+            if (burst.value > 0f) {
+                drawCircle(color.copy(alpha = burst.value), r * (1.4f + (1f - burst.value)), c, style = Stroke(2.dp.toPx()))
+                repeat(8) { i ->
+                    val angle = Math.toRadians(i * 45.0)
+                    val ray = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+                    drawLine(color.copy(alpha = burst.value), c + ray * r * 1.6f, c + ray * r * 2.0f, 2.dp.toPx())
+                }
+            }
+            val body = androidx.compose.ui.graphics.Path().apply {
+                moveTo(c.x, c.y - r * 1.25f); lineTo(c.x + r, c.y - r * 0.65f)
+                lineTo(c.x + r * 0.75f, c.y + r); lineTo(c.x - r * 0.75f, c.y + r)
+                lineTo(c.x - r, c.y - r * 0.65f); close()
+            }
+            drawPath(body, ink)
+            drawPath(body, color.copy(alpha = glow), style = Stroke(2.dp.toPx()))
+            drawCircle(androidx.compose.ui.graphics.lerp(Color(0xFF777570), color, glow), r * 0.48f, c)
+            if (lit) drawCircle(Color(0xFFFFE8AD), r * 0.22f, c)
+            drawLine(ink, Offset(c.x - r * 0.85f, c.y + r * 1.2f), Offset(c.x + r * 0.85f, c.y + r * 1.2f), 3.dp.toPx())
+            drawArc(ink, 180f, 180f, false, Offset(c.x - r * 0.35f, c.y - r * 1.8f), Size(r * 0.7f, r * 0.7f), style = Stroke(2.dp.toPx()))
         }
-        Column(Modifier.weight(1f)) {
-            Text(label, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-            Text(detail, color = Muted, style = MaterialTheme.typography.bodySmall)
-        }
+        Text(title, color = if (lit) color else Ink, fontFamily = GothicTreasureFontFamily, fontSize = 17.sp, textAlign = TextAlign.Center)
+        Text(if (lit) "FLAME AWAKENED" else hint, color = Muted, fontSize = 9.sp, textAlign = TextAlign.Center)
+        Text(detail, color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
     }
 }
 
