@@ -216,7 +216,10 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     currentUserId = user.uid,
                     onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
-                    onClaimCompletedHuntTreasure = activeRoomHuntViewModel?.let { it::claimCompletedHuntTreasure } ?: {},
+                    onClaimCompletedHuntTreasure = { complete ->
+                        activeRoomHuntViewModel?.claimCompletedHuntTreasureWithConfirmation(complete)
+                            ?: complete("No active team hunt")
+                    },
                     requestedTreasureId = requestedMapTreasureId,
                     onTreasureRequestConsumed = { requestedMapTreasureId = null },
                 )

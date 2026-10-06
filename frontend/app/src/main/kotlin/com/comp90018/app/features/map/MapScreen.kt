@@ -200,7 +200,7 @@ fun MapScreen(
     currentUserId: String = "",
     onCompleteActiveHuntTask: () -> Unit = {},
     onFindActiveHuntFragment: (String) -> Unit = {},
-    onClaimCompletedHuntTreasure: () -> Unit = {},
+    onClaimCompletedHuntTreasure: ((String?) -> Unit) -> Unit = { it("No active team hunt") },
     requestedTreasureId: String? = null,
     onTreasureRequestConsumed: () -> Unit = {},
 ) {
@@ -256,7 +256,7 @@ fun MapScreen(
     val foundRelicIds = discoveredTreasureIds + revealedIds
     fun collectWithHaptics(treasureId: String, onComplete: (String?) -> Unit) {
         TreasureHapticSave.collect(
-            treasureId, treasureId in foundRelicIds, hapticController, onCollectTreasure, onComplete,
+            treasureId, treasureId in foundRelicIds || teamHuntActive, hapticController, onCollectTreasure, onComplete,
         )
     }
     fun returnFromReveal(relic: MapRelic) {
@@ -539,11 +539,15 @@ fun MapScreen(
             collecting = savingTreasureId == relic.id,
             preciseLocationEnabled = preciseLocationEnabled,
             onCollected = { onComplete ->
-                collectWithHaptics(relic.id) { error ->
-                    if (error == null && teamHuntActive && relic.id == teamHuntTarget.id && teamHuntAllCompleted) {
-                        onClaimCompletedHuntTreasure()
-                    }
-                    onComplete(error)
+                if (teamHuntActive && relic.id == teamHuntTarget.id && teamHuntAllCompleted) {
+                    TreasureHapticSave.collectTeam(
+                        relic.id, hapticController, onCollectTreasure, onClaimCompletedHuntTreasure, onComplete,
+                    )
+                } else if (teamHuntActive) {
+                    // Preserve existing collection behavior without treating an individual task as final unlock.
+                    onCollectTreasure(relic.id, onComplete)
+                } else {
+                    collectWithHaptics(relic.id, onComplete)
                 }
             },
             onStartChallenge = relic.challengeConfig
