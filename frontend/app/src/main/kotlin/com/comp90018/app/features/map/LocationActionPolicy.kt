@@ -45,6 +45,6 @@ internal object LocationActionPolicy {
             availability = location.availability,
             accuracyMeters = location.accuracyMeters,
             lastKnownLocation = display,
-        )
+        ).copy(isMock = location.isMock || simulatedCoordinate != null)
     }
 }

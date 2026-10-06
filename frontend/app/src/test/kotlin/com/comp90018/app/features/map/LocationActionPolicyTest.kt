@@ -149,6 +149,31 @@ class LocationActionPolicyTest {
         assertEquals(ProximityState.INSIDE, simulatedOutput.proximity)
     }
 
+    @Test
+    fun derivedOutputPreservesMockSourceWithoutChangingChallengeCalculations() {
+        val real = targetOutput(liveLocation())
+        val mock = targetOutput(liveLocation().copy(isMock = true))
+        assertFalse(real.isMock)
+        assertTrue(mock.isMock)
+        assertEquals(real.distanceToTargetMeters, mock.distanceToTargetMeters)
+        assertEquals(real.validity, mock.validity)
+        assertTrue(targetOutput(liveLocation().copy(currentLocation = null, isMock = true)).isMock)
+    }
+
+    @Test
+    fun simulatedCoordinateIsMarkedEvenWithOtherwiseFreshRealMetadata() {
+        val now = 20_000_000_000L
+        val raw = liveLocation().copy(timestampNanos = now, accuracyMeters = 5.0,
+            permission = LocationPermissionState.PRECISE,
+            availability = com.comp90018.app.sensors.location.LocationAvailabilityState.AVAILABLE)
+        val simulated = LocationActionPolicy.targetOutput(raw, target, config, nearby)
+        assertTrue(simulated.isMock)
+        assertEquals(SensorValidity.VALID, simulated.validity)
+        assertNull(com.comp90018.app.features.haptics.TreasureHapticProximity.usableCoordinate(simulated, now))
+        val rawMock = raw.copy(isMock = true)
+        assertNull(com.comp90018.app.features.haptics.TreasureHapticProximity.usableCoordinate(targetOutput(rawMock), now))
+    }
+
     private fun liveLocation() = LocationOutput(
         currentLocation = nearby,
         lastKnownLocation = nearby,

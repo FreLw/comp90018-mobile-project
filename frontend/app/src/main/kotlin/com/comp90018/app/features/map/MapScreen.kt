@@ -113,8 +113,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.comp90018.app.features.haptics.TreasureHapticAttempt
+import com.comp90018.app.features.haptics.TreasureHapticController
+import com.comp90018.app.features.haptics.TreasureHapticSave
+import com.comp90018.app.features.haptics.TreasureHapticTarget
+import androidx.lifecycle.compose.currentStateAsState
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.activity.compose.LocalActivity
+import android.os.SystemClock
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.res.painterResource
@@ -125,9 +132,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
@@ -184,6 +189,7 @@ fun MapScreen(
     preciseLocationEnabled: Boolean,
     hapticsEnabled: Boolean,
     userLocation: LocationOutput,
+    hapticController: TreasureHapticController? = null,
     soundEffectsEnabled: Boolean = true,
     onEnableLocation: () -> Unit,
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
@@ -196,7 +202,7 @@ fun MapScreen(
     currentUserId: String = "",
     onCompleteActiveHuntTask: () -> Unit = {},
     onFindActiveHuntFragment: (String) -> Unit = {},
-    onClaimCompletedHuntTreasure: () -> Unit = {},
+    onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     requestedTreasureId: String? = null,
     onTreasureRequestConsumed: () -> Unit = {},
 ) {
@@ -250,6 +256,17 @@ fun MapScreen(
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
     val foundRelicIds = discoveredTreasureIds + revealedIds
+    val mapActivity = LocalActivity.current
+    DisposableEffect(hapticController) {
+        onDispose {
+            if (mapActivity?.isChangingConfigurations != true) hapticController?.abandonOwner("map")
+        }
+    }
+    fun collectWithHaptics(treasureId: String, onComplete: (String?) -> Unit) {
+        TreasureHapticSave.collect(
+            treasureId, treasureId in foundRelicIds || teamHuntActive, hapticController, onCollectTreasure, onComplete,
+        )
+    }
     fun returnFromReveal(relic: MapRelic) {
         returningRelicId = relic.id
         huntRevealRelic = null
@@ -293,16 +310,15 @@ fun MapScreen(
         )
     }
     val huntReadyRelic = nearestTreasure?.takeIf { (_, distance) -> distance <= HUNT_READY_RADIUS_METERS }?.first
-    val discoveryHaptics = LocalHapticFeedback.current
-    val discoveryTarget = selectedRelic?.takeIf { relic ->
-        actionableCoordinate?.let { LocationCalculator.distanceMeters(it, relic.coordinate) <= HUNT_READY_RADIUS_METERS } == true
-    } ?: huntReadyRelic
-    LaunchedEffect(discoveryTarget?.id) {
-        if (discoveryTarget != null && hapticsEnabled) {
-            discoveryHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            delay(160)
-            discoveryHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        }
+    val hapticLifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    LaunchedEffect(userLocation, huntCandidates, foundRelicIds, activeHuntTreasureId,
+        compassRelic?.id, challengeRelic?.id, hapticsEnabled, hapticLifecycleState, hapticController) {
+        if (!hapticsEnabled || !hapticLifecycleState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
+        TreasureHapticTarget.nearest(
+            huntCandidates, foundRelicIds,
+            activeHuntTreasureId ?: compassRelic?.id ?: challengeRelic?.id,
+            userLocation, SystemClock.elapsedRealtimeNanos(),
+        )?.let { (id, distance) -> hapticController?.nearby(id, distance) }
     }
     val proximityMessage = remember(nearestTreasure, huntCandidates, actionableCoordinate) {
         when {
@@ -440,7 +456,7 @@ fun MapScreen(
                     onCompleteActiveHuntTask()
                     complete(null)
                 } else {
-                    onCollectTreasure(relic.id) { error ->
+                    collectWithHaptics(relic.id) { error ->
                         if (error == null) revealedIds = revealedIds + relic.id
                         complete(error)
                     }
@@ -452,6 +468,7 @@ fun MapScreen(
                 huntRevealRelic = relic
             },
             onBack = {
+                hapticController?.abandonTreasure("map", relic.id)
                 compassRelic = null
                 selectedRelic = null
                 detailRelic = null
@@ -501,7 +518,7 @@ fun MapScreen(
                         challengeRelic = null
                         debugSimulationEnabled = false
                     } else {
-                        saveRelicDiscovery(relic, onCollectTreasure, onComplete)
+                        saveRelicDiscovery(relic, ::collectWithHaptics, onComplete)
                     }
                 },
                 onDiscoverySaved = { capturedPhotoUri ->
@@ -509,7 +526,10 @@ fun MapScreen(
                     challengeRelic = null
                     debugSimulationEnabled = false
                 },
-                onBack = { challengeRelic = null; debugSimulationEnabled = false },
+                onBack = {
+                    hapticController?.abandonTreasure("map", relic.id)
+                    challengeRelic = null; debugSimulationEnabled = false
+                },
             )
             return
         }
@@ -531,11 +551,15 @@ fun MapScreen(
             collecting = savingTreasureId == relic.id,
             preciseLocationEnabled = preciseLocationEnabled,
             onCollected = { onComplete ->
-                onCollectTreasure(relic.id) { error ->
-                    if (error == null && teamHuntActive && relic.id == teamHuntTarget.id && teamHuntAllCompleted) {
-                        onClaimCompletedHuntTreasure()
-                    }
-                    onComplete(error)
+                if (teamHuntActive && relic.id == teamHuntTarget.id && teamHuntAllCompleted) {
+                    TreasureHapticSave.collectTeam(
+                        relic.id, hapticController, onCollectTreasure, onClaimCompletedHuntTreasure, onComplete,
+                    )
+                } else if (teamHuntActive) {
+                    // Preserve existing collection behavior without treating an individual task as final unlock.
+                    onCollectTreasure(relic.id, onComplete)
+                } else {
+                    collectWithHaptics(relic.id, onComplete)
                 }
             },
             onStartChallenge = relic.challengeConfig
@@ -544,6 +568,7 @@ fun MapScreen(
             forceReadyToDig = teamHuntAllCompleted && relic.id == teamHuntTarget.id,
             onTeamTaskFinished = if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) onCompleteActiveHuntTask else null,
             onBack = {
+                hapticController?.abandonTreasure("map", relic.id)
                 detailRelic = null
             },
         )
@@ -1453,7 +1478,6 @@ private fun TreasureCompassGate(
         }
     }
     var signalLocked by remember(relic.id) { mutableStateOf(false) }
-    val hapticFeedback = LocalHapticFeedback.current
     var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG) }
     var testDistance by remember(relic.id) { mutableStateOf((locationOutput.distanceToTargetMeters ?: 9.0).toFloat().coerceIn(0f, 30f)) }
     var testHeading by remember(relic.id) { mutableStateOf(deviceHeading) }
@@ -1492,7 +1516,6 @@ private fun TreasureCompassGate(
         if (!allReady) signalLocked = false
         if (allReady && !signalLocked) {
             signalLocked = true
-            if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 
@@ -1821,29 +1844,6 @@ private fun TreasureDetailScreen(
     onBack: () -> Unit,
 ) {
     var navigating by remember(relic.id) { mutableStateOf(false) }
-    var nearbyNotified by remember(relic.id) { mutableStateOf(false) }
-    var huntReadyNotified by remember(relic.id) { mutableStateOf(false) }
-    val hapticFeedback = LocalHapticFeedback.current
-    val proximityStage = HuntProximityResolver.resolve(
-        locationOutput.distanceToTargetMeters,
-        locationValidity,
-        relic.radarRadiusMeters,
-        relic.insideRadiusMeters,
-    )
-    LaunchedEffect(relic.id, navigating, proximityStage) {
-        if (!navigating) return@LaunchedEffect
-        when (proximityStage) {
-            HuntProximityStage.HUNT_READY -> if (!huntReadyNotified) {
-                huntReadyNotified = true
-                if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-            }
-            HuntProximityStage.NEARBY -> if (!nearbyNotified) {
-                nearbyNotified = true
-                if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            }
-            else -> Unit
-        }
-    }
     var stage by remember(relic.id, forceReadyToDig) { mutableStateOf(if (forceReadyToDig) TreasureHuntStage.READY_TO_DIG else TreasureHuntStage.DETAILS) }
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }

@@ -14,6 +14,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.SideEffect
+import com.comp90018.app.features.haptics.TreasureHapticSessionBinding
+import com.comp90018.app.features.haptics.TreasureHapticSessionViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -117,6 +120,14 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     } else {
         userLocation.currentLocation ?: userLocation.lastKnownLocation
     }
+    val hapticSession: TreasureHapticSessionViewModel = viewModel(
+        key = "treasure_haptics_${user.uid}",
+        factory = TreasureHapticSessionViewModel.factory(context),
+    )
+    // Unknown/failed profile settings must not enable automatic treasure feedback.
+    val automaticHapticsPreference = settings?.haptics.takeIf { appState.profileError == null }
+    TreasureHapticSessionBinding(hapticSession, automaticHapticsPreference)
+    SideEffect { hapticSession.teamClaims.observeRoom(activeRoomHuntState.room) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, userLocationViewModel) {
@@ -168,6 +179,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     treasures = treasureCatalogState.treasures,
                     treasuresLoading = treasureCatalogState.loading,
                     treasuresError = treasureCatalogState.error,
+                    onClaimTreasure = { model -> hapticSession.teamClaims.claim(model, user.uid) },
                     onStartHunt = { treasureId ->
                         activeHuntTreasureId = treasureId
                         destination = AppDestination.Map
@@ -181,9 +193,10 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     savingTreasureId = treasureCollectionState.savingTreasureId,
                     preciseLocationEnabled = preciseLocationEnabled,
-                    hapticsEnabled = settings?.haptics ?: true,
+                    hapticsEnabled = automaticHapticsPreference == true,
                     soundEffectsEnabled = settings?.soundEffects ?: true,
                     userLocation = userLocation,
+                    hapticController = hapticSession.controller,
                     onEnableLocation = userLocationViewModel::retryAfterPermissionGranted,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
                     activeHuntTreasureId = activeHuntTreasureId
@@ -196,7 +209,11 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     currentUserId = user.uid,
                     onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
-                    onClaimCompletedHuntTreasure = activeRoomHuntViewModel?.let { it::claimCompletedHuntTreasure } ?: {},
+                    onClaimCompletedHuntTreasure = { attempt, complete ->
+                        activeRoomHuntViewModel?.let { model ->
+                            hapticSession.teamClaims.claim(model, user.uid, attempt, complete)
+                        } ?: complete("No active team hunt")
+                    },
                     requestedTreasureId = requestedMapTreasureId,
                     onTreasureRequestConsumed = { requestedMapTreasureId = null },
                 )
@@ -209,7 +226,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     profileError = appState.profileError,
                     currentRoomId = roomsState.activeRoomId,
                     onRetry = appShellViewModel::retry,
-                    onLogout = onLogout,
+                    onLogout = { hapticSession.endSession(); onLogout() },
                 )
             }
         }
