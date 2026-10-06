@@ -130,7 +130,12 @@ class TreasureChallengeViewModel(
     }
 
     fun onPhotoCaptured(uri: String) {
-        if (!photoOpportunityReady || uri.isBlank() || mutableUiState.value.completed) return
+        if (!photoOpportunityReady || mutableUiState.value.cameraState != ChallengeCameraState.CAPTURING ||
+            mutableUiState.value.completed) return
+        if (!isCapturedPhotoUri(uri)) {
+            onCameraError("Capture returned an invalid photo URI. Please try again.")
+            return
+        }
         mutableUiState.value = mutableUiState.value.copy(
             cameraState = ChallengeCameraState.CAPTURED,
             capturedPhotoUri = uri,
@@ -285,9 +290,15 @@ private fun ChallengeInstruction.displayText(type: RelicChallengeType): String =
     ChallengeInstruction.HOLD_OBSERVATION -> "Keep observing"
     ChallengeInstruction.HOLD_EXCAVATION_POSITION -> "Excavating"
     ChallengeInstruction.HOLD_VIEWING_ANGLE -> "Locking angle"
-    ChallengeInstruction.HOLD_GLASSHOUSE_POSITION -> "Excavating"
-    ChallengeInstruction.MAKE_SOUND -> if (type == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL) "Blow Hard For 1s" else "Make some noise"
+    ChallengeInstruction.HOLD_GLASSHOUSE_POSITION -> "Prepare to photograph the glasshouse site"
+    ChallengeInstruction.MAKE_SOUND -> if (type == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL) "Make sound above the threshold" else "Make some noise"
     ChallengeInstruction.HOLD_TONE -> "Keep the noise going"
     ChallengeInstruction.TAKE_PHOTO -> "Take photo"
     ChallengeInstruction.COMPLETED -> "Relic discovered"
 }
+
+/** CameraX MediaStore captures must identify an actual local photo, not an empty result. */
+internal fun isCapturedPhotoUri(value: String): Boolean = runCatching {
+    val uri = java.net.URI(value)
+    uri.scheme == "content" && !uri.authority.isNullOrBlank() && !uri.path.isNullOrBlank()
+}.getOrDefault(false)

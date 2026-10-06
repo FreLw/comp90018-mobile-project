@@ -86,7 +86,7 @@ object RelicChallengeConfigs {
         photoActionRequired = false,
     )
 
-    /** Same rule set as [oldQuadExcavation]: hold the phone flat and still to "excavate" the tower site. */
+    /** Photograph the site after GPS proximity is confirmed. */
     fun systemGardenGlasshouse(
         challengeId: String,
         targetLocation: GeoCoordinate,
@@ -98,12 +98,12 @@ object RelicChallengeConfigs {
         insideRadiusMeters = insideRadiusMeters,
         requiredHeadingDegrees = null,
         headingToleranceDegrees = 0.0,
-        requiresStationary = true,
-        requiresStability = true,
-        requiresRotationStill = true,
-        requiresHorizontal = true,
-        holdDurationNanos = 3_000_000_000L,
-        photoActionRequired = false,
+        requiresStationary = false,
+        requiresStability = false,
+        requiresRotationStill = false,
+        requiresHorizontal = false,
+        holdDurationNanos = 0L,
+        photoActionRequired = true,
     )
 
     /**

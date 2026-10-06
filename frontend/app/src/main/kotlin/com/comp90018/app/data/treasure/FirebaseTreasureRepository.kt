@@ -2,6 +2,7 @@ package com.comp90018.app.data.treasure
 
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
+import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules
 import com.comp90018.app.contextengine.challenge.CalibrationStatus
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.map.MapRelic
@@ -111,7 +112,7 @@ internal fun parseChallengeConfig(
             },
             headingReference = (challenge["headingReference"] as? String)?.trim()?.takeIf(String::isNotBlank),
         )
-    }.getOrNull()
+    }.getOrNull()?.takeIf { it.hasRequiredTaskRules() }
 }
 
 private fun DocumentSnapshot.number(field: String): Double? = (get(field) as? Number)?.toDouble()

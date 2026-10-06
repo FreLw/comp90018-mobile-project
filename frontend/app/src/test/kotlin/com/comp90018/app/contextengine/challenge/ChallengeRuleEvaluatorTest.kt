@@ -212,34 +212,25 @@ class ChallengeRuleEvaluatorTest {
         assertEquals(ChallengeInstruction.COMPLETED, completed.instruction)
     }
 
-    @Test fun systemGardenUsesTheSameRuleSetAsOldQuad() {
-        val systemGarden = systemGardenConfig()
-        assertEquals(null, systemGarden.requiredHeadingDegrees)
-        assertTrue(
-            systemGarden.requiresStationary && systemGarden.requiresStability &&
-                systemGarden.requiresRotationStill && systemGarden.requiresHorizontal,
-        )
-        assertEquals(3_000_000_000L, systemGarden.holdDurationNanos)
-        assertFalse(systemGarden.requiresSound)
+    @Test fun systemGardenRequiresPhotoWithoutMotionOrHeading() {
+        val config = systemGardenConfig()
+        assertEquals(null, config.requiredHeadingDegrees)
+        assertFalse(config.requiresHorizontal || config.requiresStationary || config.requiresStability || config.requiresRotationStill || config.requiresSound)
+        assertTrue(config.photoActionRequired)
+        assertEquals(0L, config.holdDurationNanos)
+        val evaluator = ChallengeRuleEvaluator(config)
+        evaluator.evaluate(snapshot(horizontal = false, stationary = false, stable = false), 0L)
+        val ready = evaluator.evaluate(snapshot(horizontal = false, stationary = false, stable = false), 1L)
+        assertTrue(ready.actionReady)
+        assertFalse(ready.completed)
+        assertEquals(listOf(ChallengeCondition.LOCATION_INSIDE), ready.requiredConditions.map { it.condition })
+        assertFalse(evaluator.evaluate(snapshot(), 3_000_000_000L).completed)
+        assertTrue(evaluator.evaluate(snapshot(), 3_000_000_001L, ChallengeEvent.PHOTO_CAPTURED).completed)
     }
 
-    @Test fun systemGardenNonHorizontalCannotProgress() {
+    @Test fun systemGardenPhotoOutsideCannotComplete() {
         val evaluator = ChallengeRuleEvaluator(systemGardenConfig())
-        evaluator.evaluate(snapshot(horizontal = false), 0L)
-        val result = evaluator.evaluate(snapshot(horizontal = false), 0L)
-
-        assertEquals(ChallengeInstruction.KEEP_PHONE_LEVEL, result.instruction)
-        assertEquals(0.0, result.holdProgress, 0.0)
-    }
-
-    @Test fun systemGardenAllConditionsHeldForThreeSecondsCompletes() {
-        val evaluator = ChallengeRuleEvaluator(systemGardenConfig())
-        evaluator.evaluate(snapshot(), 0L)
-        evaluator.evaluate(snapshot(), 0L)
-
-        val completed = evaluator.evaluate(snapshot(), 3_000_000_000L)
-        assertTrue(completed.completed)
-        assertEquals(1.0, completed.holdProgress, 0.0)
+        assertFalse(evaluator.evaluate(snapshot(inside = false), 0L, ChallengeEvent.PHOTO_CAPTURED).completed)
     }
 
     @Test fun graingerConfigRequiresASoundThreshold() {
