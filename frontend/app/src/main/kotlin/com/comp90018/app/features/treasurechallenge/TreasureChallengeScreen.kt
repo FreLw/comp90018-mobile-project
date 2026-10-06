@@ -177,7 +177,7 @@ fun TreasureChallengeScreen(
                 progress = { state.holdProgress.toFloat() },
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (simulation == null && state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO &&
+            if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
                 (state.actionReady || state.capturedPhotoUri != null)
             ) {
                 UnionPhotoPanel(
@@ -343,7 +343,7 @@ private fun UnionPhotoPanel(
                     onPhotoCaptureStarted()
                     cameraCapture.capturePhoto { uri, error ->
                         when {
-                            uri != null -> onPhotoCaptured(uri.toString())
+                            uri != null && error == null && isCapturedPhotoUri(uri.toString()) -> onPhotoCaptured(uri.toString())
                             else -> onCameraError(error ?: "Capture failed")
                         }
                     }

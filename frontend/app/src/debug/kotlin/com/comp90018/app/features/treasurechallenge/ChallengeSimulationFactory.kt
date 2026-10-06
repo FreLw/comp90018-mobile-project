@@ -258,11 +258,7 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
                     Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it) }
                 }
                 if (config.photoActionRequired) {
-                    Button(
-                        onClick = { onPhotoCaptured("android.resource://com.comp90018.app/${R.drawable.treasure_postcard}") },
-                        enabled = state.actionReady && !state.completed,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Simulate PHOTO_CAPTURED") }
+                    Text("Use the CameraX panel to capture a real photo after sensor simulation is ready.")
                 }
             }
         }
