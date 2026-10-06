@@ -13,14 +13,14 @@ import org.junit.Test
 class PostChallengeRevealSessionTest {
     private val coordinate = GeoCoordinate(-37.8, 144.96)
 
-    @Test fun unionPhotoSurvivesThroughHistoryTreasureAndStory() {
+    @Test fun unionPhotoSurvivesDirectTreasureRevealAndStory() {
         val relic = relic("union_lawn_lost_lake", "The Lost Lake Photograph", "Union Lawn", "treasure_postcard",
             RelicChallengeType.UNION_LAWN_PHOTO).copy(
             historicalImageUrl = "https://example.org/history.jpg",
             story = "The lake was filled as campus grew.",
         )
         val session = PostChallengeRevealSession(relic, "content://local/captured-photo")
-        assertEquals(PostChallengePage.PHOTO_HISTORY, session.page)
+        assertEquals(PostChallengePage.TREASURE, session.page)
         assertEquals("content://local/captured-photo", session.capturedPhotoUri)
         assertTrue(session.hasHistoricalImage)
         session.showHistorical()
@@ -39,7 +39,7 @@ class PostChallengeRevealSessionTest {
             RelicChallengeType.UNION_LAWN_PHOTO)
         val session = PostChallengeRevealSession(relic, "content://local/captured-photo")
         assertFalse(session.hasHistoricalImage)
-        assertEquals(PostChallengePage.PHOTO_HISTORY, session.page)
+        assertEquals(PostChallengePage.TREASURE, session.page)
         session.continueToTreasure()
         assertEquals(PostChallengePage.TREASURE, session.page)
     }

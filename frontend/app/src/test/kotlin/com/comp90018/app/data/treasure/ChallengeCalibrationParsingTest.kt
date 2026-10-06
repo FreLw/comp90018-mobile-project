@@ -14,18 +14,8 @@ import org.junit.Test
 class ChallengeCalibrationParsingTest {
     private val target = GeoCoordinate(-37.7971, 144.96189)
 
-    @Test fun pendingCalibrationAndMagneticReferenceArePreservedWithNullHeading() {
-        val config = requireNotNull(parseChallengeConfig(challenge("pending", null), target, 25.0))
-        assertEquals(CalibrationStatus.PENDING, config.calibrationStatus)
-        assertEquals("magnetic", config.headingReference)
-        assertNull(config.requiredHeadingDegrees)
-        val conditions = ChallengeRuleEvaluator(config).evaluate(DeviceContextSnapshot(), 0L).requiredConditions
-        assertEquals(false, conditions.any { it.condition == ChallengeCondition.HEADING_ALIGNED })
-        assertEquals(target, config.targetLocation)
-        assertEquals(25.0, config.insideRadiusMeters, 0.0)
-        assertEquals(800_000_000L, config.holdDurationNanos)
-        assertEquals(RelicChallengeType.UNION_LAWN_PHOTO, config.type)
-        assertEquals(true, config.photoActionRequired)
+    @Test fun missingRequiredHeadingIsRejectedEvenWhenCalibrationIsPending() {
+        assertNull(parseChallengeConfig(challenge("pending", null), target, 25.0))
     }
 
     @Test fun calibratedMetadataDoesNotChangeConfiguredHeading() {
@@ -42,10 +32,29 @@ class ChallengeCalibrationParsingTest {
     }
 
     @Test fun unknownMetadataIsNotSilentlyCalibratedAndReferenceIsPreserved() {
-        val config = requireNotNull(parseChallengeConfig(challenge("field-check-needed", null)
+        val config = requireNotNull(parseChallengeConfig(challenge("field-check-needed", 247.0)
             .plus("headingReference" to "custom-reference"), target, 25.0))
         assertEquals(CalibrationStatus.UNKNOWN, config.calibrationStatus)
         assertEquals("custom-reference", config.headingReference)
+    }
+
+    @Test fun gardenMigrationRequiresPhotoAndRejectsLegacyExcavationRules() {
+        val photoRules = mapOf<String, Any?>(
+            "enabled" to true, "challengeId" to "system-garden-glasshouse",
+            "type" to "SYSTEM_GARDEN_GLASSHOUSE", "requiredHeadingDegrees" to null,
+            "requiresStationary" to false, "requiresStability" to false,
+            "requiresRotationStill" to false, "requiresHorizontal" to false,
+            "holdDurationMs" to 0L, "photoActionRequired" to true, "requiresSound" to false,
+        )
+        val config = requireNotNull(parseChallengeConfig(photoRules, target, 22.0))
+        assertEquals(true, config.photoActionRequired)
+        assertEquals(false, config.requiresHorizontal || config.requiresStationary || config.requiresStability)
+        assertEquals(22.0, config.insideRadiusMeters, 0.0)
+        assertNull(parseChallengeConfig(photoRules + mapOf(
+            "photoActionRequired" to false, "requiresHorizontal" to true,
+            "requiresStationary" to true, "requiresStability" to true,
+            "requiresRotationStill" to true, "holdDurationMs" to 3000L,
+        ), target, 22.0))
     }
 
     private fun challenge(status: String, heading: Double?): Map<String, Any?> = mapOf(

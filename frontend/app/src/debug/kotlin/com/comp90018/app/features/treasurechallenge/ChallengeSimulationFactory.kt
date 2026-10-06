@@ -193,9 +193,8 @@ fun debugScenarios(config: RelicChallengeConfig): List<DebugChallengeScenario> {
             DebugChallengeScenario("All valid (hold)", valid),
         )
         RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> listOf(
-            DebugChallengeScenario("Not horizontal", valid.copy(horizontal = false)),
-            DebugChallengeScenario("Horizontal but moving", valid.copy(stationary = false)),
-            DebugChallengeScenario("All valid (3s hold)", valid),
+            DebugChallengeScenario("Outside target", valid.copy(distanceMeters = config.insideRadiusMeters + 50.0)),
+            DebugChallengeScenario("Photo ready (GPS only)", valid.copy(horizontal = false, stationary = false, stable = false)),
         )
         RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> listOf(
             DebugChallengeScenario("Quiet (inside target)", valid),
@@ -258,11 +257,7 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
                     Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it) }
                 }
                 if (config.photoActionRequired) {
-                    Button(
-                        onClick = { onPhotoCaptured("android.resource://com.comp90018.app/${R.drawable.treasure_postcard}") },
-                        enabled = state.actionReady && !state.completed,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Simulate PHOTO_CAPTURED") }
+                    Text("Use the CameraX panel to capture a real photo after sensor simulation is ready.")
                 }
             }
         }

@@ -55,6 +55,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.ChallengeInstruction
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
@@ -171,13 +172,14 @@ fun TreasureChallengeScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Text(state.challengeType.taskInstructions(), style = MaterialTheme.typography.bodyLarge)
             ChallengeStatusCard(state)
             debugCalibrationInfo?.invoke()
             LinearProgressIndicator(
                 progress = { state.holdProgress.toFloat() },
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (simulation == null && state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO &&
+            if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
                 (state.actionReady || state.capturedPhotoUri != null)
             ) {
                 UnionPhotoPanel(
@@ -229,6 +231,10 @@ private fun ChallengeStatusCard(state: TreasureChallengeUiState) {
                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
             Text(state.instructionText, style = MaterialTheme.typography.headlineSmall)
+            state.conditionStates.forEach { condition ->
+                Text("${if (condition.satisfied) "✓" else "○"} ${condition.condition.displayLabel()}",
+                    style = MaterialTheme.typography.bodyMedium)
+            }
             if (state.instruction == ChallengeInstruction.TURN_LEFT ||
                 state.instruction == ChallengeInstruction.TURN_RIGHT
             ) {
@@ -343,7 +349,7 @@ private fun UnionPhotoPanel(
                     onPhotoCaptureStarted()
                     cameraCapture.capturePhoto { uri, error ->
                         when {
-                            uri != null -> onPhotoCaptured(uri.toString())
+                            uri != null && error == null && isCapturedPhotoUri(uri.toString()) -> onPhotoCaptured(uri.toString())
                             else -> onCameraError(error ?: "Capture failed")
                         }
                     }
@@ -380,4 +386,23 @@ private fun CapturedPhotoReveal(
             }
         }
     }
+}
+
+internal fun RelicChallengeType.taskInstructions(): String = when (this) {
+    RelicChallengeType.UNION_LAWN_PHOTO -> "Find the lost lake site, align with the configured compass direction, then take a photograph."
+    RelicChallengeType.WILSON_HALL_OBSERVATION -> "Observe the stone rosette from the configured direction. Keep your device steady without rotating for 3 seconds."
+    RelicChallengeType.OLD_QUAD_EXCAVATION -> "Excavate the fossil by holding your phone horizontal, stationary and stable for 3 seconds."
+    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "View the Atlas sculpture from the configured direction and hold steady until the angle locks."
+    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> "Find the lost glasshouse site and take a photograph. No phone leveling or compass alignment is needed."
+    RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> "At the museum, enable the microphone and sustain sound above the configured threshold until the progress bar fills."
+}
+
+private fun ChallengeCondition.displayLabel(): String = when (this) {
+    ChallengeCondition.LOCATION_INSIDE -> "Valid GPS within this treasure's radius"
+    ChallengeCondition.PHONE_HORIZONTAL -> "Phone horizontal"
+    ChallengeCondition.HEADING_ALIGNED -> "Compass direction aligned"
+    ChallengeCondition.STATIONARY -> "Stationary"
+    ChallengeCondition.STABLE -> "Device stable"
+    ChallengeCondition.ROTATION_STILL -> "No rotation"
+    ChallengeCondition.SOUND_DETECTED -> "Sound above threshold"
 }
