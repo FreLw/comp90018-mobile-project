@@ -119,6 +119,7 @@ import com.comp90018.app.features.haptics.TreasureHapticTarget
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import androidx.activity.compose.LocalActivity
 import android.os.SystemClock
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -254,6 +255,12 @@ fun MapScreen(
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
     val foundRelicIds = discoveredTreasureIds + revealedIds
+    val mapActivity = LocalActivity.current
+    DisposableEffect(hapticController) {
+        onDispose {
+            if (mapActivity?.isChangingConfigurations != true) hapticController?.abandonOwner("map")
+        }
+    }
     fun collectWithHaptics(treasureId: String, onComplete: (String?) -> Unit) {
         TreasureHapticSave.collect(
             treasureId, treasureId in foundRelicIds || teamHuntActive, hapticController, onCollectTreasure, onComplete,
@@ -460,6 +467,7 @@ fun MapScreen(
                 huntRevealRelic = relic
             },
             onBack = {
+                hapticController?.abandonTreasure("map", relic.id)
                 compassRelic = null
                 selectedRelic = null
                 detailRelic = null
@@ -517,7 +525,10 @@ fun MapScreen(
                     challengeRelic = null
                     debugSimulationEnabled = false
                 },
-                onBack = { challengeRelic = null; debugSimulationEnabled = false },
+                onBack = {
+                    hapticController?.abandonTreasure("map", relic.id)
+                    challengeRelic = null; debugSimulationEnabled = false
+                },
             )
             return
         }
@@ -556,6 +567,7 @@ fun MapScreen(
             forceReadyToDig = teamHuntAllCompleted && relic.id == teamHuntTarget.id,
             onTeamTaskFinished = if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) onCompleteActiveHuntTask else null,
             onBack = {
+                hapticController?.abandonTreasure("map", relic.id)
                 detailRelic = null
             },
         )
