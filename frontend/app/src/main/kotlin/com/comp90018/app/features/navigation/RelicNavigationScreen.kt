@@ -1,92 +1,116 @@
 package com.comp90018.app.features.navigation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.comp90018.app.Background
 import com.comp90018.app.Brand
-import com.comp90018.app.BrandSoft
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
+import com.comp90018.app.features.map.GoogleMapView
+import com.comp90018.app.features.map.MapPerspective
 import com.comp90018.app.features.map.MapRelic
-import com.comp90018.app.features.treasure.TreasurePrototypeImage
+import com.comp90018.app.features.map.rememberDeviceHeading
+import com.comp90018.app.sensors.location.LocationOutput
 
-/** Standalone navigation surface. Map tracking and relic energy are added in later stages. */
+/** Standalone target-focused map. It does not own or mutate the existing hunt state machine. */
 @Composable
 fun RelicNavigationScreen(
     relic: MapRelic,
+    userLocation: LocationOutput,
     onStopNavigation: () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(Background)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    val deviceHeading = rememberDeviceHeading()
+    var recenterRequestKey by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxSize()) {
+        GoogleMapView(
+            relics = listOf(relic),
+            selectedRelic = relic,
+            locationOutput = userLocation,
+            deviceHeading = deviceHeading,
+            activeHuntTreasureId = relic.id,
+            focusSelectedRelic = false,
+            perspective = MapPerspective.HUNT,
+            allowCameraGestures = true,
+            allowZoomGestures = false,
+            allowRotateGestures = false,
+            allowTiltGestures = false,
+            recenterRequestKey = recenterRequestKey,
+            onRelicSelected = {},
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        Surface(
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            shadowElevation = 5.dp,
         ) {
-            IconButton(onClick = onStopNavigation) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Stop navigation", tint = Ink)
+            IconButton(onClick = { recenterRequestKey += 1 }) {
+                Icon(Icons.Rounded.MyLocation, "Recenter map", tint = Brand)
             }
-            Text(
-                "Navigation",
-                color = Ink,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
-            )
         }
 
-        Card(
-            modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+        Surface(
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            shadowElevation = 4.dp,
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier.size(132.dp).background(BrandSoft, RoundedCornerShape(20.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    TreasurePrototypeImage(relic, discovered = false, modifier = Modifier.size(116.dp))
+                IconButton(onClick = onStopNavigation) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Stop navigation", tint = Ink)
                 }
                 Text(
-                    relic.name,
+                    "Navigation",
                     color = Ink,
                     fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge,
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.LocationOn, contentDescription = null, tint = Brand)
-                    Spacer(Modifier.width(5.dp))
-                    Text(relic.locationName, color = Muted)
+            }
+        }
+
+        Surface(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+            shadowElevation = 10.dp,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodyMedium)
                 }
-                OutlinedButton(onClick = onStopNavigation, modifier = Modifier.fillMaxWidth()) {
-                    Text("Stop Navigation")
+                OutlinedButton(onClick = onStopNavigation) {
+                    Text("Stop")
                 }
             }
         }

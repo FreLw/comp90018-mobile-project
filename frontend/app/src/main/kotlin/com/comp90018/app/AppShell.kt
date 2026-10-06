@@ -171,6 +171,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
             if (navigationTreasure != null) {
                 RelicNavigationScreen(
                     relic = navigationTreasure,
+                    userLocation = userLocation,
                     onStopNavigation = { navigationTreasureId = null },
                 )
                 return@Box

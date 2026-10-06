@@ -175,7 +175,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-private enum class MapPerspective { GOD, HUNT }
+internal enum class MapPerspective { GOD, HUNT }
 
 /** Dedicated map feature boundary; location rendering belongs here. */
 @Composable
@@ -1201,7 +1201,7 @@ private fun SouthLawnClaimWaitingScreen(
 }
 
 @Composable
-private fun GoogleMapView(
+internal fun GoogleMapView(
     relics: List<MapRelic>,
     selectedRelic: MapRelic?,
     locationOutput: LocationOutput,
@@ -1215,6 +1215,11 @@ private fun GoogleMapView(
     foundFragmentIds: Set<String> = emptySet(),
     focusSelectedRelic: Boolean = true,
     perspective: MapPerspective = MapPerspective.GOD,
+    allowCameraGestures: Boolean = perspective == MapPerspective.GOD,
+    allowZoomGestures: Boolean = allowCameraGestures,
+    allowRotateGestures: Boolean = allowCameraGestures,
+    allowTiltGestures: Boolean = allowCameraGestures,
+    recenterRequestKey: Int = 0,
     onRelicSelected: (MapRelic) -> Unit,
     onFragmentSelected: (TeamHuntFragment) -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -1233,6 +1238,8 @@ private fun GoogleMapView(
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
     var mapStyleConfigured by remember { mutableStateOf(false) }
     var cameraPerspective by remember { mutableStateOf(perspective) }
+    var cameraMovedByUser by remember { mutableStateOf(false) }
+    var handledRecenterRequestKey by remember { mutableIntStateOf(recenterRequestKey) }
     val flip = remember(flippingRelicId) { Animatable(if (flippingRelicId == null) 1f else 0f) }
     LaunchedEffect(flippingRelicId, renderedRelicMarkers) {
         if (flippingRelicId != null && renderedRelicMarkers.containsKey(flippingRelicId)) {
@@ -1255,8 +1262,10 @@ private fun GoogleMapView(
                 }
                 map.uiSettings.isZoomControlsEnabled = false
                 map.uiSettings.isCompassEnabled = perspective == MapPerspective.GOD
-                map.uiSettings.isScrollGesturesEnabled = perspective == MapPerspective.GOD
-                map.uiSettings.isRotateGesturesEnabled = perspective == MapPerspective.GOD
+                map.uiSettings.isScrollGesturesEnabled = allowCameraGestures
+                map.uiSettings.isRotateGesturesEnabled = allowRotateGestures
+                map.uiSettings.isZoomGesturesEnabled = allowZoomGestures
+                map.uiSettings.isTiltGesturesEnabled = allowTiltGestures
                 map.isBuildingsEnabled = true
                 map.setOnMarkerClickListener { marker ->
                     relics.firstOrNull { it.id == marker.tag }?.let {
@@ -1268,6 +1277,11 @@ private fun GoogleMapView(
                     } ?: false
                 }
                 map.setOnMapClickListener { onMapClick() }
+                map.setOnCameraMoveStartedListener { reason ->
+                    if (allowCameraGestures && reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                        cameraMovedByUser = true
+                    }
+                }
                 // Google Maps draws its blue location layer above overlapping treasure markers,
                 // which made an arrived explorer unable to tap their active hunt target. Our
                 // own marker is rendered below whenever we have a usable reading, so avoid the
@@ -1324,8 +1338,13 @@ private fun GoogleMapView(
                 if (cameraPerspective != perspective) {
                     cameraPerspective = perspective
                     cameraInitialised = false
+                    cameraMovedByUser = false
                 }
-                if (perspective == MapPerspective.HUNT && displayLocation != null) {
+                if (handledRecenterRequestKey != recenterRequestKey) {
+                    handledRecenterRequestKey = recenterRequestKey
+                    cameraMovedByUser = false
+                }
+                if (perspective == MapPerspective.HUNT && displayLocation != null && !cameraMovedByUser) {
                     moveCameraToHuntView(map, displayLocation, deviceHeading)
                     cameraInitialised = true
                 } else if (!cameraInitialised) {
@@ -2793,7 +2812,7 @@ private fun DetailTextRow(title: String, subtitle: String) {
 }
 
 @Composable
-private fun rememberDeviceHeading(): Float {
+internal fun rememberDeviceHeading(): Float {
     val context = LocalContext.current
     var heading by remember { mutableStateOf(0f) }
     DisposableEffect(context) {
