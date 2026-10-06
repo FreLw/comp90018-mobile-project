@@ -1,7 +1,11 @@
 package com.comp90018.app.features.haptics
 
 /** One instance per signed-in exploration session; UI navigation never resets these sets. */
-class TreasureHapticController(private val driver: TreasureHapticDriver) {
+class TreasureHapticController(
+    private val driver: TreasureHapticDriver,
+    private val nowNanos: () -> Long = System::nanoTime,
+) {
+    private var successStartedAtNanos: Long? = null
     private val attempts = mutableSetOf<TreasureHapticAttempt>()
     private val nearbyIds = mutableSetOf<String>()
     private val unlockedIds = mutableSetOf<String>()
@@ -16,6 +20,7 @@ class TreasureHapticController(private val driver: TreasureHapticDriver) {
         ended = true
         enabled = false
         foreground = false
+        successStartedAtNanos = null
         attempts.clear()
         nearbyIds.clear()
         unlockedIds.clear()
@@ -58,10 +63,18 @@ class TreasureHapticController(private val driver: TreasureHapticDriver) {
         discoverySaved(attempt.treasureId, error, alreadyDiscovered, completionId)
     }
 
+    /** Clear protection when the driver is cancelled by settings or lifecycle. */
+    @Synchronized
+    fun cancelPlaybackProtection() { successStartedAtNanos = null }
+
     @Synchronized
     fun nearby(treasureId: String, distanceMeters: Double?) {
         if (ended || !enabled || !foreground || treasureId.isBlank() ||
-            !TreasureHapticProximity.isNearby(distanceMeters) || !nearbyIds.add(treasureId)
+            !TreasureHapticProximity.isNearby(distanceMeters)
+        ) return
+        // Drop this update without consuming its treasure ID. A later valid GPS event can notify.
+        if (successStartedAtNanos?.let { nowNanos() - it < TreasureHapticPattern.SUCCESS_DURATION_NANOS } == true ||
+            !nearbyIds.add(treasureId)
         ) return
         driver.play(TreasureHapticEvent.Nearby(treasureId))
     }
@@ -74,6 +87,10 @@ class TreasureHapticController(private val driver: TreasureHapticDriver) {
     ) {
         if (ended || error != null || alreadyDiscovered || treasureId.isBlank() || completionId.isBlank() || !unlockedIds.add(completionId)) return
         // A background/disabled success is consumed, not replayed later on navigation/resume.
-        if (enabled && foreground) driver.play(TreasureHapticEvent.Unlocked(treasureId))
+        nearbyIds.add(treasureId) // prevent a lagging collection snapshot from notifying an unlocked target
+        if (enabled && foreground) {
+            successStartedAtNanos = nowNanos()
+            driver.play(TreasureHapticEvent.Unlocked(treasureId))
+        }
     }
 }

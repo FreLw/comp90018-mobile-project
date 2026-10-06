@@ -35,12 +35,18 @@ class TreasureHapticSessionViewModel(
 
     fun setForeground(foreground: Boolean) {
         controller.foreground = foreground
-        if (!foreground) cancelVibration()
+        if (!foreground) {
+            controller.cancelPlaybackProtection()
+            cancelVibration()
+        }
     }
 
     fun setPreference(preference: Boolean?) {
         controller.enabled = preference == true
-        if (preference != true) cancelVibration()
+        if (preference != true) {
+            controller.cancelPlaybackProtection()
+            cancelVibration()
+        }
     }
 
     override fun onCleared() { endSession() }
