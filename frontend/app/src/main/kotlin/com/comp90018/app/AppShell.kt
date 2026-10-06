@@ -55,6 +55,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     var activeHuntTreasureId by remember { mutableStateOf<String?>(null) }
     var requestedMapTreasureId by remember { mutableStateOf<String?>(null) }
     var navigationTreasureId by remember { mutableStateOf<String?>(null) }
+    var requestedHuntTreasureId by remember { mutableStateOf<String?>(null) }
     val profileRepository = remember(firestore) { FirebaseProfileRepository(firestore) }
     val appShellViewModel: AppShellViewModel = viewModel(
         key = "app_shell_${user.uid}",
@@ -173,6 +174,11 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     relic = navigationTreasure,
                     userLocation = userLocation,
                     onStopNavigation = { navigationTreasureId = null },
+                    onStartHunting = { treasureId ->
+                        navigationTreasureId = null
+                        requestedHuntTreasureId = treasureId
+                        destination = AppDestination.Map
+                    },
                 )
                 return@Box
             }
@@ -235,6 +241,8 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     },
                     requestedTreasureId = requestedMapTreasureId,
                     onTreasureRequestConsumed = { requestedMapTreasureId = null },
+                    requestedHuntTreasureId = requestedHuntTreasureId,
+                    onHuntRequestConsumed = { requestedHuntTreasureId = null },
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, appState.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
                 AppDestination.Profile -> ProfileScreen(

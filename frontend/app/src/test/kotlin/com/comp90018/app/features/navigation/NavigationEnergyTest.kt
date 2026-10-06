@@ -3,6 +3,8 @@ package com.comp90018.app.features.navigation
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NavigationEnergyTest {
@@ -39,5 +41,14 @@ class NavigationEnergyTest {
         assertEquals(2_850, navigationTrailDurationMillis(90.0, 0.0))
         assertEquals(4_200, navigationTrailDurationMillis(180.0, 0.0))
         assertEquals(4_200, navigationTrailDurationMillis(null, 0.0))
+    }
+
+    @Test
+    fun arrivalUsesHysteresisToAvoidButtonFlicker() {
+        assertFalse(navigationArrivalReached(false, 10.1))
+        assertTrue(navigationArrivalReached(false, 10.0))
+        assertTrue(navigationArrivalReached(true, 14.9))
+        assertFalse(navigationArrivalReached(true, 15.1))
+        assertFalse(navigationArrivalReached(true, null))
     }
 }

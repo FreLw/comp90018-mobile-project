@@ -212,6 +212,8 @@ fun MapScreen(
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     requestedTreasureId: String? = null,
     onTreasureRequestConsumed: () -> Unit = {},
+    requestedHuntTreasureId: String? = null,
+    onHuntRequestConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
@@ -288,6 +290,12 @@ fun MapScreen(
             HuntEntry.MEMBER_QUIZ -> memberQuizRelic = relic
             HuntEntry.COMPASS -> compassRelic = relic
         }
+    }
+    LaunchedEffect(requestedHuntTreasureId, treasures) {
+        val requestedId = requestedHuntTreasureId ?: return@LaunchedEffect
+        val requestedRelic = treasures.firstOrNull { it.id == requestedId } ?: return@LaunchedEffect
+        onHuntRequestConsumed()
+        openHunt(requestedRelic)
     }
     val mapActivity = LocalActivity.current
     DisposableEffect(hapticController) {
