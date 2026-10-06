@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.SideEffect
 import com.comp90018.app.features.haptics.TreasureHapticSessionViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -127,7 +128,9 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     val automaticHapticsPreference = settings?.haptics.takeIf { appState.profileError == null }
     SideEffect { hapticSession.setPreference(automaticHapticsPreference) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = LocalActivity.current
     DisposableEffect(lifecycleOwner, hapticSession) {
+        hapticSession.beginSession()
         hapticSession.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) hapticSession.setForeground(true)
@@ -136,7 +139,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            hapticSession.setForeground(false)
+            hapticSession.detach(activity?.isChangingConfigurations == true)
         }
     }
 
@@ -234,7 +237,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     profileError = appState.profileError,
                     currentRoomId = roomsState.activeRoomId,
                     onRetry = appShellViewModel::retry,
-                    onLogout = onLogout,
+                    onLogout = { hapticSession.endSession(); onLogout() },
                 )
             }
         }

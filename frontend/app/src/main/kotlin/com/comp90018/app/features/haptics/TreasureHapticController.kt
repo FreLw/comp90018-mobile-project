@@ -4,12 +4,24 @@ package com.comp90018.app.features.haptics
 class TreasureHapticController(private val driver: TreasureHapticDriver) {
     private val nearbyIds = mutableSetOf<String>()
     private val unlockedIds = mutableSetOf<String>()
+    var ended = false
+        private set
     var enabled = false
     var foreground = false
 
+    /** Closed controllers stay closed: late callbacks cannot cross into the next sign-in. */
+    @Synchronized
+    fun endSession() {
+        ended = true
+        enabled = false
+        foreground = false
+        nearbyIds.clear()
+        unlockedIds.clear()
+    }
+
     @Synchronized
     fun nearby(treasureId: String, distanceMeters: Double?) {
-        if (!enabled || !foreground || treasureId.isBlank() ||
+        if (ended || !enabled || !foreground || treasureId.isBlank() ||
             !TreasureHapticProximity.isNearby(distanceMeters) || !nearbyIds.add(treasureId)
         ) return
         driver.play(TreasureHapticEvent.Nearby(treasureId))
@@ -18,7 +30,7 @@ class TreasureHapticController(private val driver: TreasureHapticDriver) {
     /** Called only by the existing discovery-save confirmation, never by sensor readiness. */
     @Synchronized
     fun discoverySaved(treasureId: String, error: String?, alreadyDiscovered: Boolean = false) {
-        if (error != null || alreadyDiscovered || treasureId.isBlank() || !unlockedIds.add(treasureId)) return
+        if (ended || error != null || alreadyDiscovered || treasureId.isBlank() || !unlockedIds.add(treasureId)) return
         // A background/disabled success is consumed, not replayed later on navigation/resume.
         if (enabled && foreground) driver.play(TreasureHapticEvent.Unlocked(treasureId))
     }

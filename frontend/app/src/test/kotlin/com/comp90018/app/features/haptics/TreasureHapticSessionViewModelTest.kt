@@ -23,4 +23,27 @@ class TreasureHapticSessionViewModelTest {
         assertFalse(session.controller.enabled)
         assertEquals(3, cancellations)
     }
+    @Test fun rotationRetainsDeduplicationButSignOutPermanentlyClosesOldController() {
+        val events = mutableListOf<TreasureHapticEvent>()
+        val session = TreasureHapticSessionViewModel(events::add)
+        session.setPreference(true); session.setForeground(true)
+        val old = session.controller
+        old.nearby("a", 20.0)
+        session.detach(changingConfigurations = true)
+        session.beginSession(); session.setForeground(true)
+        assertSame(old, session.controller)
+        session.controller.nearby("a", 20.0)
+        assertEquals(1, events.size)
+        session.endSession()
+        session.beginSession(); session.setPreference(true); session.setForeground(true)
+        assertNotSame(old, session.controller)
+        old.discoverySaved("late", null)
+        old.enabled = true; old.foreground = true
+        old.discoverySaved("even-later", null)
+        session.controller.nearby("a", 20.0)
+        assertEquals(listOf(TreasureHapticEvent.Nearby("a"), TreasureHapticEvent.Nearby("a")), events)
+        session.detach(changingConfigurations = false)
+        assertTrue(session.controller.ended)
+    }
+
 }
