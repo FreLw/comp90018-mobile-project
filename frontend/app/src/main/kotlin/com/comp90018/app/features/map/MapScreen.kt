@@ -470,9 +470,7 @@ fun MapScreen(
                 treasureId = relic.id,
                 radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                // Debug builds must always expose deterministic sensor controls.  The map's
-                // launcher also sets this flag, but making the build type authoritative avoids
-                // falling back to real emulator GPS/sensor readings if that UI state is lost.
+                // Only the explicit debug launcher enables simulation; normal hunts use sensors.
                 debugSimulationEnabled = debugSimulationEnabled,
                 onChallengeCompleted = { onComplete ->
                     if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) {
@@ -558,9 +556,7 @@ fun MapScreen(
                 // The owner always performs the treasure's normal individual challenge. This
                 // keeps the GPS/sensor rules and challenge examples identical in solo and team
                 // hunts; team mode only adds the shared completion update on success.
-                if (teamHuntIsOwner && target.challengeConfig != null) {
-                    challengeRelic = target
-                } else if (teamHuntIsOwner) {
+                if (teamHuntIsOwner) {
                     challengeRelic = target
                 } else {
                     memberQuizRelic = target

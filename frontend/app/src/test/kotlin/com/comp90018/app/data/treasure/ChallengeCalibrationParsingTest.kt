@@ -38,6 +38,25 @@ class ChallengeCalibrationParsingTest {
         assertEquals("custom-reference", config.headingReference)
     }
 
+    @Test fun gardenMigrationRequiresPhotoAndRejectsLegacyExcavationRules() {
+        val photoRules = mapOf<String, Any?>(
+            "enabled" to true, "challengeId" to "system-garden-glasshouse",
+            "type" to "SYSTEM_GARDEN_GLASSHOUSE", "requiredHeadingDegrees" to null,
+            "requiresStationary" to false, "requiresStability" to false,
+            "requiresRotationStill" to false, "requiresHorizontal" to false,
+            "holdDurationMs" to 0L, "photoActionRequired" to true, "requiresSound" to false,
+        )
+        val config = requireNotNull(parseChallengeConfig(photoRules, target, 22.0))
+        assertEquals(true, config.photoActionRequired)
+        assertEquals(false, config.requiresHorizontal || config.requiresStationary || config.requiresStability)
+        assertEquals(22.0, config.insideRadiusMeters, 0.0)
+        assertNull(parseChallengeConfig(photoRules + mapOf(
+            "photoActionRequired" to false, "requiresHorizontal" to true,
+            "requiresStationary" to true, "requiresStability" to true,
+            "requiresRotationStill" to true, "holdDurationMs" to 3000L,
+        ), target, 22.0))
+    }
+
     private fun challenge(status: String, heading: Double?): Map<String, Any?> = mapOf(
         "enabled" to true,
         "challengeId" to "union-lawn-photo",
