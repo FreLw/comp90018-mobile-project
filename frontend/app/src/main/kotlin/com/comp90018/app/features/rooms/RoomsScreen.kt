@@ -132,7 +132,7 @@ private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJo
                 Icon(Icons.Rounded.ChevronRight, "Find room", tint = Brand, modifier = Modifier.size(30.dp))
             }
         }
-        OutlinedButton(onClick = { browsing = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working) { Text("浏览房间") }
+        OutlinedButton(onClick = { browsing = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working) { Text("Browse rooms") }
         (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
     }
@@ -639,16 +639,16 @@ private fun RoomDetailsDialog(
     var removingMember by remember { mutableStateOf<TeamRoomMember?>(null) }
     removingMember?.let { member ->
         AlertDialog(onDismissRequest = { if (!working) removingMember = null },
-            title = { Text("移除成员？") }, text = { Column { Text("将 ${member.name} 移出房间，他们之后仍可重新加入。")
+            title = { Text("Remove member?") }, text = { Column { Text("Remove ${member.name} from the room? They can still rejoin later.")
                 error?.let { Text(it, color = RelicRed) } } },
-            confirmButton = { TextButton(enabled = !working, onClick = { onRemoveMember(member) { removingMember = null } }) { Text(if (working) "移除中…" else "移除", color = RelicRed) } },
-            dismissButton = { TextButton(enabled = !working, onClick = { removingMember = null }) { Text("取消") } })
+            confirmButton = { TextButton(enabled = !working, onClick = { onRemoveMember(member) { removingMember = null } }) { Text(if (working) "Removing…" else "Remove", color = RelicRed) } },
+            dismissButton = { TextButton(enabled = !working, onClick = { removingMember = null }) { Text("Cancel") } })
     }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Room details", fontWeight = FontWeight.Bold, color = Ink) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(room?.name?.takeIf { it.isNotBlank() } ?: if (room == null) "Loading room…" else "Room ${room.id.takeLast(6)}", color = Ink, fontWeight = FontWeight.Bold)
             room?.description?.takeIf { it.isNotBlank() }?.let { Text(it, color = Muted) }
-            Text(if (room?.idOnly != false) "仅 Room ID 加入" else "公开房间 · 可从广场直接加入", color = Muted)
+            Text(if (room?.idOnly != false) "Join by Room ID only" else "Public room · Join directly from the plaza", color = Muted)
             if (isOwner) TextButton(onClick = onEditSettings) { Text("Edit room settings") }
             Column {
                 Text("ROOM ID", color = Muted, style = MaterialTheme.typography.labelMedium)
@@ -670,7 +670,7 @@ private fun RoomDetailsDialog(
                             Spacer(Modifier.width(10.dp))
                             Text(member.name, color = Ink, fontWeight = FontWeight.Medium)
                         }
-                        if (isOwner && member.uid != room?.creatorId) TextButton(enabled = !working, onClick = { removingMember = member }) { Text("移除", color = RelicRed) }
+                        if (isOwner && member.uid != room?.creatorId) TextButton(enabled = !working, onClick = { removingMember = member }) { Text("Remove", color = RelicRed) }
                     }
                 }
                 if (members.size < (room?.maxMembers ?: 4)) Text("Waiting for more explorers to join.", color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -734,8 +734,8 @@ private fun RoomSettingsForm(
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("是否仅输入 Room ID 才能加入", color = Ink)
-                Text(if (idOnly) "不在广场展示，分享 ID 后可直接加入" else "在广场展示，任何人都可以直接加入", color = Muted, style = MaterialTheme.typography.bodySmall)
+                Text("Require a Room ID to join", color = Ink)
+                Text(if (idOnly) "Hidden from the plaza. Share the ID so others can join." else "Visible in the plaza. Anyone can join directly.", color = Muted, style = MaterialTheme.typography.bodySmall)
             }
             Switch(checked = idOnly, onCheckedChange = { idOnly = it }, enabled = !working)
         }

@@ -53,7 +53,9 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 288
         },
-        "longitude": 144.961958
+        "longitude": 144.961958,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
       }
     },
     {
@@ -102,7 +104,9 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 197
         },
-        "longitude": 144.961417
+        "longitude": 144.961417,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
       }
     },
     {
@@ -151,7 +155,9 @@
           "soundThresholdDecibels": null
         },
         "huntReadyRadiusMeters": 10,
-        "longitude": 144.96097
+        "longitude": 144.96097,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
       }
     },
     {
@@ -200,7 +206,9 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 185
         },
-        "longitude": 144.9599
+        "longitude": 144.9599,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
       }
     },
     {
@@ -249,7 +257,9 @@
         },
         "huntReadyRadiusMeters": 10,
         "latitude": -37.7966124089,
-        "longitude": 144.959126948
+        "longitude": 144.959126948,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
       }
     },
     {
@@ -298,7 +308,9 @@
           "soundThresholdDecibels": -30
         },
         "huntReadyRadiusMeters": 10,
-        "longitude": 144.95831
+        "longitude": 144.95831,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
       }
     }
   ]

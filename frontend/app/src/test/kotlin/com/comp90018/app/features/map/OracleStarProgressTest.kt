@@ -12,6 +12,12 @@ class OracleStarProgressTest {
         assertEquals(10, oracleStarCount(10.0))
     }
 
+    @Test fun starsReachFullBrightnessAtConfiguredDistance() {
+        assertEquals(0, oracleStarCount(45.0, 25.0))
+        assertEquals(5, oracleStarCount(35.0, 25.0))
+        assertEquals(10, oracleStarCount(25.0, 25.0))
+    }
+
     @Test fun retreatExtinguishesStarsAndMissingSignalsStayDark() {
         assertEquals(10, oracleStarCount(0.0))
         assertEquals(5, oracleStarCount(20.0))

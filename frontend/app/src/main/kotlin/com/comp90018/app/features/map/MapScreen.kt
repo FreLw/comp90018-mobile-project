@@ -1573,8 +1573,8 @@ internal fun TreasureCompassGate(
     val locationReady = (BuildConfig.DEBUG && simulateSensors) ||
         locationOutput.validity == com.comp90018.app.sensors.SensorValidity.VALID
     val readiness = if (locationReady) {
-        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees)
-    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= HORIZONTAL_TOLERANCE_DEGREES)
+        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees, relic.compassGateConfig)
+    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= relic.compassGateConfig.horizontalToleranceDegrees)
     val nearTreasure = readiness.nearTreasure
     val facingTreasure = readiness.facingTreasure
     val phoneHorizontal = readiness.phoneHorizontal
@@ -1589,10 +1589,10 @@ internal fun TreasureCompassGate(
         }
     }
 
-    val proximityGlow = distance?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / 165.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val levelGlow = ((45f - effectiveMotion.tiltDegrees) / 33f).coerceIn(0f, 1f)
-    val stars = oracleStarCount(distance)
+    val proximityGlow = distance?.let { (((relic.compassGateConfig.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / (180.0 - relic.compassGateConfig.compassAlignmentToleranceDegrees).coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val levelGlow = (((relic.compassGateConfig.horizontalToleranceDegrees + 33.0) - effectiveMotion.tiltDegrees) / 33.0).toFloat().coerceIn(0f, 1f)
+    val stars = oracleStarCount(distance, relic.compassGateConfig.huntReadyRadiusMeters)
     val tone = remember { runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 55) }.getOrNull() }
     DisposableEffect(tone) { onDispose { tone?.release() } }
     var previousStars by remember(relic.id) { mutableIntStateOf(stars) }
@@ -1617,7 +1617,7 @@ internal fun TreasureCompassGate(
     val instruction = when {
         signalLocked -> "Treasure signal locked — the hidden trial has awakened."
         !locationReady || distance == null || targetBearing == null -> "Waiting for a reliable location signal…"
-        !nearTreasure -> "The signal faded. Move back within 10 m."
+        !nearTreasure -> "The signal faded. Move back within ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}."
         !facingTreasure && requireNotNull(turnDegrees) > 0 -> "Turn right ${abs(turnDegrees).formatDegrees()} toward the treasure."
         !facingTreasure -> "Turn left ${abs(requireNotNull(turnDegrees)).formatDegrees()} toward the treasure."
         !phoneHorizontal -> "Lower the phone until it is flat and level."
@@ -1645,6 +1645,7 @@ internal fun TreasureCompassGate(
         }
         DivineCompassVisual(
             readiness = readiness,
+            config = relic.compassGateConfig,
             turnDegrees = turnDegrees?.toFloat() ?: 0f,
             signalAvailable = turnDegrees != null,
             distanceMeters = distance,
@@ -1675,9 +1676,9 @@ internal fun TreasureCompassGate(
             ) {
                 Text(instruction, modifier = Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OracleLamp("The Trail", "Draw nearer", distance.formatDistance(), nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
-                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / 15°" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
-                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / 12°", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
+                    OracleLamp("The Trail", "Draw nearer", "${distance.formatDistance()} / ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}", nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
+                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / ${relic.compassGateConfig.compassAlignmentToleranceDegrees.formatDegrees()}" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
+                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / ${relic.compassGateConfig.horizontalToleranceDegrees.formatDegrees()}", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
                 }
                 AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1716,6 +1717,7 @@ private fun SensorTestSlider(label: String, value: Float, range: ClosedFloatingP
 @Composable
 private fun DivineCompassVisual(
     readiness: HuntReadiness,
+    config: CompassGateConfig,
     turnDegrees: Float,
     signalAvailable: Boolean,
     distanceMeters: Double?,
@@ -1737,7 +1739,7 @@ private fun DivineCompassVisual(
     val rust = if (readiness.facingTreasure) Color(0xFFA44736) else grey
     val compassInk = if (readiness.facingTreasure) plum else Color(0xFF777570)
     val levelColor = if (readiness.phoneHorizontal) Color(0xFF507052) else grey
-    val starCount = oracleStarCount(distanceMeters)
+    val starCount = oracleStarCount(distanceMeters, config.huntReadyRadiusMeters)
     val starFlash = remember { androidx.compose.animation.core.Animatable(0f) }
     var lastStarCount by remember { mutableIntStateOf(starCount) }
     var flashingStars by remember { mutableStateOf(0 until 0) }
@@ -1749,7 +1751,7 @@ private fun DivineCompassVisual(
             starFlash.animateTo(0f, tween(700))
         } else lastStarCount = starCount
     }
-    val distanceProgress = distanceMeters?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val distanceProgress = distanceMeters?.let { (((config.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     val levelDegrees = maxOf(abs(pitchDegrees), abs(rollDegrees))
     Box(modifier.padding(4.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().padding(bottom = 42.dp)) {
@@ -1850,13 +1852,13 @@ private fun DivineCompassVisual(
         }
         Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (signalLocked) "✦ SIGNAL AWAKENED ✦" else "${distanceMeters.formatDistance()} · $starCount / 10 stars", color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp)
-            Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (levelDegrees <= HORIZONTAL_TOLERANCE_DEGREES) Color(0xFF507052) else rust, fontSize = 10.sp)
+            Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (readiness.phoneHorizontal) Color(0xFF507052) else rust, fontSize = 10.sp)
         }
     }
 }
 
-internal fun oracleStarCount(distanceMeters: Double?): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
-    kotlin.math.floor(((30.0 - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
+internal fun oracleStarCount(distanceMeters: Double?, huntReadyRadiusMeters: Double = 10.0): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
+    kotlin.math.floor((((huntReadyRadiusMeters + 20.0) - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
 } ?: 0
 
 @Composable
@@ -3233,6 +3235,9 @@ private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val HUNT_CAMERA_LEAD_METERS = 80.0
 private const val HUNT_CAMERA_ZOOM = 18.5f
 private const val HUNT_CAMERA_TILT = 45f
+
+private fun Double.formatGateDistance(): String =
+    "${java.math.BigDecimal.valueOf(this).stripTrailingZeros().toPlainString()} m"
 
 private fun Double?.formatDistance(): String = when {
     this == null -> "unknown"

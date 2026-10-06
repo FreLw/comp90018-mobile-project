@@ -39,18 +39,18 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
     BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
             Column {
-                Text("房间广场", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("寻找同行的探索者", color = Muted)
+                Text("Room plaza", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Find fellow explorers", color = Muted)
             }
         }
-        Text("亮点：已有成员  ·  灰点：空位  ·  锁：不可用", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Text("Bright: occupied · Gray: empty · Lock: unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
         when {
             state.browsingLoading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Brand) }
             state.browsingError != null -> Column { Text(state.browsingError, color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = { viewModel.stopBrowsing(); viewModel.startBrowsing() }) { Text("重试") } }
-            state.publicRooms.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text("广场还没有公开房间，创建一个邀请大家加入吧。", color = Muted, textAlign = TextAlign.Center) }
+                TextButton(onClick = { viewModel.stopBrowsing(); viewModel.startBrowsing() }) { Text("Retry") } }
+            state.publicRooms.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text("No public rooms yet. Create one and invite others to join.", color = Muted, textAlign = TextAlign.Center) }
             else -> LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 items(state.publicRooms, key = { it.id }) { room ->
@@ -58,8 +58,8 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
                         colors = CardDefaults.cardColors(containerColor = BrandSoft.copy(alpha = .35f))) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             RoomDiamond(room)
-                            Text(room.name.ifBlank { "探索者房间" }, color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            Text("${room.memberIds.size}/${room.maxMembers} 人 · ${if (room.memberIds.size >= room.maxMembers) "已满" else "可加入"}", color = Muted, style = MaterialTheme.typography.bodySmall)
+                            Text(room.name.ifBlank { "Explorer room" }, color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            Text("${room.memberIds.size}/${room.maxMembers} members · ${if (room.memberIds.size >= room.maxMembers) "Full" else "Open"}", color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -69,26 +69,26 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
     selectedRoomId?.let { id ->
         val room = state.publicRooms.firstOrNull { it.id == id }
         AlertDialog(onDismissRequest = { if (!state.working) selectedRoomId = null },
-            title = { Text(room?.name?.ifBlank { "探索者房间" } ?: "房间已不可用") },
+            title = { Text(room?.name?.ifBlank { "Explorer room" } ?: "Room unavailable") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (room != null) {
                     RoomDiamond(room, Modifier.align(Alignment.CenterHorizontally).size(160.dp))
-                    Text(room.description.ifBlank { "一起出发，寻找校园里的宝藏。" })
-                    Text("成员 ${room.memberIds.size}/${room.maxMembers} · 无需房主审核", color = Muted)
-                    if (room.taskTitle.isNotBlank()) Text("目的地：${room.taskTitle}")
-                } else Text("房间可能已关闭，或已改为仅 Room ID 加入。")
+                    Text(room.description.ifBlank { "Explore together and discover treasures around campus." })
+                    Text("Members ${room.memberIds.size}/${room.maxMembers} · No host approval needed", color = Muted)
+                    if (room.taskTitle.isNotBlank()) Text("Destination: ${room.taskTitle}")
+                } else Text("This room may have closed or now require a Room ID to join.")
                 state.actionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             } },
             confirmButton = { Button(enabled = room != null && room.memberIds.size < room.maxMembers && !state.working,
-                onClick = { room?.let(viewModel::joinPublicRoom) }) { Text(if (state.working) "加入中…" else if (room != null && room.memberIds.size >= room.maxMembers) "房间已满" else "加入房间") } },
-            dismissButton = { TextButton(enabled = !state.working, onClick = { selectedRoomId = null }) { Text("返回广场") } })
+                onClick = { room?.let(viewModel::joinPublicRoom) }) { Text(if (state.working) "Joining…" else if (room != null && room.memberIds.size >= room.maxMembers) "Room full" else "Join room") } },
+            dismissButton = { TextButton(enabled = !state.working, onClick = { selectedRoomId = null }) { Text("Back to plaza") } })
     }
 }
 
 @Composable
 internal fun RoomDiamond(room: TeamRoom, modifier: Modifier = Modifier.size(128.dp)) {
     val positions = listOf(Alignment.TopCenter, Alignment.CenterEnd, Alignment.BottomCenter, Alignment.CenterStart)
-    Box(modifier.semantics { contentDescription = "${room.name}，${room.memberIds.size} 个座位有人，${room.maxMembers-room.memberIds.size} 个空位，${4-room.maxMembers} 个锁定座位" }) {
+    Box(modifier.semantics { contentDescription = "${room.name}, ${room.memberIds.size} occupied seats, ${room.maxMembers-room.memberIds.size} empty seats, ${4-room.maxMembers} locked seats" }) {
         Canvas(Modifier.fillMaxSize().padding(12.dp)) {
             val path = Path().apply {
                 moveTo(size.width/2, 0f); lineTo(size.width, size.height/2)
