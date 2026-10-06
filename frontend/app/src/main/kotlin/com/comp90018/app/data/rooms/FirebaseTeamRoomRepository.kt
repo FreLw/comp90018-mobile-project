@@ -9,6 +9,19 @@ import android.net.Uri
 class FirebaseTeamRoomRepository(
     private val firestore: FirebaseFirestore,
 ) : TeamRoomRepository {
+    override fun observePublicRooms(onChange: (List<TeamRoom>, String?) -> Unit): Subscription {
+        val registration = FirebaseTeamRoomService.observePublicRooms(firestore, onChange)
+        return Subscription { registration.remove() }
+    }
+    override fun createRoom(userId: String, name: String, maxMembers: Int, description: String, idOnly: Boolean, onComplete: (String?, String?) -> Unit) =
+        FirebaseTeamRoomService.createRoom(firestore, userId, name, maxMembers, description, onComplete, idOnly)
+    override fun updateSettings(roomId: String, userId: String, name: String, maxMembers: Int, description: String, idOnly: Boolean, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.updateSettings(firestore, roomId, userId, name, maxMembers, description, onComplete, idOnly)
+    override fun removeMember(roomId: String, ownerId: String, memberId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.removeMember(firestore, roomId, ownerId, memberId, onComplete)
+    override fun joinPublicRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) =
+        FirebaseTeamRoomService.joinRoom(firestore, roomId, userId, onComplete, publicEntry = true)
+
     override fun observeMembership(userId: String, onChange: (String?, String?) -> Unit): Subscription {
         val registration = FirebaseTeamRoomService.observeMembership(firestore, userId, onChange)
         return Subscription { registration.remove() }

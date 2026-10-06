@@ -28,6 +28,8 @@ import android.os.Bundle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -230,6 +232,8 @@ fun MapScreen(
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
     var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var treasureSheetExpanded by remember(selectedRelic?.id) { mutableStateOf(false) }
+    BackHandler(enabled = selectedRelic != null && treasureSheetExpanded) { treasureSheetExpanded = false }
     var detailRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var compassRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
@@ -798,7 +802,7 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 18.dp),
+                .padding(top = 18.dp),
             transitionSpec = {
                 (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { it } + fadeOut())
             },
@@ -806,24 +810,32 @@ fun MapScreen(
         ) { relic ->
             if (relic != null) {
                 ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(26.dp),
+                    modifier = Modifier.fillMaxWidth().animateContentSize(),
+                    shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = Color.White.copy(alpha = 0.97f)),
                 ) {
                     TreasurePeekHeader(
                         relic = relic,
                         distance = locationOutput.distanceToTargetMeters.formatDistance(),
                         isFound = relic.id in foundRelicIds,
-                        expanded = false,
-                        onChevron = { detailRelic = relic },
+                        expanded = treasureSheetExpanded,
+                        onChevron = { treasureSheetExpanded = !treasureSheetExpanded },
                         actionLabel = when {
                             teamHuntCanClaim -> "Claim treasure"
+                            !teamHuntActive && relic.id in foundRelicIds -> null
                             teamHuntActive && !teamHuntTaskPendingForCurrentUser -> null
                             locationOutput.distanceToTargetMeters?.let { it <= HUNT_READY_RADIUS_METERS } == true -> "Start Hunting"
                             else -> null
                         },
                         onAction = { openHunt(relic) },
                     )
+                    if (treasureSheetExpanded) {
+                        TreasureInformationPanel(
+                            relic = relic,
+                            isFound = relic.id in foundRelicIds,
+                            modifier = Modifier.fillMaxWidth().height(300.dp),
+                        )
+                    }
                 }
             }
         }
@@ -2087,7 +2099,7 @@ private fun TreasurePeekHeader(
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
-                    relic.name,
+                    if (isFound) relic.name else "Undiscovered treasure",
                     color = Ink,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge,
@@ -2138,9 +2150,9 @@ private fun TreasureInformationPanel(
                     colors = CardDefaults.cardColors(containerColor = BrandSoft),
                 ) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("Known legend", color = Brand, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Adventure awaits!", color = Brand, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            relic.story.ifBlank { relic.clue.ifBlank { relic.description } },
+                            "Keep exploring and find this treasure to uncover its story. You’re getting closer!",
                             color = Ink,
                             style = MaterialTheme.typography.bodyLarge,
                         )

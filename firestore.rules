@@ -301,7 +301,10 @@ service cloud.firestore {
     }
 
     match /teamMemberships/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId)
+        || (signedIn()
+          && exists(/databases/$(database)/documents/teamRooms/$(resource.data.roomId))
+          && get(/databases/$(database)/documents/teamRooms/$(resource.data.roomId)).data.creatorId == request.auth.uid);
       allow list: if false;
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly(['roomId', 'createdAt', 'unreadCount'])
@@ -331,12 +334,13 @@ service cloud.firestore {
     }
 
     match /teamRooms/{roomId} {
-      // A room ID is intentionally shareable; listing all rooms remains private.
+      // ID-only rooms are accessible by exact ID; only public rooms can be queried.
       allow get: if signedIn();
-      allow list: if false;
+      allow list: if signedIn() && resource.data.get('idOnly', true) == false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['name', 'maxMembers', 'description', 'creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['idOnly', 'name', 'maxMembers', 'description', 'creatorId', 'memberIds', 'taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'createdAt', 'updatedAt'])
         && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.get('idOnly', true) is bool
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80
@@ -481,7 +485,8 @@ service cloud.firestore {
         );
       allow update: if signedIn()
         && resource.data.creatorId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'maxMembers', 'description', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['idOnly', 'name', 'maxMembers', 'description', 'updatedAt'])
+        && request.resource.data.get('idOnly', true) is bool
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80
@@ -491,6 +496,18 @@ service cloud.firestore {
         && request.resource.data.maxMembers >= 2
         && request.resource.data.maxMembers <= 4
         && request.resource.data.maxMembers >= resource.data.memberIds.size()
+        && request.resource.data.updatedAt == request.time;
+      // Owner removal is atomic with deleting the removed explorer's membership.
+      allow update: if signedIn()
+        && resource.data.creatorId == request.auth.uid
+        && request.resource.data.memberIds is list
+        && request.resource.data.memberIds.hasAll([resource.data.creatorId])
+        && resource.data.memberIds.hasAll(request.resource.data.memberIds)
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'taskCompletedMemberIds', 'taskClaimedMemberIds', 'updatedAt'])
+        && request.resource.data.taskCompletedMemberIds == resource.data.get('taskCompletedMemberIds', []).removeAll(resource.data.memberIds.removeAll(request.resource.data.memberIds))
+        && request.resource.data.taskClaimedMemberIds == resource.data.get('taskClaimedMemberIds', []).removeAll(resource.data.memberIds.removeAll(request.resource.data.memberIds))
+        && !existsAfter(/databases/$(database)/documents/teamMemberships/$(resource.data.memberIds.removeAll(request.resource.data.memberIds)[0]))
         && request.resource.data.updatedAt == request.time;
       allow delete: if signedIn() && resource.data.creatorId == request.auth.uid;
 

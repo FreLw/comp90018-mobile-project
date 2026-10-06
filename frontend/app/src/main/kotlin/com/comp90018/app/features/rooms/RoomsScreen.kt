@@ -2,6 +2,9 @@ package com.comp90018.app.features.rooms
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -104,12 +107,18 @@ fun RoomsScreen(
 @Composable
 private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJoin: () -> Unit) {
     var creating by remember { mutableStateOf(false) }
+    var browsing by remember { mutableStateOf(false) }
+    if (browsing) {
+        RoomPlazaScreen(state, viewModel, onBack = { browsing = false })
+        return
+    }
     if (creating) {
+        BackHandler(enabled = !state.working) { creating = false }
         RoomSettingsForm(title = "Create a room", working = state.working, error = state.actionError,
             onCancel = { creating = false }, onSave = viewModel::createRoom)
         return
     }
-    Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.size(86.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) {
             Image(painterResource(R.drawable.nav_rooms_symbol), null, modifier = Modifier.size(76.dp))
         }
@@ -123,6 +132,7 @@ private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJo
                 Icon(Icons.Rounded.ChevronRight, "Find room", tint = Brand, modifier = Modifier.size(30.dp))
             }
         }
+        OutlinedButton(onClick = { browsing = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working) { Text("浏览房间") }
         (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
     }
@@ -195,9 +205,9 @@ private fun TeamRoomChatScreen(
     }
     if (editingSettings && room != null) {
         RoomSettingsForm(title = "Room settings", initialName = room.name, initialCapacity = room.maxMembers,
-            initialDescription = room.description, minimumCapacity = room.memberIds.size.coerceAtLeast(2),
+            initialDescription = room.description, initialIdOnly = room.idOnly, minimumCapacity = room.memberIds.size.coerceAtLeast(2),
             working = state.updatingTask, error = state.error, onCancel = { editingSettings = false },
-            onSave = { name, capacity, description -> viewModel.updateSettings(name, capacity, description) { editingSettings = false } })
+            onSave = { name, capacity, description, idOnly -> viewModel.updateSettings(name, capacity, description, idOnly) { editingSettings = false } })
         return
     }
     Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
@@ -296,6 +306,9 @@ private fun TeamRoomChatScreen(
         isOwner = room?.creatorId == user.uid,
         onMemberClick = { viewingMember = it; showDetails = false },
         onEditSettings = { showDetails = false; editingSettings = true },
+        onRemoveMember = { member, complete -> viewModel.removeMember(member.uid, complete) },
+        working = state.updatingTask,
+        error = state.error,
         onLeave = { viewModel.leave(onRoomExited) },
         onDismissRoom = {
             showDetails = false
@@ -614,16 +627,28 @@ private fun RoomDetailsDialog(
     isOwner: Boolean,
     onMemberClick: (TeamRoomMember) -> Unit,
     onEditSettings: () -> Unit,
+    onRemoveMember: (TeamRoomMember, () -> Unit) -> Unit,
+    working: Boolean,
+    error: String?,
     onLeave: () -> Unit,
     onDismissRoom: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    var removingMember by remember { mutableStateOf<TeamRoomMember?>(null) }
+    removingMember?.let { member ->
+        AlertDialog(onDismissRequest = { if (!working) removingMember = null },
+            title = { Text("移除成员？") }, text = { Column { Text("将 ${member.name} 移出房间，他们之后仍可重新加入。")
+                error?.let { Text(it, color = RelicRed) } } },
+            confirmButton = { TextButton(enabled = !working, onClick = { onRemoveMember(member) { removingMember = null } }) { Text(if (working) "移除中…" else "移除", color = RelicRed) } },
+            dismissButton = { TextButton(enabled = !working, onClick = { removingMember = null }) { Text("取消") } })
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Room details", fontWeight = FontWeight.Bold, color = Ink) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(room?.name?.takeIf { it.isNotBlank() } ?: if (room == null) "Loading room…" else "Room ${room.id.takeLast(6)}", color = Ink, fontWeight = FontWeight.Bold)
             room?.description?.takeIf { it.isNotBlank() }?.let { Text(it, color = Muted) }
+            Text(if (room?.idOnly != false) "仅 Room ID 加入" else "公开房间 · 可从广场直接加入", color = Muted)
             if (isOwner) TextButton(onClick = onEditSettings) { Text("Edit room settings") }
             Column {
                 Text("ROOM ID", color = Muted, style = MaterialTheme.typography.labelMedium)
@@ -638,7 +663,16 @@ private fun RoomDetailsDialog(
             }
             Column {
                 Text("MEMBERS (${members.size}/${room?.maxMembers ?: 4})", color = Muted, style = MaterialTheme.typography.labelMedium); Spacer(Modifier.height(8.dp))
-                members.forEach { member -> TextButton(onClick = { onMemberClick(member) }, contentPadding = PaddingValues(0.dp)) { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) { ProfileAvatar(member.avatarUrl, member.name, 36.dp); Spacer(Modifier.width(10.dp)); Text(member.name, color = Ink, fontWeight = FontWeight.Medium) } } }
+                members.forEach { member ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { onMemberClick(member) }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(0.dp)) {
+                            ProfileAvatar(member.avatarUrl, member.name, 36.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(member.name, color = Ink, fontWeight = FontWeight.Medium)
+                        }
+                        if (isOwner && member.uid != room?.creatorId) TextButton(enabled = !working, onClick = { removingMember = member }) { Text("移除", color = RelicRed) }
+                    }
+                }
                 if (members.size < (room?.maxMembers ?: 4)) Text("Waiting for more explorers to join.", color = Muted, style = MaterialTheme.typography.bodySmall)
             }
             room?.takeIf { it.taskStatus == "hunting" }?.let { activeHunt ->
@@ -675,16 +709,18 @@ private fun RoomSettingsForm(
     initialName: String = "",
     initialCapacity: Int = 4,
     initialDescription: String = "",
+    initialIdOnly: Boolean = true,
     minimumCapacity: Int = 2,
     working: Boolean,
     error: String?,
     onCancel: () -> Unit,
-    onSave: (String, Int, String) -> Unit,
+    onSave: (String, Int, String, Boolean) -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var capacity by remember { mutableIntStateOf(initialCapacity) }
     var description by remember { mutableStateOf(initialDescription) }
-    Column(Modifier.fillMaxSize().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    var idOnly by remember { mutableStateOf(initialIdOnly) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onCancel, enabled = !working) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
             Text(title, style = MaterialTheme.typography.titleLarge, color = Ink, fontWeight = FontWeight.Bold)
@@ -696,7 +732,14 @@ private fun RoomSettingsForm(
         }
         OutlinedTextField(description, { description = it.take(500) }, label = { Text("Room description") }, minLines = 3, enabled = !working, modifier = Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Button(onClick = { onSave(name.trim(), capacity, description.trim()) }, enabled = name.isNotBlank() && !working,
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("是否仅输入 Room ID 才能加入", color = Ink)
+                Text(if (idOnly) "不在广场展示，分享 ID 后可直接加入" else "在广场展示，任何人都可以直接加入", color = Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = idOnly, onCheckedChange = { idOnly = it }, enabled = !working)
+        }
+        Button(onClick = { onSave(name.trim(), capacity, description.trim(), idOnly) }, enabled = name.isNotBlank() && !working,
             modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (working) "Saving..." else if (title == "Create a room") "Create room" else "Save settings") }
     }
 }

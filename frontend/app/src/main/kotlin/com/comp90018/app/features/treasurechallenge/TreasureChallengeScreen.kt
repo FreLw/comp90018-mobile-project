@@ -173,9 +173,8 @@ fun TreasureChallengeScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(state.challengeType.taskInstructions(), style = MaterialTheme.typography.bodyLarge)
+            ChallengeExperience(state)
             ChallengeStatusCard(state)
-            debugCalibrationInfo?.invoke()
             LinearProgressIndicator(
                 progress = { state.holdProgress.toFloat() },
                 modifier = Modifier.fillMaxWidth(),
@@ -199,6 +198,13 @@ fun TreasureChallengeScreen(
                     onPhotoCaptured = onPhotoCaptured,
                     onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
                 )
+            }
+            if (debugCalibrationInfo != null) {
+                var showDiagnostics by remember { mutableStateOf(false) }
+                androidx.compose.material3.TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
+                    Text(if (showDiagnostics) "Hide diagnostics" else "Developer diagnostics")
+                }
+                if (showDiagnostics) debugCalibrationInfo.invoke()
             }
             if (state.completed) {
                 when (saveStatus) {
