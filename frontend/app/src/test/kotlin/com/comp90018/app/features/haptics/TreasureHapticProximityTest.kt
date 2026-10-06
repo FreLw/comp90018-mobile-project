@@ -22,7 +22,7 @@ class TreasureHapticProximityTest {
 
     @Test fun onlyFreshReliableRealCoordinatesAreUsable() {
         assertEquals(fix.currentLocation, TreasureHapticProximity.usableCoordinate(fix, now))
-        listOf(fix.copy(currentLocation = null), fix.copy(timestampNanos = null),
+        listOf(fix.copy(isMock = true), fix.copy(currentLocation = null), fix.copy(timestampNanos = null),
             fix.copy(timestampNanos = now - 10_000_000_001L), fix.copy(timestampNanos = now + 1),
             fix.copy(accuracyMeters = null), fix.copy(accuracyMeters = 50.1),
             fix.copy(accuracyMeters = Double.NaN), fix.copy(accuracyMeters = -1.0),

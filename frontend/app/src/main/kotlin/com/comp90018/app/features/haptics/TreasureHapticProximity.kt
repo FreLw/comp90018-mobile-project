@@ -14,7 +14,7 @@ object TreasureHapticProximity {
         val config = LocationConfig()
         val timestamp = location.timestampNanos ?: return null
         val accuracy = location.accuracyMeters ?: return null
-        if (location.validity != SensorValidity.VALID || !location.permission.canUnlockTreasure ||
+        if (location.isMock || location.validity != SensorValidity.VALID || !location.permission.canUnlockTreasure ||
             location.availability != LocationAvailabilityState.AVAILABLE ||
             timestamp < 0 || nowNanos < timestamp || nowNanos - timestamp > config.staleTimeoutNanos ||
             !accuracy.isFinite() || accuracy < 0 || accuracy > config.maxAcceptedAccuracyMeters

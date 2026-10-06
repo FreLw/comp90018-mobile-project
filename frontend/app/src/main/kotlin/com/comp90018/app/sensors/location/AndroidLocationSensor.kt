@@ -159,7 +159,11 @@ class AndroidLocationSensor(
         refreshOutput()
     }
 
+    private var lastReadingIsMock = false
+
     private fun onLocation(location: Location) {
+        @Suppress("DEPRECATION")
+        lastReadingIsMock = location.isFromMockProvider
         lastReading = LocationReading(
             coordinate = GeoCoordinate(location.latitude, location.longitude),
             accuracyMeters = location.accuracy.takeIf { location.hasAccuracy() }?.toDouble(),
@@ -232,7 +236,7 @@ class AndroidLocationSensor(
                 accuracyMeters = reading.accuracyMeters,
                 lastKnownLocation = reading.coordinate,
                 previousProximity = lastStableProximity,
-            ).also { output ->
+            ).copy(isMock = lastReadingIsMock).also { output ->
                 lastStableProximity = output.proximity
             }
         }
