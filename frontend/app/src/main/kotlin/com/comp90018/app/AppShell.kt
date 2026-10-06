@@ -202,12 +202,16 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     activeHuntTreasureId = activeHuntTreasureId
                         ?: activeRoomHuntState.room?.takeIf { it.taskStatus == "hunting" }?.taskId,
                     activeHuntOwnerId = activeRoomHuntState.room?.takeIf { it.taskStatus == "hunting" }?.creatorId,
+                    activeHuntSessionId = activeRoomHuntState.room?.takeIf { it.taskStatus == "hunting" }?.huntSessionId,
                     activeHuntMemberIds = activeRoomHuntState.room?.memberIds.orEmpty(),
                     activeHuntCompletedMemberIds = activeRoomHuntState.room?.taskCompletedMemberIds.orEmpty(),
                     activeHuntFoundFragmentIds = activeRoomHuntState.room?.foundFragmentIds.orEmpty(),
                     activeHuntClaimedMemberIds = activeRoomHuntState.room?.taskClaimedMemberIds.orEmpty(),
                     currentUserId = user.uid,
-                    onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
+                    onCompleteActiveHuntTask = { complete ->
+                        activeRoomHuntViewModel?.completeHuntTaskWithConfirmation(complete)
+                            ?: complete("No active team hunt")
+                    },
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
                     onClaimCompletedHuntTreasure = { attempt, complete ->
                         activeRoomHuntViewModel?.let { model ->

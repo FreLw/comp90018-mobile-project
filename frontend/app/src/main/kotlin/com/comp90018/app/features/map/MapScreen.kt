@@ -195,12 +195,13 @@ fun MapScreen(
     onCollectTreasure: (String, (String?) -> Unit) -> Unit,
     activeHuntTreasureId: String? = null,
     activeHuntOwnerId: String? = null,
+    activeHuntSessionId: String? = null,
     activeHuntMemberIds: List<String> = emptyList(),
     activeHuntCompletedMemberIds: List<String> = emptyList(),
     activeHuntFoundFragmentIds: List<String> = emptyList(),
     activeHuntClaimedMemberIds: List<String> = emptyList(),
     currentUserId: String = "",
-    onCompleteActiveHuntTask: () -> Unit = {},
+    onCompleteActiveHuntTask: ((String?) -> Unit) -> Unit = { complete -> complete("No active team hunt") },
     onFindActiveHuntFragment: (String) -> Unit = {},
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     requestedTreasureId: String? = null,
@@ -212,6 +213,12 @@ fun MapScreen(
     val teamHuntIsOwner = activeHuntOwnerId == currentUserId
     val teamHuntAllCompleted = teamHuntActive && activeHuntMemberIds.size in 2..4 &&
         activeHuntMemberIds.all { it in activeHuntCompletedMemberIds }
+    val teamHuntCanClaim = TeamHuntTaskEligibility.canClaim(
+        teamHuntActive, activeHuntMemberIds, activeHuntCompletedMemberIds,
+        activeHuntClaimedMemberIds, currentUserId,
+    ) && (teamHuntTarget?.id != SOUTH_LAWN_ATLAS_ID ||
+        SouthLawnFragments.all { it.id in activeHuntFoundFragmentIds })
+    val teamHuntAlreadyClaimed = teamHuntActive && currentUserId in activeHuntClaimedMemberIds
     val teamHuntTaskPendingForCurrentUser = TeamHuntTaskEligibility.isPendingFor(
         huntActive = teamHuntActive,
         memberIds = activeHuntMemberIds,
@@ -222,24 +229,35 @@ fun MapScreen(
         SouthLawnFragments.any { it.id !in activeHuntFoundFragmentIds }
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
-    var selectedRelic by remember { mutableStateOf<MapRelic?>(null) }
-    var detailRelic by remember { mutableStateOf<MapRelic?>(null) }
-    var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
-    var huntRevealRelic by remember { mutableStateOf<MapRelic?>(null) }
-    var huntStoryVisible by remember { mutableStateOf(false) }
-    var compassRelic by remember { mutableStateOf<MapRelic?>(null) }
-    var memberQuizRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var detailRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var challengeRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var huntRevealRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var huntStoryVisible by remember(activeHuntSessionId) { mutableStateOf(false) }
+    var compassRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var memberQuizRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var perspective by remember { mutableStateOf(MapPerspective.GOD) }
     var simulation by remember { mutableStateOf<Double?>(null) }
     // This acknowledgement must survive leaving/re-entering MapScreen (and app restarts).
     // Otherwise a location update can repeatedly reopen the arrival dialog after the explorer
-    // has already chosen either action. It is scoped to the signed-in explorer and destination.
+    // has already chosen either action. It is scoped to the explorer and hunt session.
     val teamHuntArrivalPreferences = remember(context) {
         context.getSharedPreferences("team_hunt_arrival_prompts", Context.MODE_PRIVATE)
     }
-    val teamHuntArrivalPreferenceKey = remember(currentUserId, teamHuntTarget?.id) {
-        "seen_${currentUserId.ifBlank { "anonymous" }}_${teamHuntTarget?.id.orEmpty()}"
+    val teamHuntArrivalPreferenceKey = remember(currentUserId, activeHuntSessionId) {
+        "arrival_${TeamHuntTaskEligibility.promptKey(currentUserId, activeHuntSessionId.orEmpty())}"
     }
+    val claimPromptPreferences = remember(context) {
+        context.getSharedPreferences("team_hunt_claim_prompts", Context.MODE_PRIVATE)
+    }
+    val claimPromptKey = TeamHuntTaskEligibility.promptKey(currentUserId, activeHuntSessionId.orEmpty())
+    val claimPrompt = remember(claimPromptKey, claimPromptPreferences) {
+        TeamHuntClaimPrompt(
+            { claimPromptPreferences.getBoolean(claimPromptKey, false) },
+            { claimPromptPreferences.edit().putBoolean(claimPromptKey, true).apply() },
+        )
+    }
+    var showTeamHuntClaimPrompt by remember(claimPromptKey) { mutableStateOf(false) }
     var showTeamHuntArrival by remember(teamHuntArrivalPreferenceKey) {
         mutableStateOf(false)
     }
@@ -252,10 +270,25 @@ fun MapScreen(
             .apply()
     }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
-    val revealCoordinator = remember { PostChallengeRevealCoordinator() }
+    val revealCoordinator = remember(activeHuntSessionId) { PostChallengeRevealCoordinator() }
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
     val foundRelicIds = discoveredTreasureIds + revealedIds
+    fun openHunt(relic: MapRelic) {
+        if (teamHuntActive) {
+            when {
+                teamHuntCanClaim -> detailRelic = relic
+                !teamHuntTaskPendingForCurrentUser -> selectedRelic = relic
+                !teamHuntIsOwner -> memberQuizRelic = relic
+                else -> compassRelic = relic
+            }
+        } else {
+            when {
+                relic.challengeConfig != null -> compassRelic = relic
+                else -> { huntStoryVisible = false; huntRevealRelic = relic }
+            }
+        }
+    }
     val mapActivity = LocalActivity.current
     DisposableEffect(hapticController) {
         onDispose {
@@ -381,11 +414,17 @@ fun MapScreen(
         resolvedTreasures.firstOrNull { it.id == requestedId }?.let { selectedRelic = it }
         onTreasureRequestConsumed()
     }
-    LaunchedEffect(teamHuntAllCompleted, teamHuntTarget?.id, activeHuntClaimedMemberIds, currentUserId) {
-        if (teamHuntAllCompleted && currentUserId !in activeHuntClaimedMemberIds) detailRelic = teamHuntTarget
+    LaunchedEffect(teamHuntCanClaim, claimPromptKey) {
+        if (!activeHuntSessionId.isNullOrBlank() && claimPrompt.shouldShow(teamHuntCanClaim)
+        ) {
+            showTeamHuntClaimPrompt = true
+        } else if (!teamHuntCanClaim) {
+            showTeamHuntClaimPrompt = false
+        }
     }
     LaunchedEffect(
         teamHuntTarget?.id,
+        activeHuntSessionId,
         teamHuntLocationOutput.distanceToTargetMeters,
         teamHuntLocationOutput.validity,
         teamHuntTaskPendingForCurrentUser,
@@ -452,9 +491,9 @@ fun MapScreen(
             hapticsEnabled = hapticsEnabled,
             soundEffectsEnabled = soundEffectsEnabled,
             onSignalFound = { complete ->
-                if (teamHuntTaskPendingForCurrentUser) {
-                    onCompleteActiveHuntTask()
-                    complete(null)
+                if (teamHuntActive) {
+                    if (teamHuntTaskPendingForCurrentUser) onCompleteActiveHuntTask(complete)
+                    else complete(null)
                 } else {
                     collectWithHaptics(relic.id) { error ->
                         if (error == null) revealedIds = revealedIds + relic.id
@@ -465,7 +504,10 @@ fun MapScreen(
             onReveal = {
                 compassRelic = null
                 huntStoryVisible = false
-                huntRevealRelic = relic
+                if (teamHuntActive) {
+                    selectedRelic = null
+                    detailRelic = null
+                } else huntRevealRelic = relic
             },
             onBack = {
                 hapticController?.abandonTreasure("map", relic.id)
@@ -484,7 +526,12 @@ fun MapScreen(
             // check. Re-reading only the live GPS fix here can lock the questions after arrival
             // when the map is using a simulated or last-known coordinate.
             locationOutput = teamHuntLocationOutput,
-            onCompleted = { onCompleteActiveHuntTask(); memberQuizRelic = null },
+            onCompleted = { complete ->
+                onCompleteActiveHuntTask { error ->
+                    if (error == null) memberQuizRelic = null
+                    complete(error)
+                }
+            },
             onBack = { memberQuizRelic = null },
         )
         return
@@ -510,13 +557,22 @@ fun MapScreen(
                 // launcher also sets this flag, but making the build type authoritative avoids
                 // falling back to real emulator GPS/sensor readings if that UI state is lost.
                 debugSimulationEnabled = BuildConfig.DEBUG,
+                challengeSessionId = activeHuntSessionId.orEmpty(),
                 onChallengeCompleted = { onComplete ->
-                    if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) {
+                    if (teamHuntActive) {
                         // A Room owner's challenge is that owner's shared hunt task, not a solo
                         // discovery.  Wait for both Room members before exposing the dig action.
-                        onCompleteActiveHuntTask()
-                        challengeRelic = null
-                        debugSimulationEnabled = false
+                        if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) {
+                            onCompleteActiveHuntTask { error ->
+                                if (error == null) {
+                                    challengeRelic = null
+                                    debugSimulationEnabled = false
+                                } else onComplete(error)
+                            }
+                        } else {
+                            challengeRelic = null
+                            debugSimulationEnabled = false
+                        }
                     } else {
                         saveRelicDiscovery(relic, ::collectWithHaptics, onComplete)
                     }
@@ -536,6 +592,20 @@ fun MapScreen(
     }
 
     detailRelic?.let { relic ->
+        if (teamHuntActive && !teamHuntCanClaim) {
+            TeamHuntStatusScreen(
+                message = when {
+                    teamHuntAlreadyClaimed -> "You have claimed your treasure. Waiting for the other explorers to claim theirs."
+                    !teamHuntTaskPendingForCurrentUser -> "Your task is complete. Waiting for the other explorers to finish."
+                    else -> "Complete your task first. The treasure unlocks when every explorer is ready."
+                },
+                onStartTask = if (teamHuntTaskPendingForCurrentUser) {
+                    { detailRelic = null; openHunt(relic) }
+                } else null,
+                onBack = { detailRelic = null; selectedRelic = null },
+            )
+            return
+        }
         TreasureDetailScreen(
             relic = relic,
             locationOutput = locationOutput,
@@ -551,13 +621,12 @@ fun MapScreen(
             collecting = savingTreasureId == relic.id,
             preciseLocationEnabled = preciseLocationEnabled,
             onCollected = { onComplete ->
-                if (teamHuntActive && relic.id == teamHuntTarget.id && teamHuntAllCompleted) {
+                if (teamHuntActive && relic.id == teamHuntTarget.id && teamHuntCanClaim) {
                     TreasureHapticSave.collectTeam(
                         relic.id, hapticController, onCollectTreasure, onClaimCompletedHuntTreasure, onComplete,
                     )
                 } else if (teamHuntActive) {
-                    // Preserve existing collection behavior without treating an individual task as final unlock.
-                    onCollectTreasure(relic.id, onComplete)
+                    onComplete("Every explorer must complete the task before you can claim this treasure.")
                 } else {
                     collectWithHaptics(relic.id, onComplete)
                 }
@@ -566,7 +635,7 @@ fun MapScreen(
                 ?.takeUnless { it.type in LOCAL_HUNT_CHALLENGE_TYPES }
                 ?.let { { debugSimulationEnabled = false; challengeRelic = relic } },
             forceReadyToDig = teamHuntAllCompleted && relic.id == teamHuntTarget.id,
-            onTeamTaskFinished = if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) onCompleteActiveHuntTask else null,
+            onTeamTaskFinished = null,
             onBack = {
                 hapticController?.abandonTreasure("map", relic.id)
                 detailRelic = null
@@ -577,7 +646,28 @@ fun MapScreen(
 
     // Keep the prompt in the map branch only. Challenge/detail routes return above, so an
     // arrival prompt can never be left layered over a task screen during navigation.
-    if (showTeamHuntArrival) {
+    if (showTeamHuntClaimPrompt && teamHuntCanClaim) {
+        // Acknowledge only when the prompt actually reaches the map branch. Effects can run
+        // behind a task screen; those must not consume the once-per-session notification.
+        LaunchedEffect(claimPromptKey) {
+            claimPrompt.onShown()
+        }
+        AlertDialog(
+            onDismissRequest = { showTeamHuntClaimPrompt = false },
+            title = { Text("Treasure unlocked") },
+            text = { Text("Every explorer has completed their task. You can now claim your treasure.") },
+            confirmButton = {
+                Button(onClick = {
+                    showTeamHuntClaimPrompt = false
+                    detailRelic = teamHuntTarget
+                }) { Text("Claim treasure") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showTeamHuntClaimPrompt = false }) { Text("Later") }
+            },
+        )
+    }
+    if (showTeamHuntArrival && teamHuntTaskPendingForCurrentUser) {
         TeamHuntArrivalDialog(
             isOwner = teamHuntIsOwner,
             onDismiss = ::acknowledgeTeamHuntArrival,
@@ -587,13 +677,7 @@ fun MapScreen(
                 // The owner always performs the treasure's normal individual challenge. This
                 // keeps the GPS/sensor rules and challenge examples identical in solo and team
                 // hunts; team mode only adds the shared completion update on success.
-                if (teamHuntIsOwner && target.challengeConfig != null) {
-                    compassRelic = target
-                } else if (teamHuntIsOwner) {
-                    detailRelic = target
-                } else {
-                    memberQuizRelic = target
-                }
+                openHunt(target)
             },
         )
     }
@@ -641,19 +725,21 @@ fun MapScreen(
                         loading -> "Loading treasures from Firebase…"
                         error != null -> error
                         resolvedTreasures.isEmpty() -> "No enabled treasures are available right now."
+                        teamHuntAlreadyClaimed -> "Your treasure is claimed. Waiting for the other explorers."
+                        teamHuntCanClaim -> "Every explorer is ready. Claim your treasure!"
+                        teamHuntActive && !teamHuntTaskPendingForCurrentUser -> "Your task is complete. Waiting for the other explorers to finish."
                         else -> proximityMessage
                     },
                     loading = loading,
                     onRetry = onRetry.takeIf { error != null },
-                    actionLabel = if (huntReadyRelic != null) "Start Hunting" else null,
+                    actionLabel = when {
+                        teamHuntCanClaim -> "Claim treasure"
+                        teamHuntActive && !teamHuntTaskPendingForCurrentUser -> null
+                        huntReadyRelic != null -> "Start Hunting"
+                        else -> null
+                    },
                     onAction = {
-                        huntReadyRelic?.let { relic ->
-                            when {
-                                teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner -> memberQuizRelic = relic
-                                relic.challengeConfig != null -> compassRelic = relic
-                                else -> { huntStoryVisible = false; huntRevealRelic = relic }
-                            }
-                        }
+                        (if (teamHuntCanClaim) teamHuntTarget else huntReadyRelic)?.let(::openHunt)
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -672,7 +758,7 @@ fun MapScreen(
                         .align(Alignment.TopCenter)
                         .padding(top = 14.dp)
                         .clickable {
-                            selectedRelic = relic
+                            if (teamHuntCanClaim) detailRelic = relic else selectedRelic = relic
                         },
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
                     shape = RoundedCornerShape(20.dp),
@@ -682,6 +768,7 @@ fun MapScreen(
                         Spacer(Modifier.width(7.dp))
                         Text(
                             when {
+                                teamHuntAlreadyClaimed -> "Treasure claimed. Waiting for the other explorers."
                                 teamHuntAllCompleted -> "All explorers are ready — dig the treasure!"
                                 currentUserId in activeHuntCompletedMemberIds -> "Waiting for your teammate — you can help them."
                                 else -> "Go and hunt for the treasure: ${relic.name}\nTap here to open the hunt"
@@ -689,11 +776,17 @@ fun MapScreen(
                             color = Ink, fontWeight = FontWeight.SemiBold,
                         )
                     }
+                    if (teamHuntCanClaim) {
+                        Button(onClick = { detailRelic = relic }, modifier = Modifier.padding(horizontal = 14.dp)) {
+                            Text("Claim treasure")
+                        }
+                    }
                 }
             }
         }
 
-        if (BuildConfig.DEBUG && selectedRelic == null) {
+        if (BuildConfig.DEBUG && selectedRelic == null && (!teamHuntActive ||
+                (teamHuntIsOwner && teamHuntTaskPendingForCurrentUser))) {
             DebugChallengeLauncher(
                 relics = resolvedTreasures,
                 onLaunch = { relic ->
@@ -743,18 +836,13 @@ fun MapScreen(
                         isFound = relic.id in foundRelicIds,
                         expanded = false,
                         onChevron = { detailRelic = relic },
-                        actionLabel = if (locationOutput.distanceToTargetMeters?.let { it <= HUNT_READY_RADIUS_METERS } == true) {
-                            "Start Hunting"
-                        } else {
-                            null
+                        actionLabel = when {
+                            teamHuntCanClaim -> "Claim treasure"
+                            teamHuntActive && !teamHuntTaskPendingForCurrentUser -> null
+                            locationOutput.distanceToTargetMeters?.let { it <= HUNT_READY_RADIUS_METERS } == true -> "Start Hunting"
+                            else -> null
                         },
-                        onAction = {
-                            when {
-                                teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner -> memberQuizRelic = relic
-                                relic.challengeConfig != null -> compassRelic = relic
-                                else -> { huntStoryVisible = false; huntRevealRelic = relic }
-                            }
-                        },
+                        onAction = { openHunt(relic) },
                     )
                 }
             }
@@ -925,16 +1013,30 @@ private val MEMBER_HUNT_QUESTIONS = mapOf(
     ),
 )
 
+@Composable
+private fun TeamHuntStatusScreen(message: String, onStartTask: (() -> Unit)?, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Team hunt", style = MaterialTheme.typography.headlineSmall, color = Ink)
+        Text(message, color = Muted)
+        onStartTask?.let { start ->
+            Button(onClick = start, modifier = Modifier.fillMaxWidth()) { Text("Start task") }
+        }
+        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
+    }
+}
+
 /** Member-only team-hunt checkpoint with history questions for each destination. */
 @Composable
 private fun MemberHuntQuiz(
     relic: MapRelic,
     locationOutput: LocationOutput,
-    onCompleted: () -> Unit,
+    onCompleted: ((String?) -> Unit) -> Unit,
     onBack: () -> Unit,
 ) {
     var questionIndex by remember(relic.id) { mutableIntStateOf(0) }
     var incorrect by remember(relic.id) { mutableStateOf(false) }
+    var submitting by remember(relic.id) { mutableStateOf(false) }
+    var completionError by remember(relic.id) { mutableStateOf<String?>(null) }
     val closeEnough = locationOutput.distanceToTargetMeters?.let { it <= relic.insideRadiusMeters } == true
     val questions = MEMBER_HUNT_QUESTIONS[relic.id].orEmpty()
     Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -954,11 +1056,15 @@ private fun MemberHuntQuiz(
                 OutlinedButton(onClick = {
                     if (index == questions[questionIndex].correctAnswerIndex) {
                         incorrect = false
-                        if (questionIndex == questions.lastIndex) onCompleted() else questionIndex += 1
+                        if (questionIndex == questions.lastIndex) {
+                            submitting = true
+                            completionError = null
+                            onCompleted { error -> submitting = false; completionError = error }
+                        } else questionIndex += 1
                     } else {
                         incorrect = true
                     }
-                }, modifier = Modifier.fillMaxWidth()) {
+                }, enabled = !submitting, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         "${'A' + index}. $option",
                         modifier = Modifier.fillMaxWidth(),
@@ -966,6 +1072,9 @@ private fun MemberHuntQuiz(
                 }
             }
             if (incorrect) Text("Not quite — try again.", color = RelicRed)
+            if (submitting) Text("Saving your task progress...", color = Muted)
+            completionError?.let { Text(it, color = RelicRed) }
+            OutlinedButton(onClick = onBack, enabled = !submitting, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
         }
     }
 }
@@ -1848,6 +1957,7 @@ private fun TreasureDetailScreen(
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }
     var collectionActionError by remember(relic.id) { mutableStateOf<String?>(null) }
+    var collectionInProgress by remember(relic.id) { mutableStateOf(false) }
     val realSensorHuntConfig = relic.challengeConfig?.takeIf { it.type in REAL_SENSOR_HUNT_TYPES }
 
     LaunchedEffect(relic.id) {
@@ -1876,15 +1986,18 @@ private fun TreasureDetailScreen(
     if (stage == TreasureHuntStage.STORY) {
         TreasureStoryPanel(
             relic = relic,
-            collecting = collecting,
+            collecting = collecting || collectionInProgress,
             collectionError = collectionActionError,
             onPutInBackpack = {
+                collectionInProgress = true
                 collectionActionError = null
                 onCollected { error ->
+                    collectionInProgress = false
                     collectionActionError = error
-                    if (error == null) stage = TreasureHuntStage.DETAILS
+                    if (error == null) onBack()
                 }
             },
+            onReturnToMap = onBack,
         )
         return
     }
@@ -1961,7 +2074,7 @@ private fun TreasureDetailScreen(
                             onDig = {
                                 stage = TreasureHuntStage.FOUND
                             },
-                            onBack = { stage = TreasureHuntStage.DETAILS },
+                            onBack = onBack,
                         )
                         TreasureHuntStage.FOUND, TreasureHuntStage.STORY -> Unit
                     }

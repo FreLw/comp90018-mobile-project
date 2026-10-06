@@ -20,6 +20,29 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/teamRooms/$(roomId)).data.memberIds;
     }
 
+    function teamHuntReady(room) {
+      return room.memberIds.size() >= 2
+        && room.memberIds.size() <= 4
+        && room.get('taskCompletedMemberIds', []).hasAll(room.memberIds)
+        && (room.taskId != 'south_lawn_atlas'
+          || room.get('foundFragmentIds', []).hasAll([
+            'south_lawn_north_west', 'south_lawn_north_east',
+            'south_lawn_south_west', 'south_lawn_south_east'
+          ]));
+    }
+
+    function canDiscoverInRoom(roomId, treasureId) {
+      let room = get(/databases/$(database)/documents/teamRooms/$(roomId)).data;
+      return room.taskStatus != 'hunting' || room.taskId != treasureId
+        || (request.auth.uid in room.memberIds && teamHuntReady(room));
+    }
+
+    function canDiscoverTreasure(userId, treasureId) {
+      let membership = /databases/$(database)/documents/teamMemberships/$(userId);
+      return !exists(membership)
+        || canDiscoverInRoom(get(membership).data.roomId, treasureId);
+    }
+
     function hasAcceptedFriendRequest(requestId, memberIds) {
       return exists(/databases/$(database)/documents/friendRequests/$(requestId))
         && getAfter(/databases/$(database)/documents/friendRequests/$(requestId)).data.status == 'accepted'
@@ -113,6 +136,7 @@ service cloud.firestore {
     match /users/{userId}/treasureCollection/{treasureId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
+        && canDiscoverTreasure(userId, treasureId)
         && request.resource.data.keys().hasOnly([
           'ownerUid', 'treasureId', 'status', 'discoveredAt'
         ])
@@ -381,9 +405,11 @@ service cloud.firestore {
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['taskId', 'taskTitle', 'taskStatus', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['taskId', 'taskTitle', 'taskStatus', 'huntSessionId', 'taskCompletedMemberIds', 'foundFragmentIds', 'taskClaimedMemberIds', 'updatedAt'])
         && (
           (request.resource.data.taskStatus == 'assigned'
+            && resource.data.taskStatus != 'hunting'
+            && request.resource.data.get('huntSessionId', '') == resource.data.get('huntSessionId', '')
             && request.resource.data.taskId is string
             && request.resource.data.taskId.size() > 0
             && request.resource.data.taskTitle is string
@@ -397,10 +423,14 @@ service cloud.firestore {
             && (
               (resource.data.taskStatus == 'assigned'
                 && request.auth.uid == resource.data.creatorId
+                && request.resource.data.huntSessionId is string
+                && request.resource.data.huntSessionId.size() > 0
+                && request.resource.data.huntSessionId != resource.data.get('huntSessionId', '')
                 && request.resource.data.taskCompletedMemberIds.size() == 0
                 && request.resource.data.foundFragmentIds.size() == 0
                 && request.resource.data.taskClaimedMemberIds.size() == 0)
               || (resource.data.taskStatus == 'hunting'
+                && request.resource.data.get('huntSessionId', '') == resource.data.get('huntSessionId', '')
                 && (!('taskCompletedMemberIds' in resource.data)
                   || request.resource.data.taskCompletedMemberIds.hasAll(resource.data.taskCompletedMemberIds))
                 && request.resource.data.taskCompletedMemberIds.size() <= resource.data.memberIds.size()
@@ -418,16 +448,29 @@ service cloud.firestore {
                 && (!('taskClaimedMemberIds' in resource.data)
                   || request.resource.data.taskClaimedMemberIds.hasAll(resource.data.taskClaimedMemberIds))
                 && request.resource.data.taskClaimedMemberIds.size() <= resource.data.memberIds.size()
-                && request.resource.data.taskClaimedMemberIds.hasOnly(resource.data.memberIds))
+                && request.resource.data.taskClaimedMemberIds.hasOnly(resource.data.memberIds)
+                && request.resource.data.taskCompletedMemberIds.hasOnly(resource.data.memberIds)
+                && (request.resource.data.taskCompletedMemberIds.removeAll(resource.data.get('taskCompletedMemberIds', [])).hasOnly([request.auth.uid])
+                  || (resource.data.taskId == 'south_lawn_atlas'
+                    && request.resource.data.foundFragmentIds.hasAll([
+                      'south_lawn_north_west', 'south_lawn_north_east',
+                      'south_lawn_south_west', 'south_lawn_south_east'
+                    ])))
+                && (request.resource.data.taskClaimedMemberIds == resource.data.get('taskClaimedMemberIds', [])
+                  || (teamHuntReady(resource.data)
+                    && request.resource.data.taskClaimedMemberIds.removeAll(resource.data.get('taskClaimedMemberIds', [])).hasOnly([request.auth.uid])
+                    && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(resource.data.taskId)))))
             )
           )
           || (request.resource.data.taskStatus == 'unassigned'
             && resource.data.taskStatus == 'hunting'
+            && request.resource.data.get('huntSessionId', '') == resource.data.get('huntSessionId', '')
             && (
               request.auth.uid == resource.data.creatorId
               || (resource.data.taskClaimedMemberIds.size() == resource.data.memberIds.size() - 1
+                && teamHuntReady(resource.data)
                 && !(request.auth.uid in resource.data.taskClaimedMemberIds)
-                && exists(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(resource.data.taskId)))
+                && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/treasureCollection/$(resource.data.taskId)))
             )
             && request.resource.data.taskId == ''
             && request.resource.data.taskTitle == ''

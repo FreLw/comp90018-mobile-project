@@ -14,6 +14,7 @@ data class TeamRoom(
     val name: String = "",
     val maxMembers: Int = 4,
     val description: String = "",
+    val huntSessionId: String = "",
 )
 
 /** Display information loaded for one room member. */

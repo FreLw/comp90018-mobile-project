@@ -5,7 +5,7 @@ import com.comp90018.app.features.rooms.TeamRoomChatViewModel
 
 /** Both UI entry points decorate the same existing confirmed transaction with this coordinator. */
 class ConfirmedTeamClaimHaptics(private val controller: TreasureHapticController) {
-    private data class Run(val target: String, val active: Boolean, val generation: Long)
+    private data class Run(val target: String, val sessionId: String, val active: Boolean, val generation: Long)
     private val runs = mutableMapOf<String, Run>()
     private val pending = mutableMapOf<String, MutableSet<TreasureHapticAttempt>>()
 
@@ -14,9 +14,9 @@ class ConfirmedTeamClaimHaptics(private val controller: TreasureHapticController
         if (room == null) return
         val old = runs[room.id]
         val active = room.taskStatus == "hunting" && room.taskId.isNotBlank()
-        val newRun = old != null && active && (!old.active || old.target != room.taskId)
+        val newRun = old != null && active && (!old.active || old.target != room.taskId || old.sessionId != room.huntSessionId)
         if (newRun) pending.remove(room.id)?.forEach(controller::abandonAttempt)
-        runs[room.id] = Run(room.taskId, active, (old?.generation ?: 0L) + if (old == null || newRun) 1L else 0L)
+        runs[room.id] = Run(room.taskId, room.huntSessionId, active, (old?.generation ?: 0L) + if (old == null || newRun) 1L else 0L)
         // Do not invalidate on an unassigned snapshot: the final successful claim clears the
         // room before its transaction callback may arrive. The captured generation stays valid.
     }

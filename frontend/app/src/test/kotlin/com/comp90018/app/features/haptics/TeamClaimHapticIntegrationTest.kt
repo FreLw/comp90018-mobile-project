@@ -29,10 +29,11 @@ class TeamClaimHapticIntegrationTest {
         requireNotNull(save)(null)
         requireNotNull(save)(null) // never dispatch a second transaction for duplicate save callbacks
         assertEquals(1, fixture.claims.size)
-        assertEquals(2, uiCompletions) // original collection callback semantics retained
+        assertEquals(0, uiCompletions) // collection alone cannot confirm the team claim
         coordinator.claim(rooms, "user") // stale UI snapshot observes/starts the same logical claim
         assertTrue(events.isEmpty())
         fixture.claims[0](null); fixture.claims[1](null); fixture.claims[0](null)
+        assertEquals(1, uiCompletions)
         assertEquals(listOf(TreasureHapticEvent.Unlocked("a")), events)
         assertFalse(map.uiState.value.updatingTask)
         assertFalse(rooms.uiState.value.updatingTask)

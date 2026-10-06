@@ -26,14 +26,22 @@ object TreasureHapticSave {
     ) {
         val attempt = controller?.beginAttempt(treasureId)
         var resolved = false
+        var claimResolved = false
         save(treasureId) { error ->
             if (!resolved) {
                 resolved = true
-                if (error == null) claim(attempt) {} // coordinator owns confirmed success emission
-                else if (attempt != null) controller.completeAttempt(attempt, error)
+                if (error == null) {
+                    claim(attempt) { claimError ->
+                        if (!claimResolved) {
+                            claimResolved = true
+                            onComplete(claimError)
+                        }
+                    }
+                } else {
+                    if (attempt != null) controller.completeAttempt(attempt, error)
+                    onComplete(error)
+                }
             }
-            // Preserve the original UI/collection callback timing; claim errors remain in Room state.
-            onComplete(error)
         }
     }
 }
