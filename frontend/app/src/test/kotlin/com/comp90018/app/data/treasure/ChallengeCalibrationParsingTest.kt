@@ -14,18 +14,8 @@ import org.junit.Test
 class ChallengeCalibrationParsingTest {
     private val target = GeoCoordinate(-37.7971, 144.96189)
 
-    @Test fun pendingCalibrationAndMagneticReferenceArePreservedWithNullHeading() {
-        val config = requireNotNull(parseChallengeConfig(challenge("pending", null), target, 25.0))
-        assertEquals(CalibrationStatus.PENDING, config.calibrationStatus)
-        assertEquals("magnetic", config.headingReference)
-        assertNull(config.requiredHeadingDegrees)
-        val conditions = ChallengeRuleEvaluator(config).evaluate(DeviceContextSnapshot(), 0L).requiredConditions
-        assertEquals(false, conditions.any { it.condition == ChallengeCondition.HEADING_ALIGNED })
-        assertEquals(target, config.targetLocation)
-        assertEquals(25.0, config.insideRadiusMeters, 0.0)
-        assertEquals(800_000_000L, config.holdDurationNanos)
-        assertEquals(RelicChallengeType.UNION_LAWN_PHOTO, config.type)
-        assertEquals(true, config.photoActionRequired)
+    @Test fun missingRequiredHeadingIsRejectedEvenWhenCalibrationIsPending() {
+        assertNull(parseChallengeConfig(challenge("pending", null), target, 25.0))
     }
 
     @Test fun calibratedMetadataDoesNotChangeConfiguredHeading() {
@@ -42,7 +32,7 @@ class ChallengeCalibrationParsingTest {
     }
 
     @Test fun unknownMetadataIsNotSilentlyCalibratedAndReferenceIsPreserved() {
-        val config = requireNotNull(parseChallengeConfig(challenge("field-check-needed", null)
+        val config = requireNotNull(parseChallengeConfig(challenge("field-check-needed", 247.0)
             .plus("headingReference" to "custom-reference"), target, 25.0))
         assertEquals(CalibrationStatus.UNKNOWN, config.calibrationStatus)
         assertEquals("custom-reference", config.headingReference)
