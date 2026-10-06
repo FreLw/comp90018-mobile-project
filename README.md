@@ -1,133 +1,231 @@
 # Lost Treasures
 
-Lost Treasures is an Android app for campus explorers. The current release
-focuses on the social experience: accounts and profiles, friend requests,
-one-to-one chat, and a shareable two-person room with real-time messaging.
-
-> The Treasure and Map tabs are intentionally empty placeholders for future
-> coursework features; they do not currently provide gameplay or mapping.
+Lost Treasures is an Android campus treasure-hunt app built for the University
+of Melbourne. Players explore real campus locations, follow map and compass
+guidance, complete context-aware sensor challenges, collect historical relics,
+and cooperate through team rooms. Social features support profiles, friends,
+direct messages, team chat, and sharing collected treasure stickers.
 
 ## Implemented features
 
+### Campus treasure hunt
+
+- A Google Maps view of the treasure catalogue and the user's current location.
+- Distance, proximity, and target-bearing calculations for the selected relic.
+- Guided hunts that progress from map discovery to compass navigation and a
+  location-specific challenge.
+- Six campus relic challenges at Union Lawn, Wilson Hall, Old Quad, South Lawn,
+  System Garden, and the Grainger Museum.
+- Historical stories, artwork, discovery state, and a personal treasure
+  collection stored in Firestore.
+- Cooperative team hunts, including the four-fragment South Lawn hunt.
+
+### Sensors and context engine
+
+- Fused Android location updates with runtime permission handling, accuracy and
+  staleness filtering, proximity hysteresis, and stale-signal recovery.
+- Device heading, target direction, rotation, motion, and stability processing.
+- Camera and microphone input for challenge-specific interactions.
+- A deterministic context engine that combines location and sensor states to
+  evaluate challenge conditions and produce user instructions.
+- Debug-only sensor simulation and calibration tools for repeatable development.
+
+Location-based actions require a current usable reading. Denied permissions,
+stale readings, and fallback coordinates cannot unlock a hunt.
+
+### Accounts and collaboration
+
 - Email/password registration, sign-in, and sign-out with Firebase Authentication.
-- An automatically created explorer profile, with username, gender, bio, and optional photo stored in Firebase.
-- Profile editing for username, gender, and profile photo.
-- Exact username lookup, friend requests, accept/decline actions, and friend removal.
-- Private, real-time direct chat between accepted friends.
-- One active two-person room per explorer: create a room, share/copy its ID, join by ID, chat in real time, inspect room members, leave, or dismiss.
-- Firebase Security Rules for Firestore and Storage.
+- Explorer profiles with username, gender, bio, and an optional profile photo.
+- Exact username search, friend requests, friend management, and profiles.
+- Real-time direct messages, including image and treasure-sticker sharing.
+- Team-room creation and joining, real-time team chat, member details, and
+  shared hunt progress.
+
+## Challenge design
+
+Each relic has a Firestore-backed challenge configuration. Depending on the
+location, the context engine can require combinations of these conditions:
+
+| Input | Example use |
+| --- | --- |
+| Location | Verify that the player is inside the relic's configured radius |
+| Direction | Guide the player and check alignment with a target bearing |
+| Motion and stability | Require the player to stop, hold still, or keep the phone level |
+| Rotation and attitude | Check a viewing angle or observation position |
+| Camera | Capture the Union Lawn challenge photo |
+| Microphone | Detect the sound required by the Grainger Museum challenge |
+
+The six catalogue configurations are included in
+[`database/treasures.json`](database/treasures.json). Their calibration status
+is currently `pending`; thresholds and bearings must be validated on physical
+devices at the corresponding campus locations before final demonstration.
 
 ## Technology
 
 | Area | Implementation |
 | --- | --- |
 | Android client | Kotlin, Jetpack Compose, Material 3 |
+| Architecture | Feature-oriented MVVM with repository interfaces |
 | Build | Gradle 9.7.1, Android Gradle Plugin 9.3.2, JDK 21 |
-| Authentication | Firebase Authentication (email/password) |
+| Maps and location | Google Maps SDK for Android, Google Play services location |
+| Device input | Android location and motion sensors, CameraX, microphone |
+| Authentication | Firebase Authentication |
 | Data and live updates | Cloud Firestore snapshot listeners |
 | Images | Firebase Storage |
 | Access control | Firestore and Storage Security Rules |
 
-The Android app has `minSdk 26`, `targetSdk 37`, and package name `com.comp90018.app`.
+The app uses `minSdk 26`, `targetSdk 37`, and application ID
+`com.comp90018.app`.
 
 ## Architecture
 
-The client uses a feature-oriented MVVM structure. Compose screens render a
-`UiState` and delegate user actions to a ViewModel. ViewModels own transient
-state and real-time subscription lifecycles; they call repository interfaces
-instead of Firebase service objects directly.
+Lost Treasures is a single-module Compose app with this primary dependency
+direction:
 
-| Layer | Responsibility |
+```text
+Compose Screen -> ViewModel -> Repository -> Firebase adapter/service
+```
+
+ViewModels expose immutable UI state and own real-time subscription lifecycles.
+Firebase calls stay behind repository implementations, and Android hardware
+APIs are wrapped in testable sensor classes. The `contextengine` package
+combines their structured outputs and evaluates challenge rules independently
+of the UI.
+
+| Package | Responsibility |
 | --- | --- |
-| `features/` | Compose screens and feature ViewModels (`auth`, `friends`, `chat`, `rooms`, `profile`) |
-| `data/auth`, `data/profile`, `data/social`, `data/chat`, `data/rooms` | Repository interfaces and Firebase-backed implementations |
-| `Firebase*Service` | Firebase persistence implementation used only from repository adapters |
+| `features/` | Auth, chat, friends, map, profile, rooms, treasure, and challenge UI/ViewModels |
+| `data/` | Domain models, repositories, Firebase adapters, and services |
+| `sensors/` | Location, orientation, motion, stability, and sound abstractions |
+| `contextengine/` | Context aggregation and deterministic challenge evaluation |
+| `diagnostics/` | Shared sensor and environment diagnostics |
+| `ui/components/` | Reusable presentation components |
 
-This separation keeps friend requests, direct chat, team rooms, profile reads,
-and authentication testable independently of Compose. Firebase SDK types are
-still passed through a small number of screen composition boundaries while
-repositories are created; UI business logic does not call Firestore, Storage,
-or Firebase service APIs directly.
+See [`frontend/ARCHITECTURE.md`](frontend/ARCHITECTURE.md) for the package tree,
+data flow, naming conventions, and feature ownership.
 
 ## Repository layout
 
 ```text
 frontend/                 Android Studio / Gradle project
-  app/                    Compose UI, ViewModels, repositories, and Firebase adapters
+  app/                    App source, resources, and tests
+  ARCHITECTURE.md         Detailed Android architecture guide
+database/                 Shared treasure catalogue and import utility
 firestore.rules           Firestore authorization and validation rules
 firestore.indexes.json    Firestore indexes
 storage.rules             Firebase Storage rules
 firebase.json             Firebase deployment and emulator configuration
-REQUIREMENTS.md           Implemented requirements and acceptance criteria
+REQUIREMENTS.md           Requirements and acceptance criteria
 ```
 
-## Run the app
+## Local setup
 
 ### Prerequisites
 
-- Android Studio with Android SDK Platform 37 and JDK 21.
-- A Firebase project and the Firebase CLI.
-- An Android emulator or device with internet access.
+- Android Studio with JDK 21 and Android SDK Platform 37.
+- An Android API 26+ emulator or physical device with internet access.
+- A Firebase project with the Firebase CLI installed.
+- A Google Cloud project with **Maps SDK for Android** enabled.
+- Node.js if the treasure catalogue needs to be imported.
 
-### Firebase setup
+### Firebase
 
-1. Create a Firebase project and register an Android app with package name `com.comp90018.app`.
-2. Download `google-services.json` and place it at `frontend/app/google-services.json`. Treat this as local configuration; do not commit it.
-3. In Firebase Authentication, enable **Email/Password** as a sign-in provider.
+1. Register an Android app with application ID `com.comp90018.app`.
+2. Download `google-services.json` and place it at
+   `frontend/app/google-services.json`. This local file must not be committed.
+3. Enable Email/Password in Firebase Authentication.
 4. Create the default Cloud Firestore database and enable Firebase Storage.
-5. From the repository root, deploy the rules and Firestore index:
+5. From the repository root, deploy the rules and indexes:
 
-   ```powershell
+   ```bash
    firebase deploy --only firestore,storage
    ```
 
-### Build and launch
+### Google Maps
 
-1. Open the `frontend` directory in Android Studio.
-2. Allow Gradle sync to finish, select a device, then choose **Run**.
+Store the Maps API key outside version control. The recommended location is the
+user-level Gradle properties file:
 
-Or, from `frontend` in PowerShell:
-
-```powershell
-.\gradlew.bat assembleDebug
+```properties
+# ~/.gradle/gradle.properties
+MAPS_API_KEY=your_google_maps_api_key
 ```
 
-The module-specific [frontend README](frontend/README.md) has the same quick-start details for Android Studio users.
+Alternatively, copy `frontend/local.properties.sample` to
+`frontend/local.properties` and set `MAPS_API_KEY` there. For an Android-
+restricted key, configure application ID `com.comp90018.app` and the SHA-1
+fingerprint of the signing certificate used to build the APK.
 
-## Use the app
+### Treasure catalogue
 
-### Account and profile
+The app reads relic definitions from the Firestore `treasures` collection. To
+import the checked-in six-relic catalogue using an authenticated Firebase CLI:
 
-1. Create an account with a valid email and a password of at least six characters, or sign in to an existing account.
-2. Open **profile** in the bottom navigation to view the profile or sign out.
-3. Select **Edit profile** to set a username, choose a gender option, and optionally select a profile photo. A username must be 3–30 lowercase letters, digits, or underscores.
+```bash
+cd database
+npm install
+node import-treasures.mjs --firebase-cli --target YOUR_FIREBASE_PROJECT_ID
+```
 
-### Friends and direct chat
+The importer also accepts a service account with `--key`; see the usage check in
+[`database/import-treasures.mjs`](database/import-treasures.mjs). Never commit a
+service-account file.
 
-1. Open **friend** and select **Add friend**.
-2. Search for another explorer by their exact username and select **Add friend**.
-3. The recipient opens **Friend requests** and selects **Accept** or **Decline**.
-4. Once accepted, either explorer selects **Chat** beside that friend to open the private conversation. The friend profile in a direct chat also provides a remove-friend action.
+## Build and test
 
-### Two-person rooms
+Open `frontend` in Android Studio, wait for Gradle sync, select a device, and
+choose **Run**. From a terminal:
 
-1. Open **Rooms** and select **Create a room**.
-2. Select the room header or information icon to open **Room details**. Copy the Room ID and share it with one other explorer.
-3. The second explorer opens **Rooms**, selects **Join the room**, enters the ID, then selects **Join the room**.
-4. Both members can exchange messages. In Room details, select a member to view their profile and send or manage a friend request.
-5. The owner can select **Dismiss room**, which permanently removes the room and its messages. A participant can select **Leave room**. Either action returns the initiating user to the room entry screen.
+```bash
+cd frontend
+./gradlew testDebugUnitTest
+./gradlew assembleDebug
+```
 
-## Data model
+On Windows, replace `./gradlew` with `gradlew.bat`.
+
+Unit tests cover pure location calculations, invalid/stale location policy,
+direction processing, motion and sound processing, treasure parsing, map and
+hunt state transitions, challenge rules, and ViewModel/repository behaviour.
+Camera, microphone, compass, GPS, permission, poor-signal, and on-site threshold
+behaviour should additionally be checked on physical Android devices.
+
+## Main user flow
+
+1. Register or sign in and complete the explorer profile.
+2. Open **Map**, select a relic, and start its hunt.
+3. Follow distance and compass guidance until a reliable location reading is
+   inside the configured radius.
+4. Complete the sensor challenge and reveal the relic's history and artwork.
+5. Review collected and undiscovered relics in **Treasure**.
+6. Use **Rooms** for team chat and a cooperative hunt, or **Friends** for direct
+   chat and treasure-sticker sharing.
+
+## Firestore data model
 
 | Path | Purpose |
 | --- | --- |
-| `users/{uid}` | Explorer profile |
-| `users/{uid}/friends/{friendUid}` | Accepted friendship reference |
-| `friendRequests/{fromUid_toUid}` | Friend-request state |
-| `rooms/{roomId}` | Deterministic private direct-chat room |
-| `rooms/{roomId}/messages/{messageId}` | Direct-chat message |
-| `teamRooms/{roomId}` | Two-person room and member IDs |
-| `teamRooms/{roomId}/messages/{messageId}` | Two-person room message |
-| `teamMemberships/{uid}` | Explorer's active two-person-room reference |
+| `users/{uid}` | Explorer profile and settings |
+| `users/{uid}/friends/{friendUid}` | Accepted friendship and unread state |
+| `users/{uid}/treasureCollection/{treasureId}` | The user's collected relics |
+| `friendRequests/{requestId}` | Incoming and outgoing friend requests |
+| `rooms/{roomId}/messages/{messageId}` | Private direct-chat messages |
+| `teamMemberships/{uid}` | The user's current team-room membership |
+| `teamRooms/{roomId}` | Team membership and cooperative hunt state |
+| `teamRooms/{roomId}/messages/{messageId}` | Team-room messages |
+| `treasures/{treasureId}` | Shared relic metadata and challenge configuration |
 
-See [REQUIREMENTS.md](REQUIREMENTS.md) for detailed requirements, constraints, and acceptance criteria.
+## Known limitations
+
+- Challenge thresholds and bearings are map-assisted development values and
+  still require on-site physical-device calibration.
+- Hardware behaviour varies by device, sensor quality, magnetic interference,
+  GPS conditions, and Android permission choice.
+- Core online features require Firebase connectivity; map rendering requires a
+  valid Maps API key and network access.
+- Debug simulation tools are excluded from release builds and are not evidence
+  of physical-device validation.
+
+See [`REQUIREMENTS.md`](REQUIREMENTS.md) for detailed acceptance criteria and
+[`frontend/README.md`](frontend/README.md) for the Android client quick start.
