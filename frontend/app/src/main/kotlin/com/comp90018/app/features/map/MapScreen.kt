@@ -257,7 +257,6 @@ fun MapScreen(
     }
     val deviceHeading = rememberDeviceHeading()
     val deviceMotion = rememberDeviceMotion()
-    val runningInEmulator = remember { isProbablyEmulator() }
     val huntCandidates = remember(resolvedTreasures, foundRelicIds, teamHuntActive) {
         if (teamHuntActive) resolvedTreasures else resolvedTreasures.filterNot { it.id in foundRelicIds }
     }
@@ -266,31 +265,33 @@ fun MapScreen(
             LocationCalculator.distanceMeters(DEFAULT_CAMPUS_CENTRE, it.coordinate)
         }
     }
-    val baseCoordinate = if (runningInEmulator) {
-        DEFAULT_CAMPUS_CENTRE
-    } else {
-        userLocation.currentLocation ?: userLocation.lastKnownLocation ?: DEFAULT_CAMPUS_CENTRE
-    }
-    val currentCoordinate = simulation?.let { distance ->
+    val simulatedCoordinate = simulation?.let { distance ->
         simulationTarget?.coordinate?.let { coordinateAtDistance(it, distance) }
-    } ?: baseCoordinate
-    val treasureDistances = remember(huntCandidates, currentCoordinate, simulation, simulationTarget) {
+    }
+    val actionableCoordinate = simulatedCoordinate ?: LocationActionPolicy.actionableCoordinate(userLocation)
+    val treasureDistances = remember(huntCandidates, actionableCoordinate, simulation, simulationTarget) {
         val candidates = if (simulation == null || simulationTarget == null) {
             huntCandidates
         } else {
             listOf(simulationTarget)
         }
-        candidates.map { it to LocationCalculator.distanceMeters(currentCoordinate, it.coordinate) }
-            .sortedBy { it.second }
+        actionableCoordinate?.let { current ->
+            candidates.map { it to LocationCalculator.distanceMeters(current, it.coordinate) }
+                .sortedBy { it.second }
+        }.orEmpty()
     }
     val nearestTreasure = treasureDistances.firstOrNull()
     // Map visibility includes recovered treasures; only the hunt candidates exclude them.
-    val visibleRelics = remember(resolvedTreasures, currentCoordinate, foundRelicIds, returningRelicId) {
-        visibleMapRelics(resolvedTreasures, currentCoordinate, REVEAL_RADIUS_METERS, foundRelicIds, returningRelicId)
+    val visibleRelics = remember(resolvedTreasures, actionableCoordinate, foundRelicIds, returningRelicId) {
+        actionableCoordinate?.let {
+            visibleMapRelics(resolvedTreasures, it, REVEAL_RADIUS_METERS, foundRelicIds, returningRelicId)
+        } ?: resolvedTreasures.filter { it.id in foundRelicIds || it.id == returningRelicId }
     }
     val huntReadyRelic = nearestTreasure?.takeIf { (_, distance) -> distance <= HUNT_READY_RADIUS_METERS }?.first
     val discoveryHaptics = LocalHapticFeedback.current
-    val discoveryTarget = selectedRelic?.takeIf { LocationCalculator.distanceMeters(currentCoordinate, it.coordinate) <= HUNT_READY_RADIUS_METERS } ?: huntReadyRelic
+    val discoveryTarget = selectedRelic?.takeIf { relic ->
+        actionableCoordinate?.let { LocationCalculator.distanceMeters(it, relic.coordinate) <= HUNT_READY_RADIUS_METERS } == true
+    } ?: huntReadyRelic
     LaunchedEffect(discoveryTarget?.id) {
         if (discoveryTarget != null && hapticsEnabled) {
             discoveryHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -298,42 +299,38 @@ fun MapScreen(
             discoveryHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
-    val proximityMessage = remember(nearestTreasure, huntCandidates, currentCoordinate) {
+    val proximityMessage = remember(nearestTreasure, huntCandidates, actionableCoordinate) {
         when {
             huntCandidates.isEmpty() -> "Every campus relic has been recovered — legendary work, explorer!"
             nearestTreasure == null -> "The trail has gone quiet — follow the hint and venture closer!"
-            else -> treasureProximityMessage(nearestTreasure.second, currentCoordinate, nearestTreasure.first.coordinate)
+            else -> treasureProximityMessage(
+                nearestTreasure.second,
+                requireNotNull(actionableCoordinate),
+                nearestTreasure.first.coordinate,
+            )
         }
     }
     val activeRelic = compassRelic ?: detailRelic ?: selectedRelic
-    val locationOutput = remember(activeRelic, userLocation, currentCoordinate) {
-        LocationCalculator.buildOutput(
-            currentLocation = currentCoordinate,
-            targetLocation = activeRelic?.coordinate,
-            timestampNanos = userLocation.timestampNanos,
+    val locationOutput = remember(activeRelic, userLocation, simulatedCoordinate) {
+        LocationActionPolicy.targetOutput(
+            location = userLocation,
+            target = activeRelic?.coordinate,
             config = LocationConfig(
                 insideRadiusMeters = activeRelic?.insideRadiusMeters ?: 20.0,
                 nearbyRadiusMeters = activeRelic?.radarRadiusMeters ?: 100.0,
             ),
-            permission = userLocation.permission,
-            availability = userLocation.availability,
-            accuracyMeters = userLocation.accuracyMeters,
-            lastKnownLocation = currentCoordinate,
+            simulatedCoordinate = simulatedCoordinate,
         )
     }
-    val teamHuntLocationOutput = remember(teamHuntTarget, userLocation, currentCoordinate) {
-        LocationCalculator.buildOutput(
-            currentLocation = currentCoordinate,
-            targetLocation = teamHuntTarget?.coordinate,
-            timestampNanos = userLocation.timestampNanos,
+    val teamHuntLocationOutput = remember(teamHuntTarget, userLocation, simulatedCoordinate) {
+        LocationActionPolicy.targetOutput(
+            location = userLocation,
+            target = teamHuntTarget?.coordinate,
             config = LocationConfig(
                 insideRadiusMeters = teamHuntTarget?.insideRadiusMeters ?: 20.0,
                 nearbyRadiusMeters = teamHuntTarget?.radarRadiusMeters ?: 100.0,
             ),
-            permission = userLocation.permission,
-            availability = userLocation.availability,
-            accuracyMeters = userLocation.accuracyMeters,
-            lastKnownLocation = currentCoordinate,
+            simulatedCoordinate = simulatedCoordinate,
         )
     }
     val isLocationStale = simulation == null && userLocation.permission.isGranted &&
@@ -459,15 +456,10 @@ fun MapScreen(
     memberQuizRelic?.let { relic ->
         MemberHuntQuiz(
             relic = relic,
-            locationOutput = LocationCalculator.buildOutput(
-                currentLocation = userLocation.currentLocation,
-                targetLocation = relic.coordinate,
-                timestampNanos = userLocation.timestampNanos,
-                config = LocationConfig(relic.insideRadiusMeters, relic.radarRadiusMeters),
-                permission = userLocation.permission,
-                availability = userLocation.availability,
-                accuracyMeters = userLocation.accuracyMeters,
-            ),
+            // Reuse the same target and effective coordinate used by the team-hunt arrival
+            // check. Re-reading only the live GPS fix here can lock the questions after arrival
+            // when the map is using a simulated or last-known coordinate.
+            locationOutput = teamHuntLocationOutput,
             onCompleted = { onCompleteActiveHuntTask(); memberQuizRelic = null },
             onBack = { memberQuizRelic = null },
         )
@@ -990,12 +982,17 @@ private fun SouthLawnFragmentHuntScreen(
 ) {
     var selectedFragmentId by remember { mutableStateOf<String?>(null) }
     val selectedFragment = fragments.firstOrNull { it.id == selectedFragmentId }
-    val currentLocation = userLocation.currentLocation ?: userLocation.lastKnownLocation
+    val currentLocation = LocationActionPolicy.actionableCoordinate(userLocation)
     val selectedDistance = selectedFragment?.let { fragment ->
         currentLocation?.let { LocationCalculator.distanceMeters(it, fragment.coordinate) }
     }
-    val canCollect = userLocation.permission.isGranted && selectedDistance != null &&
-        selectedDistance <= SOUTH_LAWN_FRAGMENT_RADIUS_METERS
+    val canCollect = selectedFragment?.let { fragment ->
+        LocationActionPolicy.isWithinRadius(
+            location = userLocation,
+            target = fragment.coordinate,
+            radiusMeters = SOUTH_LAWN_FRAGMENT_RADIUS_METERS,
+        )
+    } == true
 
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
