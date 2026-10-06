@@ -1442,14 +1442,24 @@ private fun PerspectiveOption(label: String, selected: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun DistanceSimulationControl(distance: Double?, onDistance: (Double?) -> Unit, modifier: Modifier = Modifier) {
+internal fun DistanceSimulationControl(
+    distance: Double?,
+    onDistance: (Double?) -> Unit,
+    modifier: Modifier = Modifier,
+    maximumDistance: Float = 120f,
+    initialDistance: Double = 100.0,
+) {
     Surface(modifier.width(240.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFFFFF4DE), shadowElevation = 4.dp) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Test distance: ${distance?.let { String.format(Locale.US, "%.1f m", it) } ?: "GPS"}", Modifier.weight(1f), color = Ink, fontSize = 12.sp)
-                Switch(checked = distance != null, onCheckedChange = { onDistance(if (it) 100.0 else null) })
+                Switch(checked = distance != null, onCheckedChange = { onDistance(if (it) initialDistance else null) })
             }
-            Slider(value = (distance ?: 100.0).toFloat(), onValueChange = { onDistance(it.toDouble()) }, valueRange = 0f..120f)
+            Slider(
+                value = (distance ?: initialDistance).toFloat(),
+                onValueChange = { onDistance(it.toDouble()) },
+                valueRange = 0f..maximumDistance,
+            )
         }
     }
 }
