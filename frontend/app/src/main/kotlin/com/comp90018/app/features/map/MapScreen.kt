@@ -119,8 +119,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import android.os.SystemClock
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.res.painterResource
@@ -1457,7 +1455,6 @@ private fun TreasureCompassGate(
         }
     }
     var signalLocked by remember(relic.id) { mutableStateOf(false) }
-    val hapticFeedback = LocalHapticFeedback.current
     var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG) }
     var testDistance by remember(relic.id) { mutableStateOf((locationOutput.distanceToTargetMeters ?: 9.0).toFloat().coerceIn(0f, 30f)) }
     var testHeading by remember(relic.id) { mutableStateOf(deviceHeading) }
@@ -1496,7 +1493,6 @@ private fun TreasureCompassGate(
         if (!allReady) signalLocked = false
         if (allReady && !signalLocked) {
             signalLocked = true
-            if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 
@@ -1825,29 +1821,6 @@ private fun TreasureDetailScreen(
     onBack: () -> Unit,
 ) {
     var navigating by remember(relic.id) { mutableStateOf(false) }
-    var nearbyNotified by remember(relic.id) { mutableStateOf(false) }
-    var huntReadyNotified by remember(relic.id) { mutableStateOf(false) }
-    val hapticFeedback = LocalHapticFeedback.current
-    val proximityStage = HuntProximityResolver.resolve(
-        locationOutput.distanceToTargetMeters,
-        locationValidity,
-        relic.radarRadiusMeters,
-        relic.insideRadiusMeters,
-    )
-    LaunchedEffect(relic.id, navigating, proximityStage) {
-        if (!navigating) return@LaunchedEffect
-        when (proximityStage) {
-            HuntProximityStage.HUNT_READY -> if (!huntReadyNotified) {
-                huntReadyNotified = true
-                if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-            }
-            HuntProximityStage.NEARBY -> if (!nearbyNotified) {
-                nearbyNotified = true
-                if (hapticsEnabled) hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            }
-            else -> Unit
-        }
-    }
     var stage by remember(relic.id, forceReadyToDig) { mutableStateOf(if (forceReadyToDig) TreasureHuntStage.READY_TO_DIG else TreasureHuntStage.DETAILS) }
     var searchStep by remember(relic.id) { mutableIntStateOf(0) }
     var detailsVisible by remember(relic.id) { mutableStateOf(false) }
