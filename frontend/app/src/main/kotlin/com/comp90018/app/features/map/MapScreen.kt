@@ -232,6 +232,7 @@ fun MapScreen(
     var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var detailRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var compassRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var huntRevealRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var huntStoryVisible by remember(activeHuntSessionId) { mutableStateOf(false) }
     var memberQuizRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
@@ -273,13 +274,13 @@ fun MapScreen(
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
     val foundRelicIds = discoveredTreasureIds + revealedIds
-    fun openHunt(relic: MapRelic) {
-        debugSimulationEnabled = false
+    fun openHunt(relic: MapRelic, simulateChallenge: Boolean = false) {
+        debugSimulationEnabled = simulateChallenge
         when (huntEntry(teamHuntActive, teamHuntTaskPendingForCurrentUser, teamHuntIsOwner, teamHuntCanClaim)) {
             HuntEntry.CLAIM -> detailRelic = relic
             HuntEntry.WAITING -> selectedRelic = relic
             HuntEntry.MEMBER_QUIZ -> memberQuizRelic = relic
-            HuntEntry.CHALLENGE -> challengeRelic = relic
+            HuntEntry.COMPASS -> compassRelic = relic
         }
     }
     val mapActivity = LocalActivity.current
@@ -338,11 +339,11 @@ fun MapScreen(
     val huntReadyRelic = nearestTreasure?.takeIf { (_, distance) -> distance <= HUNT_READY_RADIUS_METERS }?.first
     val hapticLifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     LaunchedEffect(userLocation, huntCandidates, foundRelicIds, activeHuntTreasureId,
-        challengeRelic?.id, hapticsEnabled, hapticLifecycleState, hapticController) {
+        compassRelic?.id, challengeRelic?.id, hapticsEnabled, hapticLifecycleState, hapticController) {
         if (!hapticsEnabled || !hapticLifecycleState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
         TreasureHapticTarget.nearest(
             huntCandidates, foundRelicIds,
-            activeHuntTreasureId ?: challengeRelic?.id,
+            activeHuntTreasureId ?: compassRelic?.id ?: challengeRelic?.id,
             userLocation, SystemClock.elapsedRealtimeNanos(),
         )?.let { (id, distance) -> hapticController?.nearby(id, distance) }
     }
@@ -359,7 +360,7 @@ fun MapScreen(
             )
         }
     }
-    val activeRelic = challengeRelic ?: detailRelic ?: selectedRelic
+    val activeRelic = compassRelic ?: challengeRelic ?: detailRelic ?: selectedRelic
     val locationOutput = remember(activeRelic, userLocation, simulatedCoordinate) {
         LocationActionPolicy.targetOutput(
             location = userLocation,
@@ -397,6 +398,7 @@ fun MapScreen(
         selectedRelic = selectedRelic?.let { selected -> resolvedTreasures.firstOrNull { it.id == selected.id } }
         detailRelic = detailRelic?.let { detail -> resolvedTreasures.firstOrNull { it.id == detail.id } }
         challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
+        compassRelic = compassRelic?.let { compass -> resolvedTreasures.firstOrNull { it.id == compass.id } }
     }
     LaunchedEffect(visibleRelics) {
         selectedRelic = selectedRelic?.takeIf { selected -> visibleRelics.any { it.id == selected.id } }
@@ -471,6 +473,28 @@ fun MapScreen(
                 onReturnToMap = { returnFromReveal(relic) },
             )
         }
+        return
+    }
+
+    compassRelic?.let { relic ->
+        TreasureCompassGate(
+            relic = relic,
+            locationOutput = locationOutput,
+            deviceHeading = deviceHeading,
+            motion = deviceMotion,
+            soundEffectsEnabled = soundEffectsEnabled,
+            debugSimulationEnabled = debugSimulationEnabled,
+            // Passing the compass only opens the physical task. Completion and persistence
+            // stay in the challenge/claim callbacks, so this cannot unlock a Room treasure.
+            onContinue = { compassRelic = null; detailRelic = null; challengeRelic = relic },
+            onBack = {
+                hapticController?.abandonTreasure("map", relic.id)
+                compassRelic = null
+                detailRelic = null
+                selectedRelic = null
+                debugSimulationEnabled = false
+            },
+        )
         return
     }
 
@@ -696,7 +720,7 @@ fun MapScreen(
                         else -> null
                     },
                     onAction = {
-                        (if (teamHuntCanClaim) teamHuntTarget else huntReadyRelic)?.let(::openHunt)
+                        (if (teamHuntCanClaim) teamHuntTarget else huntReadyRelic)?.let { openHunt(it) }
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -747,8 +771,7 @@ fun MapScreen(
             DebugChallengeLauncher(
                 relics = resolvedTreasures,
                 onLaunch = { relic ->
-                    debugSimulationEnabled = true
-                    challengeRelic = relic
+                    openHunt(relic, simulateChallenge = true)
                 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
@@ -1504,47 +1527,27 @@ private val REAL_SENSOR_HUNT_TYPES = setOf(
 )
 
 @Composable
-private fun TreasureCompassGate(
+internal fun TreasureCompassGate(
     relic: MapRelic,
     locationOutput: LocationOutput,
     deviceHeading: Float,
     motion: DeviceMotionSample,
-    hapticsEnabled: Boolean,
     soundEffectsEnabled: Boolean,
-    onSignalFound: ((String?) -> Unit) -> Unit,
-    onReveal: () -> Unit,
+    debugSimulationEnabled: Boolean = false,
+    onContinue: () -> Unit,
     onBack: () -> Unit,
 ) {
     val compassEntrance = remember(relic.id) { Animatable(0f) }
     val lampEntrance = remember(relic.id) { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var leaving by remember(relic.id) { mutableStateOf(false) }
-    var saving by remember(relic.id) { mutableStateOf(false) }
-    var saveError by remember(relic.id) { mutableStateOf<String?>(null) }
     LaunchedEffect(relic.id) {
         launch { compassEntrance.animateTo(1f, tween(1050, easing = FastOutSlowInEasing)) }
         delay(380)
         lampEntrance.animateTo(1f, tween(950, easing = FastOutSlowInEasing))
     }
-    fun revealAfterSave() {
-        if (saving || leaving) return
-        saving = true
-        saveError = null
-        onSignalFound { error ->
-            saving = false
-            saveError = error
-            if (error == null) {
-                leaving = true
-                scope.launch {
-                    launch { lampEntrance.animateTo(0f, tween(420)) }
-                    compassEntrance.animateTo(0f, tween(700, easing = FastOutSlowInEasing))
-                    onReveal()
-                }
-            }
-        }
-    }
     var signalLocked by remember(relic.id) { mutableStateOf(false) }
-    var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG) }
+    var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG && debugSimulationEnabled) }
     var testDistance by remember(relic.id) { mutableStateOf((locationOutput.distanceToTargetMeters ?: 9.0).toFloat().coerceIn(0f, 30f)) }
     var testHeading by remember(relic.id) { mutableStateOf(deviceHeading) }
     var testPitch by remember(relic.id) { mutableStateOf(motion.pitchDegrees) }
@@ -1552,13 +1555,27 @@ private fun TreasureCompassGate(
     val effectiveMotion = if (BuildConfig.DEBUG && simulateSensors) DeviceMotionSample(0f, maxOf(abs(testPitch), abs(testRoll)), testPitch, testRoll) else motion
     val distance = if (BuildConfig.DEBUG && simulateSensors) testDistance.toDouble() else locationOutput.distanceToTargetMeters
     val targetBearing = locationOutput.targetBearingDegrees
+        ?: if (BuildConfig.DEBUG && simulateSensors) 0.0 else null
     val heading = if (BuildConfig.DEBUG && simulateSensors) testHeading else deviceHeading
     val turnDegrees = targetBearing?.let { signedBearingDifference(it, heading.toDouble()) }
-    val readiness = evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees)
+    val locationReady = (BuildConfig.DEBUG && simulateSensors) ||
+        locationOutput.validity == com.comp90018.app.sensors.SensorValidity.VALID
+    val readiness = if (locationReady) {
+        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees)
+    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= HORIZONTAL_TOLERANCE_DEGREES)
     val nearTreasure = readiness.nearTreasure
     val facingTreasure = readiness.facingTreasure
     val phoneHorizontal = readiness.phoneHorizontal
     val allReady = readiness.allReady
+    fun continueToChallenge() {
+        if (!allReady || leaving) return
+        leaving = true
+        scope.launch {
+            launch { lampEntrance.animateTo(0f, tween(420)) }
+            compassEntrance.animateTo(0f, tween(700, easing = FastOutSlowInEasing))
+            onContinue()
+        }
+    }
 
     val proximityGlow = distance?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / 165.0).toFloat().coerceIn(0f, 1f) } ?: 0f
@@ -1578,7 +1595,7 @@ private fun TreasureCompassGate(
         }
     }
 
-    LaunchedEffect(allReady, signalLocked, hapticsEnabled) {
+    LaunchedEffect(allReady, signalLocked) {
         if (!allReady) signalLocked = false
         if (allReady && !signalLocked) {
             signalLocked = true
@@ -1587,7 +1604,7 @@ private fun TreasureCompassGate(
 
     val instruction = when {
         signalLocked -> "Treasure signal locked — the hidden trial has awakened."
-        distance == null || targetBearing == null -> "Waiting for a reliable location signal…"
+        !locationReady || distance == null || targetBearing == null -> "Waiting for a reliable location signal…"
         !nearTreasure -> "The signal faded. Move back within 10 m."
         !facingTreasure && requireNotNull(turnDegrees) > 0 -> "Turn right ${abs(turnDegrees).formatDegrees()} toward the treasure."
         !facingTreasure -> "Turn left ${abs(requireNotNull(turnDegrees)).formatDegrees()} toward the treasure."
@@ -1653,13 +1670,11 @@ private fun TreasureCompassGate(
                 AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("All lanterns are alight. The relic awaits.", color = Ink, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        if (saving) CircularProgressIndicator(Modifier.size(24.dp), color = Brand)
-                        else if (!leaving) DiscoveryHuntButton("Hunt", ::revealAfterSave)
+                        if (!leaving) DiscoveryHuntButton("Hunt", ::continueToChallenge)
                     }
                 }
             }
         }
-        saveError?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         if (BuildConfig.DEBUG) {
             Surface(color = Color(0xFFE8DDC6), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(12.dp)) {
@@ -2801,7 +2816,7 @@ private fun rememberDeviceHeading(): Float {
     return heading
 }
 
-private data class DeviceMotionSample(
+internal data class DeviceMotionSample(
     val accelerationMagnitude: Float,
     val tiltDegrees: Float,
     val pitchDegrees: Float = 0f,

@@ -4,11 +4,11 @@ import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules
 
-internal enum class HuntEntry { CHALLENGE, MEMBER_QUIZ, WAITING, CLAIM }
+internal enum class HuntEntry { COMPASS, MEMBER_QUIZ, WAITING, CLAIM }
 
-/** A member quiz remains a room task; the owner and solo explorer use the physical challenge. */
+/** A member quiz remains a room task; the owner and solo explorer start with the compass gate. */
 internal fun huntEntry(memberTaskPending: Boolean, isOwner: Boolean): HuntEntry =
-    if (memberTaskPending && !isOwner) HuntEntry.MEMBER_QUIZ else HuntEntry.CHALLENGE
+    if (memberTaskPending && !isOwner) HuntEntry.MEMBER_QUIZ else HuntEntry.COMPASS
 
 /** Shared completion and individual claims take priority over reopening a physical task. */
 internal fun huntEntry(
@@ -17,7 +17,7 @@ internal fun huntEntry(
     isOwner: Boolean,
     canClaim: Boolean,
 ): HuntEntry = when {
-    !huntActive -> HuntEntry.CHALLENGE
+    !huntActive -> HuntEntry.COMPASS
     canClaim -> HuntEntry.CLAIM
     !memberTaskPending -> HuntEntry.WAITING
     else -> huntEntry(memberTaskPending, isOwner)

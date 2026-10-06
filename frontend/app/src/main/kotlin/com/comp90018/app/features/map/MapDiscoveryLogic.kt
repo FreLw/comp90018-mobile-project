@@ -52,7 +52,7 @@ internal fun signedBearingDifference(
     deviceHeadingDegrees: Double,
 ): Double = ((targetBearingDegrees - deviceHeadingDegrees + 540.0) % 360.0) - 180.0
 
-/** The three independent sensor conditions required before digging is enabled. */
+/** The three independent sensor conditions required before the task challenge opens. */
 internal data class HuntReadiness(
     val nearTreasure: Boolean,
     val facingTreasure: Boolean,

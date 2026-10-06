@@ -38,18 +38,18 @@ class TreasureChallengeRoutingTest {
     }
 
     @Test fun multiplayerOwnerUsesChallengeAndPendingMemberRetainsQuiz() {
-        assertEquals(HuntEntry.CHALLENGE, huntEntry(false, false))
-        assertEquals(HuntEntry.CHALLENGE, huntEntry(true, true))
+        assertEquals(HuntEntry.COMPASS, huntEntry(false, false))
+        assertEquals(HuntEntry.COMPASS, huntEntry(true, true))
         assertEquals(HuntEntry.MEMBER_QUIZ, huntEntry(true, false))
     }
 
     @Test fun roomOwnerKeepsAllSixChallengeRoutesUntilTheirTaskIsComplete() {
         configs.forEach { (id, config) ->
-            assertEquals(HuntEntry.CHALLENGE, huntEntry(true, true, true, false))
+            assertEquals(HuntEntry.COMPASS, huntEntry(true, true, true, false))
             assertEquals(config, relic(id, config).validatedChallengeConfig())
         }
         assertEquals(HuntEntry.MEMBER_QUIZ, huntEntry(true, true, false, false))
-        assertEquals(HuntEntry.CHALLENGE, huntEntry(false, false, false, false))
+        assertEquals(HuntEntry.COMPASS, huntEntry(false, false, false, false))
     }
 
     @Test fun completedOwnerWaitsThenClaimsAndNeverReopensTheTaskAfterClaiming() {
@@ -66,7 +66,7 @@ class TreasureChallengeRoutingTest {
         assertEquals(HuntEntry.WAITING, entry(members, listOf("owner"), "owner"))
         assertEquals(HuntEntry.CLAIM, entry(members, listOf("owner"), "member"))
         assertEquals(HuntEntry.WAITING, entry(listOf("member"), emptyList(), "member"))
-        assertEquals(HuntEntry.CHALLENGE, entry(listOf("member"), emptyList(), "owner"))
+        assertEquals(HuntEntry.COMPASS, entry(listOf("member"), emptyList(), "owner"))
     }
 
     private fun relic(id: String, config: RelicChallengeConfig?) =
