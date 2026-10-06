@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.SideEffect
+import com.comp90018.app.features.haptics.TreasureHapticSessionViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -117,7 +119,24 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     } else {
         userLocation.currentLocation ?: userLocation.lastKnownLocation
     }
+    val hapticSession: TreasureHapticSessionViewModel = viewModel(
+        key = "treasure_haptics_${user.uid}",
+        factory = TreasureHapticSessionViewModel.factory(context),
+    )
+    SideEffect { hapticSession.setEnabled(settings?.haptics ?: true) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, hapticSession) {
+        hapticSession.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hapticSession.setForeground(true)
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) hapticSession.setForeground(false)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            hapticSession.setForeground(false)
+        }
+    }
 
     DisposableEffect(lifecycleOwner, userLocationViewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -184,6 +203,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     hapticsEnabled = settings?.haptics ?: true,
                     soundEffectsEnabled = settings?.soundEffects ?: true,
                     userLocation = userLocation,
+                    hapticController = hapticSession.controller,
                     onEnableLocation = userLocationViewModel::retryAfterPermissionGranted,
                     onCollectTreasure = treasureCollectionViewModel::addDiscoveredTreasure,
                     activeHuntTreasureId = activeHuntTreasureId
