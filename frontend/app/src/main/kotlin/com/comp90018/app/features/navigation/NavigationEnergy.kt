@@ -1,6 +1,7 @@
 package com.comp90018.app.features.navigation
 
 import com.comp90018.app.sensors.location.GeoCoordinate
+import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -27,7 +28,7 @@ internal fun navigationDistanceLabel(distanceMeters: Double?): String = when {
     else -> "${distanceMeters.roundToInt()} m"
 }
 
-/** Deterministic debug coordinate south of the target, kept out of release navigation state. */
+/** Deterministic debug coordinate south of the target. */
 internal fun navigationTestCoordinate(target: GeoCoordinate, distanceMeters: Double): GeoCoordinate {
     val angularDistance = distanceMeters.coerceAtLeast(0.0) / EARTH_RADIUS_METERS
     val bearing = Math.PI
@@ -41,6 +42,18 @@ internal fun navigationTestCoordinate(target: GeoCoordinate, distanceMeters: Dou
         cos(angularDistance) - sin(latitude) * sin(destinationLatitude),
     )
     return GeoCoordinate(Math.toDegrees(destinationLatitude), Math.toDegrees(destinationLongitude))
+}
+
+internal fun navigationHeadingError(targetBearingDegrees: Double?, deviceHeadingDegrees: Double): Double? =
+    targetBearingDegrees?.let { abs(((it - deviceHeadingDegrees + 540.0) % 360.0) - 180.0) }
+
+internal fun navigationTrailDurationMillis(
+    targetBearingDegrees: Double?,
+    deviceHeadingDegrees: Double,
+): Int {
+    val error = navigationHeadingError(targetBearingDegrees, deviceHeadingDegrees) ?: return 4_200
+    val alignment = 1.0 - (error / 180.0).coerceIn(0.0, 1.0)
+    return (4_200 - alignment * 2_700).roundToInt()
 }
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0

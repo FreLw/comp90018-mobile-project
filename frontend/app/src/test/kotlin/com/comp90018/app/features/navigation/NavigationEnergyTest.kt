@@ -31,4 +31,13 @@ class NavigationEnergyTest {
 
         assertEquals(175.0, LocationCalculator.distanceMeters(simulated, target), 0.05)
     }
+
+    @Test
+    fun trailRunsFastestWhenHeadingMatchesTargetBearing() {
+        assertEquals(1_500, navigationTrailDurationMillis(10.0, 10.0))
+        assertEquals(1_500, navigationTrailDurationMillis(5.0, 365.0))
+        assertEquals(2_850, navigationTrailDurationMillis(90.0, 0.0))
+        assertEquals(4_200, navigationTrailDurationMillis(180.0, 0.0))
+        assertEquals(4_200, navigationTrailDurationMillis(null, 0.0))
+    }
 }
