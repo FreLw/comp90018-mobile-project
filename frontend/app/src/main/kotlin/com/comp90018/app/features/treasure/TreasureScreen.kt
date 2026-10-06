@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,7 +62,7 @@ fun TreasureScreen(
     onRetry: () -> Unit,
     discoveredTreasureIds: Set<String>,
     currentLocation: GeoCoordinate?,
-    onOpenMap: (String) -> Unit,
+    onNavigate: (String) -> Unit,
 ) {
     var selectedTreasure by remember { mutableStateOf<MapRelic?>(null) }
 
@@ -73,7 +73,7 @@ fun TreasureScreen(
             discovered = treasure.id in discoveredTreasureIds,
             distanceMeters = distance,
             onBack = { selectedTreasure = null },
-            onOpenMap = { onOpenMap(treasure.id) },
+            onNavigate = { onNavigate(treasure.id) },
         )
         return
     }
@@ -194,10 +194,9 @@ private fun TreasureRouteDetail(
     discovered: Boolean,
     distanceMeters: Double?,
     onBack: () -> Unit,
-    onOpenMap: () -> Unit,
+    onNavigate: () -> Unit,
 ) {
     val context = LocalContext.current
-    val closeEnoughToSearch = !discovered && distanceMeters != null && distanceMeters <= REVEAL_RADIUS_METERS
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 28.dp),
@@ -225,13 +224,14 @@ private fun TreasureRouteDetail(
                     Text(undiscoveredLegend(treasure), Modifier.padding(20.dp), color = Ink, style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            if (closeEnoughToSearch) {
-                item {
-                    Button(onClick = onOpenMap, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp)) {
-                        Icon(Icons.Rounded.Map, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Find on Map · ${distanceMeters.formatDistance()}", fontWeight = FontWeight.Bold)
-                    }
+            item {
+                Button(onClick = onNavigate, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp)) {
+                    Icon(Icons.Rounded.Navigation, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        distanceMeters?.let { "Navigate · ${it.formatDistance()}" } ?: "Navigate",
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         } else {
@@ -292,5 +292,3 @@ private fun Double.formatDistance(): String = when {
     this >= 1000.0 -> String.format(Locale.US, "%.2f km", this / 1000.0)
     else -> "${kotlin.math.round(this).toInt()} m"
 }
-
-private const val REVEAL_RADIUS_METERS = 50.0
