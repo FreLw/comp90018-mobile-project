@@ -63,7 +63,7 @@ class FakeLocationSensorTest {
         val output = sensor.output.value
         assertEquals(null, output.targetLocation)
         assertEquals(ProximityState.UNKNOWN, output.proximity)
-        assertEquals(SensorValidity.UNKNOWN, output.validity)
+        assertEquals(SensorValidity.VALID, output.validity)
     }
 
     @Test

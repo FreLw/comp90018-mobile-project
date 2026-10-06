@@ -257,6 +257,7 @@ fun MapScreen(
     }
     val deviceHeading = rememberDeviceHeading()
     val deviceMotion = rememberDeviceMotion()
+    val runningInEmulator = remember { isProbablyEmulator() }
     val huntCandidates = remember(resolvedTreasures, foundRelicIds, teamHuntActive) {
         if (teamHuntActive) resolvedTreasures else resolvedTreasures.filterNot { it.id in foundRelicIds }
     }
@@ -269,6 +270,9 @@ fun MapScreen(
         simulationTarget?.coordinate?.let { coordinateAtDistance(it, distance) }
     }
     val actionableCoordinate = simulatedCoordinate ?: LocationActionPolicy.actionableCoordinate(userLocation)
+    val mapDisplayCoordinate = simulatedCoordinate ?: LocationActionPolicy.mapDisplayCoordinate(
+        userLocation, runningInEmulator,
+    )
     val treasureDistances = remember(huntCandidates, actionableCoordinate, simulation, simulationTarget) {
         val candidates = if (simulation == null || simulationTarget == null) {
             huntCandidates
@@ -282,10 +286,11 @@ fun MapScreen(
     }
     val nearestTreasure = treasureDistances.firstOrNull()
     // Map visibility includes recovered treasures; only the hunt candidates exclude them.
-    val visibleRelics = remember(resolvedTreasures, actionableCoordinate, foundRelicIds, returningRelicId) {
-        actionableCoordinate?.let {
-            visibleMapRelics(resolvedTreasures, it, REVEAL_RADIUS_METERS, foundRelicIds, returningRelicId)
-        } ?: resolvedTreasures.filter { it.id in foundRelicIds || it.id == returningRelicId }
+    val visibleRelics = remember(resolvedTreasures, mapDisplayCoordinate, foundRelicIds, returningRelicId, perspective) {
+        visibleMapRelics(
+            resolvedTreasures, mapDisplayCoordinate, REVEAL_RADIUS_METERS, foundRelicIds, returningRelicId,
+            showAllRelics = perspective == MapPerspective.GOD,
+        )
     }
     val huntReadyRelic = nearestTreasure?.takeIf { (_, distance) -> distance <= HUNT_READY_RADIUS_METERS }?.first
     val discoveryHaptics = LocalHapticFeedback.current
@@ -301,6 +306,8 @@ fun MapScreen(
     }
     val proximityMessage = remember(nearestTreasure, huntCandidates, actionableCoordinate) {
         when {
+            actionableCoordinate == null && huntCandidates.isNotEmpty() ->
+                "Waiting for a usable GPS location. Explore the map while waiting; move outdoors to begin hunting."
             huntCandidates.isEmpty() -> "Every campus relic has been recovered — legendary work, explorer!"
             nearestTreasure == null -> "The trail has gone quiet — follow the hint and venture closer!"
             else -> treasureProximityMessage(
@@ -1213,6 +1220,9 @@ private fun GoogleMapView(
                     } else {
                         if (huntFragments.isNotEmpty()) {
                             moveCameraToCampus(map, huntFragments.map { it.coordinate }, displayLocation)
+                        } else if (relics.isNotEmpty()) {
+                            // Frame the treasure catalogue even if the user's GPS is in another city.
+                            moveCameraToTreasureArea(map, relics, activeHuntTreasureId)
                         } else {
                             moveCameraToCampus(map, relics.map { it.coordinate }, displayLocation ?: DEFAULT_CAMPUS_CENTRE)
                         }

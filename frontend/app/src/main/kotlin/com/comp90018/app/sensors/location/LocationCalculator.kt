@@ -26,7 +26,13 @@ object LocationCalculator {
                 currentLocation = currentLocation,
                 lastKnownLocation = lastKnownLocation,
                 targetLocation = targetLocation,
-                validity = SensorValidity.UNKNOWN,
+                // A shared GPS stream need not have a treasure target yet. Its coordinate
+                // remains usable; only distance, bearing and proximity require a target.
+                validity = when {
+                    currentLocation == null -> SensorValidity.UNKNOWN
+                    !currentLocation.isValid() -> SensorValidity.UNRELIABLE
+                    else -> SensorValidity.VALID
+                },
                 permission = permission,
                 availability = availability,
                 accuracyMeters = accuracyMeters,

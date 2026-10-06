@@ -8,6 +8,11 @@ import com.comp90018.app.sensors.location.LocationOutput
 
 /** Keeps display-only fallback coordinates out of treasure completion decisions. */
 internal object LocationActionPolicy {
+    /** Display fallbacks reveal nearby markers without granting arrival or hunt readiness. */
+    fun mapDisplayCoordinate(location: LocationOutput, runningInEmulator: Boolean): GeoCoordinate =
+        if (runningInEmulator) DEFAULT_CAMPUS_CENTRE
+        else location.currentLocation ?: location.lastKnownLocation ?: DEFAULT_CAMPUS_CENTRE
+
     fun actionableCoordinate(location: LocationOutput): GeoCoordinate? =
         location.currentLocation?.takeIf {
             location.permission.isGranted && location.validity == SensorValidity.VALID

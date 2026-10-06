@@ -83,7 +83,7 @@ class LocationCalculatorTest {
     }
 
     @Test
-    fun buildOutputReturnsUnknownWhenCurrentOrTargetLocationIsMissing() {
+    fun buildOutputReturnsUnknownWhenCurrentLocationIsMissing() {
         val output = LocationCalculator.buildOutput(
             currentLocation = null,
             targetLocation = oldQuad,
@@ -93,6 +93,31 @@ class LocationCalculatorTest {
         assertEquals(SensorValidity.UNKNOWN, output.validity)
         assertEquals(null, output.distanceToTargetMeters)
         assertEquals(null, output.targetBearingDegrees)
+    }
+
+    @Test
+    fun validCoordinateWithoutTargetRemainsUsable() {
+        val output = LocationCalculator.buildOutput(
+            currentLocation = nearbyOldQuad,
+            targetLocation = null,
+        )
+
+        assertEquals(SensorValidity.VALID, output.validity)
+        assertEquals(nearbyOldQuad, output.currentLocation)
+        assertEquals(ProximityState.UNKNOWN, output.proximity)
+        assertEquals(null, output.distanceToTargetMeters)
+        assertEquals(null, output.targetBearingDegrees)
+    }
+
+    @Test
+    fun invalidCoordinateWithoutTargetIsStillUnreliable() {
+        val output = LocationCalculator.buildOutput(
+            currentLocation = GeoCoordinate(-91.0, 144.960481),
+            targetLocation = null,
+        )
+
+        assertEquals(SensorValidity.UNRELIABLE, output.validity)
+        assertEquals(null, output.distanceToTargetMeters)
     }
 
     @Test

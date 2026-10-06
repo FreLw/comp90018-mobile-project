@@ -7,6 +7,20 @@ import org.junit.Test
 
 class MapDiscoveryLogicTest {
     @Test
+    fun overviewShowsEveryTreasureEvenWhenUserIsOutsideCampus() {
+        val outsideCampus = com.comp90018.app.sensors.location.GeoCoordinate(37.422, -122.084)
+        val relics = listOf(
+            MapRelic("near", "Near relic", "Campus", coordinate = DEFAULT_CAMPUS_CENTRE),
+            MapRelic("far", "Far relic", "Campus",
+                coordinate = com.comp90018.app.sensors.location.GeoCoordinate(-37.7966, 144.9591)),
+        )
+
+        assertEquals(relics, visibleMapRelics(relics, outsideCampus, REVEAL_RADIUS_METERS,
+            showAllRelics = true))
+        assertTrue(visibleMapRelics(relics, outsideCampus, REVEAL_RADIUS_METERS).isEmpty())
+    }
+
+    @Test
     fun radarDistanceBandsUseTheRequestedBoundaries() {
         assertEquals(RadarSignalRange.HUNT_READY, radarSignalForDistance(10.0))
         assertEquals(RadarSignalRange.REVEALED, radarSignalForDistance(10.01))
