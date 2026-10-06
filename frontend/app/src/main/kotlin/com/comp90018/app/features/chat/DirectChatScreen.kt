@@ -73,6 +73,7 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
             sending = state.sending,
             ownedTreasureStickerIds = treasureState.discoveredIds,
             onTreasureStickerSelected = viewModel::sendTreasureSticker,
+            onPhotoSelected = viewModel::sendImage,
         )
     }
 }

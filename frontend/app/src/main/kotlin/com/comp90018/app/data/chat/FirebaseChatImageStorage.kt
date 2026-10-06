@@ -25,7 +25,7 @@ object FirebaseChatImageStorage {
             .addOnCompleteListener { task ->
                 onComplete(
                     if (task.isSuccessful) task.result.toString() else null,
-                    task.exception?.localizedMessage ?: "Unable to upload photo",
+                    if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to upload photo",
                 )
             }
     }

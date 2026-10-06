@@ -1,5 +1,9 @@
 package com.comp90018.app.ui.components
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -12,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,9 +39,12 @@ fun ChatComposer(
     showTreasureAction: Boolean = false,
     ownedTreasureStickerIds: Set<String>? = null,
     onTreasureStickerSelected: ((String) -> Unit)? = null,
+    onPhotoSelected: ((Uri) -> Unit)? = null,
 ) {
     var emojis by remember { mutableStateOf(false) }
-    var attachments by remember { mutableStateOf(false) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onPhotoSelected?.invoke(uri)
+    }
     var treasures by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
         if (emojis) Surface(Modifier.fillMaxWidth().padding(bottom = 8.dp), RoundedCornerShape(16.dp), color = BrandSoft) { Column { commonEmojis.chunked(8).forEach { row -> Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.SpaceEvenly) { row.forEach { emoji -> IconButton({ onValueChange(value + emoji) }, Modifier.size(38.dp)) { Text(emoji) } } } } } }
@@ -69,7 +75,6 @@ fun ChatComposer(
                 }
             }
         }
-        if (attachments) Surface(Modifier.fillMaxWidth().padding(bottom = 8.dp), RoundedCornerShape(16.dp), color = BrandSoft) { Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.Center) { Attachment(Icons.Rounded.Photo, "Photo") } }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(value, onValueChange, Modifier.weight(1f), placeholder = { Text("Message") }, singleLine = true, shape = RoundedCornerShape(16.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Brand, unfocusedBorderColor = BrandSoft, focusedTextColor = Ink))
             onSend?.let {
@@ -92,7 +97,12 @@ fun ChatComposer(
                     Image(painterResource(R.drawable.nav_treasure_symbol), "Open treasure stickers", modifier = Modifier.size(28.dp))
                 }
             }
-            IconButton({ attachments = !attachments }) { Icon(Icons.Rounded.PhotoCamera, "Photo", tint = Ink) }
+            if (onPhotoSelected != null) {
+                IconButton(
+                    onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    enabled = !sending,
+                ) { Icon(Icons.Rounded.PhotoCamera, "Choose photo from gallery", tint = Ink) }
+            }
         }
     }
 }
@@ -159,5 +169,3 @@ private fun TreasureStickerPicker(
         }
     }
 }
-
-@Composable private fun Attachment(icon: ImageVector, label: String, click: () -> Unit = {}) = Column(horizontalAlignment = Alignment.CenterHorizontally) { IconButton(click) { Icon(icon, label, tint = Brand) }; Text(label) }

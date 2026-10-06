@@ -46,7 +46,7 @@ data class OutgoingFriendRequest(
     val message: String = "",
 )
 
-/** A contact row. Firebase contacts and bundled starter contacts use the same model. */
+/** A contact row loaded from the signed-in user's Firebase friendships. */
 data class FriendSummary(
     val uid: String,
     val username: String,

@@ -131,7 +131,7 @@ REQUIREMENTS.md           Requirements and acceptance criteria
 
 ### Firebase
 
-1. Register an Android app with application ID `com.comp90018.app`.
+1. Use Firebase project `mobile-melbourne` and register an Android app with application ID `com.comp90018.app`.
 2. Download `google-services.json` and place it at
    `frontend/app/google-services.json`. This local file must not be committed.
 3. Enable Email/Password in Firebase Authentication.
@@ -139,7 +139,7 @@ REQUIREMENTS.md           Requirements and acceptance criteria
 5. From the repository root, deploy the rules and indexes:
 
    ```bash
-   firebase deploy --only firestore,storage
+   firebase deploy --only firestore,storage --project mobile-melbourne
    ```
 
 ### Google Maps
