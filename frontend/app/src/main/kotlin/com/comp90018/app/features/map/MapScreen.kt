@@ -114,6 +114,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.comp90018.app.features.haptics.TreasureHapticController
+import com.comp90018.app.features.haptics.TreasureHapticSave
 import com.comp90018.app.features.haptics.TreasureHapticTarget
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -253,6 +254,11 @@ fun MapScreen(
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
     val foundRelicIds = discoveredTreasureIds + revealedIds
+    fun collectWithHaptics(treasureId: String, onComplete: (String?) -> Unit) {
+        TreasureHapticSave.collect(
+            treasureId, treasureId in foundRelicIds, hapticController, onCollectTreasure, onComplete,
+        )
+    }
     fun returnFromReveal(relic: MapRelic) {
         returningRelicId = relic.id
         huntRevealRelic = null
@@ -442,7 +448,7 @@ fun MapScreen(
                     onCompleteActiveHuntTask()
                     complete(null)
                 } else {
-                    onCollectTreasure(relic.id) { error ->
+                    collectWithHaptics(relic.id) { error ->
                         if (error == null) revealedIds = revealedIds + relic.id
                         complete(error)
                     }
@@ -503,7 +509,7 @@ fun MapScreen(
                         challengeRelic = null
                         debugSimulationEnabled = false
                     } else {
-                        saveRelicDiscovery(relic, onCollectTreasure, onComplete)
+                        saveRelicDiscovery(relic, ::collectWithHaptics, onComplete)
                     }
                 },
                 onDiscoverySaved = { capturedPhotoUri ->
@@ -533,7 +539,7 @@ fun MapScreen(
             collecting = savingTreasureId == relic.id,
             preciseLocationEnabled = preciseLocationEnabled,
             onCollected = { onComplete ->
-                onCollectTreasure(relic.id) { error ->
+                collectWithHaptics(relic.id) { error ->
                     if (error == null && teamHuntActive && relic.id == teamHuntTarget.id && teamHuntAllCompleted) {
                         onClaimCompletedHuntTreasure()
                     }
