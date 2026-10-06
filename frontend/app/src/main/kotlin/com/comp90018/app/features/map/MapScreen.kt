@@ -418,10 +418,9 @@ fun MapScreen(
                 treasureId = relic.id,
                 radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                // Debug builds must always expose deterministic sensor controls.  The map's
-                // launcher also sets this flag, but making the build type authoritative avoids
-                // falling back to real emulator GPS/sensor readings if that UI state is lost.
-                debugSimulationEnabled = BuildConfig.DEBUG,
+                // Normal entry uses device sensors, including on debug APKs. Only the explicit
+                // debug launcher opts into simulation so field tests exercise real hardware.
+                debugSimulationEnabled = BuildConfig.DEBUG && debugSimulationEnabled,
                 onChallengeCompleted = { onComplete ->
                     if (teamHuntTaskPendingForCurrentUser && teamHuntIsOwner) {
                         // A Room owner's challenge is that owner's shared hunt task, not a solo

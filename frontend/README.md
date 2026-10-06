@@ -52,6 +52,9 @@ To build a debug APK from PowerShell instead:
 
 ## Navigation
 
+For Task 1–4, sensor field tests, debug simulation, and Maps API key setup, see
+the [Chinese field-test manual](docs/FIELD_TEST_MANUAL_ZH.md).
+
 | Bottom tab | Current behaviour |
 | --- | --- |
 | `Treasure` | Hunt route and discovered/undiscovered treasure details |

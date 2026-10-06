@@ -155,9 +155,16 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
             LocationCalculator.distanceMeters(current, config.targetLocation) <= config.insideRadiusMeters
 
         val timestamp = location.timestampNanos
+        // Expiry/permission updates can invalidate a fix without changing its timestamp.
+        // Clear arrival immediately rather than retaining a previously trusted streak.
+        if (!withinRange) {
+            lastLocationTimestampNanos = timestamp
+            consecutiveInsideReadings = 0
+            return false
+        }
         if (timestamp == null || timestamp != lastLocationTimestampNanos) {
             lastLocationTimestampNanos = timestamp
-            consecutiveInsideReadings = if (withinRange) consecutiveInsideReadings + 1 else 0
+            consecutiveInsideReadings++
         }
         return consecutiveInsideReadings >= REQUIRED_CONSECUTIVE_INSIDE_READINGS
     }

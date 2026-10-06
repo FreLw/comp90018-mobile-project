@@ -352,6 +352,27 @@ class ChallengeRuleEvaluatorTest {
         assertFalse(result.condition(ChallengeCondition.LOCATION_INSIDE))
     }
 
+    @Test fun expiredFixWithUnchangedTimestampStopsHoldAndRequiresTwoFreshFixes() {
+        val evaluator = ChallengeRuleEvaluator(wilsonConfig())
+        evaluator.evaluate(snapshot(locationTimestampNanos = 1L), 0L)
+        val valid = snapshot(locationTimestampNanos = 2L)
+        evaluator.evaluate(valid, 1L)
+        assertTrue(evaluator.evaluate(valid, 1_000_000_000L).holdProgress > 0.0)
+
+        val expired = valid.copy(location = valid.location.copy(
+            currentLocation = null,
+            validity = SensorValidity.UNRELIABLE,
+        ))
+        val blocked = evaluator.evaluate(expired, 3_000_000_001L)
+        assertFalse(blocked.completed)
+        assertFalse(blocked.condition(ChallengeCondition.LOCATION_INSIDE))
+        assertEquals(0.0, blocked.holdProgress, 0.0)
+        assertFalse(evaluator.evaluate(snapshot(locationTimestampNanos = 3L), 4_000_000_000L)
+            .condition(ChallengeCondition.LOCATION_INSIDE))
+        assertTrue(evaluator.evaluate(snapshot(locationTimestampNanos = 4L), 5_000_000_000L)
+            .condition(ChallengeCondition.LOCATION_INSIDE))
+    }
+
     private fun unionConfig() = RelicChallengeConfigs.unionLawnPhoto(
         challengeId = "union-test",
         targetLocation = target,
