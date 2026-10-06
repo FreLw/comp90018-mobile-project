@@ -3,7 +3,6 @@ package com.comp90018.app.features.map
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.comp90018.app.contextengine.challenge.RelicChallengeType
 
 enum class PostChallengePage { PHOTO_HISTORY, TREASURE, STORY }
 
@@ -12,10 +11,9 @@ class PostChallengeRevealSession(
     val relic: MapRelic,
     val capturedPhotoUri: String?,
 ) {
-    var page by mutableStateOf(
-        if (relic.challengeConfig?.type == RelicChallengeType.UNION_LAWN_PHOTO && !capturedPhotoUri.isNullOrBlank())
-            PostChallengePage.PHOTO_HISTORY else PostChallengePage.TREASURE,
-    )
+    // Simplified photo tasks open the normal treasure reveal immediately after a confirmed save.
+    // The reusable historical-image panel remains available but is not part of task completion.
+    var page by mutableStateOf(PostChallengePage.TREASURE)
         private set
     var historicalShown by mutableStateOf(false)
         private set
