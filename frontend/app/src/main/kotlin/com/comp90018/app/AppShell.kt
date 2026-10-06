@@ -123,7 +123,9 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         key = "treasure_haptics_${user.uid}",
         factory = TreasureHapticSessionViewModel.factory(context),
     )
-    SideEffect { hapticSession.setEnabled(settings?.haptics ?: true) }
+    // Unknown/failed profile settings must not enable automatic treasure feedback.
+    val automaticHapticsPreference = settings?.haptics.takeIf { appState.profileError == null }
+    SideEffect { hapticSession.setPreference(automaticHapticsPreference) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, hapticSession) {
         hapticSession.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
@@ -200,7 +202,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     savingTreasureId = treasureCollectionState.savingTreasureId,
                     preciseLocationEnabled = preciseLocationEnabled,
-                    hapticsEnabled = settings?.haptics ?: true,
+                    hapticsEnabled = automaticHapticsPreference == true,
                     soundEffectsEnabled = settings?.soundEffects ?: true,
                     userLocation = userLocation,
                     hapticController = hapticSession.controller,
