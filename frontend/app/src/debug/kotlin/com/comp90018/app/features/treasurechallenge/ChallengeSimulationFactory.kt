@@ -193,9 +193,8 @@ fun debugScenarios(config: RelicChallengeConfig): List<DebugChallengeScenario> {
             DebugChallengeScenario("All valid (hold)", valid),
         )
         RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> listOf(
-            DebugChallengeScenario("Not horizontal", valid.copy(horizontal = false)),
-            DebugChallengeScenario("Horizontal but moving", valid.copy(stationary = false)),
-            DebugChallengeScenario("All valid (3s hold)", valid),
+            DebugChallengeScenario("Outside target", valid.copy(distanceMeters = config.insideRadiusMeters + 50.0)),
+            DebugChallengeScenario("Photo ready (GPS only)", valid.copy(horizontal = false, stationary = false, stable = false)),
         )
         RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> listOf(
             DebugChallengeScenario("Quiet (inside target)", valid),

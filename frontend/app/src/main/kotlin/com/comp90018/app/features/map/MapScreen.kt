@@ -155,7 +155,6 @@ import com.comp90018.app.BuildConfig
 import com.comp90018.app.RelicRed
 import com.comp90018.app.features.treasure.RemoteTreasureImage
 import com.comp90018.app.features.treasure.TreasurePrototypeImage
-import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules
 import com.comp90018.app.features.treasurechallenge.TreasureChallengeRoute
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -228,7 +227,6 @@ fun MapScreen(
     var challengeRelic by remember { mutableStateOf<MapRelic?>(null) }
     var huntRevealRelic by remember { mutableStateOf<MapRelic?>(null) }
     var huntStoryVisible by remember { mutableStateOf(false) }
-    var compassRelic by remember { mutableStateOf<MapRelic?>(null) }
     var memberQuizRelic by remember { mutableStateOf<MapRelic?>(null) }
     var perspective by remember { mutableStateOf(MapPerspective.GOD) }
     var simulation by remember { mutableStateOf<Double?>(null) }
@@ -313,11 +311,11 @@ fun MapScreen(
     val huntReadyRelic = nearestTreasure?.takeIf { (_, distance) -> distance <= HUNT_READY_RADIUS_METERS }?.first
     val hapticLifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     LaunchedEffect(userLocation, huntCandidates, foundRelicIds, activeHuntTreasureId,
-        compassRelic?.id, challengeRelic?.id, hapticsEnabled, hapticLifecycleState, hapticController) {
+        challengeRelic?.id, hapticsEnabled, hapticLifecycleState, hapticController) {
         if (!hapticsEnabled || !hapticLifecycleState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
         TreasureHapticTarget.nearest(
             huntCandidates, foundRelicIds,
-            activeHuntTreasureId ?: compassRelic?.id ?: challengeRelic?.id,
+            activeHuntTreasureId ?: challengeRelic?.id,
             userLocation, SystemClock.elapsedRealtimeNanos(),
         )?.let { (id, distance) -> hapticController?.nearby(id, distance) }
     }
@@ -334,7 +332,7 @@ fun MapScreen(
             )
         }
     }
-    val activeRelic = compassRelic ?: detailRelic ?: selectedRelic
+    val activeRelic = challengeRelic ?: detailRelic ?: selectedRelic
     val locationOutput = remember(activeRelic, userLocation, simulatedCoordinate) {
         LocationActionPolicy.targetOutput(
             location = userLocation,
@@ -372,7 +370,6 @@ fun MapScreen(
         selectedRelic = selectedRelic?.let { selected -> resolvedTreasures.firstOrNull { it.id == selected.id } }
         detailRelic = detailRelic?.let { detail -> resolvedTreasures.firstOrNull { it.id == detail.id } }
         challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
-        compassRelic = compassRelic?.let { compass -> resolvedTreasures.firstOrNull { it.id == compass.id } }
     }
     LaunchedEffect(visibleRelics) {
         selectedRelic = selectedRelic?.takeIf { selected -> visibleRelics.any { it.id == selected.id } }
@@ -467,7 +464,7 @@ fun MapScreen(
     }
 
     challengeRelic?.let { relic ->
-        relic.challengeConfig?.takeIf { it.hasRequiredTaskRules() }?.let { config ->
+        relic.validatedChallengeConfig()?.let { config ->
             TreasureChallengeRoute(
                 config = config,
                 treasureId = relic.id,
@@ -536,7 +533,7 @@ fun MapScreen(
                 }
             },
             onStartChallenge = {
-                if (teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner) memberQuizRelic = relic
+                if (huntEntry(teamHuntTaskPendingForCurrentUser, teamHuntIsOwner) == HuntEntry.MEMBER_QUIZ) memberQuizRelic = relic
                 else { debugSimulationEnabled = false; challengeRelic = relic }
             },
             forceReadyToDig = teamHuntAllCompleted && relic.id == teamHuntTarget.id,
@@ -623,7 +620,7 @@ fun MapScreen(
                     onAction = {
                         huntReadyRelic?.let { relic ->
                             when {
-                                teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner -> memberQuizRelic = relic
+                                huntEntry(teamHuntTaskPendingForCurrentUser, teamHuntIsOwner) == HuntEntry.MEMBER_QUIZ -> memberQuizRelic = relic
                                 else -> challengeRelic = relic
                             }
                         }
@@ -723,7 +720,7 @@ fun MapScreen(
                         },
                         onAction = {
                             when {
-                                teamHuntTaskPendingForCurrentUser && !teamHuntIsOwner -> memberQuizRelic = relic
+                                huntEntry(teamHuntTaskPendingForCurrentUser, teamHuntIsOwner) == HuntEntry.MEMBER_QUIZ -> memberQuizRelic = relic
                                 else -> challengeRelic = relic
                             }
                         },
