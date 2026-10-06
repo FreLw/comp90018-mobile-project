@@ -19,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
 
+private val treasureImageCache = android.util.LruCache<String, ImageBitmap>(12)
+
 /** Loads a remote treasure image and always falls back to the local unknown-relic artwork. */
 @Composable
 fun RemoteTreasureImage(
@@ -28,11 +30,16 @@ fun RemoteTreasureImage(
     silhouette: Boolean = false,
     @DrawableRes fallbackResId: Int = R.drawable.treasure_unknown,
 ) {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, imageUrl) {
-        value = withContext(Dispatchers.IO) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = treasureImageCache.get(imageUrl), imageUrl) {
+        value = treasureImageCache.get(imageUrl)
+        value = value ?: withContext(Dispatchers.IO) {
             if (!imageUrl.startsWith("https://")) return@withContext null
             runCatching {
-                URL(imageUrl).openStream().use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+                URL(imageUrl).openConnection().apply {
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                }.getInputStream().use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+                    ?.also { treasureImageCache.put(imageUrl, it) }
             }.getOrNull()
         }
     }
@@ -81,4 +88,27 @@ fun treasureArtworkResource(artworkKey: String): Int = when (artworkKey) {
     "treasure_glasshouse" -> R.drawable.treasure_glasshouse
     "treasure_press" -> R.drawable.treasure_press
     else -> R.drawable.treasure_unknown
+}
+
+/** Bundled archive photographs remain available offline and when Firestore has no image URL. */
+@DrawableRes
+fun historicalArtworkResource(relic: MapRelic): Int? = relic.historicalImageResId ?: when (relic.id) {
+    "union_lawn_lost_lake" -> R.drawable.historical_union_lake_1936
+    "wilson_hall_rosette" -> R.drawable.historical_wilson_hall_fire_1952
+    "old_quad_fossil" -> R.drawable.historical_old_quad_fossil_1875
+    "south_lawn_atlas" -> R.drawable.historical_south_lawn_atlas_1900
+    "system_garden_glasshouse" -> R.drawable.historical_system_garden
+    "grainger_tone_tool" -> R.drawable.historical_grainger_tone_tool_1952
+    else -> null
+}
+
+@Composable
+fun HistoricalTreasureImage(relic: MapRelic, modifier: Modifier = Modifier) {
+    val local = historicalArtworkResource(relic)
+    if (relic.historicalImageUrl.isNotBlank()) {
+        RemoteTreasureImage(relic.historicalImageUrl, "Historical reference for ${relic.name}", modifier,
+            fallbackResId = local ?: R.drawable.treasure_unknown)
+    } else if (local != null) {
+        Image(painterResource(local), "Historical reference for ${relic.name}", modifier, contentScale = ContentScale.Fit)
+    }
 }

@@ -40,4 +40,16 @@ class MapDiscoveryLogicTest {
         assertFalse(evaluateHuntReadiness(5.0, 0.0, 12.01f).allReady)
         assertFalse(evaluateHuntReadiness(null, null, 0f).allReady)
     }
+    @Test
+    fun recoveredMarkersRemainVisibleWhenTheNextHuntTargetChanges() {
+        val here = com.comp90018.app.sensors.location.GeoCoordinate(-37.798, 144.96)
+        val distant = com.comp90018.app.sensors.location.GeoCoordinate(-37.81, 144.98)
+        val recovered = MapRelic("recovered", "Recovered relic", "Campus", coordinate = distant)
+        val hidden = MapRelic("hidden", "Hidden relic", "Campus", coordinate = distant)
+        val nearby = MapRelic("nearby", "Nearby relic", "Campus", coordinate = here)
+        assertEquals(listOf(recovered, nearby), visibleMapRelics(
+            listOf(recovered, hidden, nearby), here, 50.0, setOf(recovered.id)))
+        assertEquals(listOf(hidden), visibleMapRelics(
+            listOf(hidden), here, 50.0, returningRelicId = hidden.id))
+    }
 }
