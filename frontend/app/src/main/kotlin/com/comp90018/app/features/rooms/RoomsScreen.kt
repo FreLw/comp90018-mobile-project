@@ -130,6 +130,9 @@ private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJo
 
 private const val DEMO_ROOM_ID = "CAMPUS-2026"
 
+private fun MapRelic.roomDestinationName(): String =
+    locationName.substringBefore('/').trim().ifBlank { name }
+
 @Composable
 private fun TeamRoomChatScreen(
     roomId: String,
@@ -153,7 +156,12 @@ private fun TeamRoomChatScreen(
         viewModel.setScreenVisible(true)
         onDispose { viewModel.setScreenVisible(false) }
     }
-    val room = state.room
+    // Resolve existing selections from the catalogue too: older rooms stored the relic title.
+    val room = state.room?.let { storedRoom ->
+        treasures.firstOrNull { it.id == storedRoom.taskId }?.let { relic ->
+            storedRoom.copy(taskTitle = relic.roomDestinationName())
+        } ?: storedRoom
+    }
     val messages = state.messages
     val members = state.members
     val error = state.error
@@ -276,7 +284,7 @@ private fun TeamRoomChatScreen(
         loading = treasuresLoading,
         error = treasuresError,
         onSelected = { relic ->
-            viewModel.selectDestination(relic.id, relic.name)
+            viewModel.selectDestination(relic.id, relic.roomDestinationName())
             choosingDestination = false
         },
         onDismiss = { choosingDestination = false },
@@ -456,7 +464,7 @@ private fun DestinationPickerDialog(
                         OutlinedButton(onClick = { onSelected(relic) }, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.fillMaxWidth()) {
                                 Text(relic.name, color = Ink, fontWeight = FontWeight.Medium)
-                                Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodySmall)
+                                Text(relic.roomDestinationName(), color = Muted, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

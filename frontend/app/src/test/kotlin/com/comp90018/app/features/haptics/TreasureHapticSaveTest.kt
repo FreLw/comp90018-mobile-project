@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TreasureHapticSaveTest {
+    @Test fun teamUiWaitsForDatabaseClaimAndReceivesClaimFailure() {
+        val results = mutableListOf<String?>()
+        var claimCallback: ((String?) -> Unit)? = null
+        TreasureHapticSave.collectTeam("a", null, { _, complete -> complete(null) },
+            { _, complete -> claimCallback = complete }, results::add)
+        assertTrue(results.isEmpty())
+        requireNotNull(claimCallback)("claim failed")
+        requireNotNull(claimCallback)(null)
+        assertEquals(listOf("claim failed"), results)
+    }
     @Test fun waitsForPersistenceAndPreservesFailureRetryCallbacks() {
         val events = mutableListOf<TreasureHapticEvent>()
         val results = mutableListOf<String?>()

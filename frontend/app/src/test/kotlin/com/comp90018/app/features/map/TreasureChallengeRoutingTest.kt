@@ -38,9 +38,35 @@ class TreasureChallengeRoutingTest {
     }
 
     @Test fun multiplayerOwnerUsesChallengeAndPendingMemberRetainsQuiz() {
-        assertEquals(HuntEntry.CHALLENGE, huntEntry(false, false))
-        assertEquals(HuntEntry.CHALLENGE, huntEntry(true, true))
+        assertEquals(HuntEntry.COMPASS, huntEntry(false, false))
+        assertEquals(HuntEntry.COMPASS, huntEntry(true, true))
         assertEquals(HuntEntry.MEMBER_QUIZ, huntEntry(true, false))
+    }
+
+    @Test fun roomOwnerKeepsAllSixChallengeRoutesUntilTheirTaskIsComplete() {
+        configs.forEach { (id, config) ->
+            assertEquals(HuntEntry.COMPASS, huntEntry(true, true, true, false))
+            assertEquals(config, relic(id, config).validatedChallengeConfig())
+        }
+        assertEquals(HuntEntry.MEMBER_QUIZ, huntEntry(true, true, false, false))
+        assertEquals(HuntEntry.COMPASS, huntEntry(false, false, false, false))
+    }
+
+    @Test fun completedOwnerWaitsThenClaimsAndNeverReopensTheTaskAfterClaiming() {
+        val members = listOf("owner", "member")
+        fun entry(completed: List<String>, claimed: List<String>, user: String) = huntEntry(
+            true,
+            TeamHuntTaskEligibility.isPendingFor(true, members, completed, user),
+            user == "owner",
+            TeamHuntTaskEligibility.canClaim(true, members, completed, claimed, user),
+        )
+        assertEquals(HuntEntry.WAITING, entry(listOf("owner"), emptyList(), "owner"))
+        assertEquals(HuntEntry.MEMBER_QUIZ, entry(listOf("owner"), emptyList(), "member"))
+        assertEquals(HuntEntry.CLAIM, entry(members, emptyList(), "owner"))
+        assertEquals(HuntEntry.WAITING, entry(members, listOf("owner"), "owner"))
+        assertEquals(HuntEntry.CLAIM, entry(members, listOf("owner"), "member"))
+        assertEquals(HuntEntry.WAITING, entry(listOf("member"), emptyList(), "member"))
+        assertEquals(HuntEntry.COMPASS, entry(listOf("member"), emptyList(), "owner"))
     }
 
     private fun relic(id: String, config: RelicChallengeConfig?) =

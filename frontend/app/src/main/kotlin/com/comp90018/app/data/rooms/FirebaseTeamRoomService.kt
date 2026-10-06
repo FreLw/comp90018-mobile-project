@@ -9,6 +9,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.MetadataChanges
+import java.util.UUID
 
 /** Low-level Firestore operations for shared treasure-hunt rooms. */
 object FirebaseTeamRoomService {
@@ -116,9 +117,11 @@ object FirebaseTeamRoomService {
         roomId: String,
         onChange: (TeamRoom?, String?) -> Unit,
     ): ListenerRegistration = firestore.collection("teamRooms").document(roomId)
-        .addSnapshotListener { snapshot, exception ->
+        .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, exception ->
             if (exception != null) {
                 onChange(null, exception.localizedMessage ?: "Unable to load room")
+            } else if (snapshot?.metadata?.hasPendingWrites() == true) {
+                return@addSnapshotListener
             } else if (snapshot == null || !snapshot.exists()) {
                 onChange(null, "Room not found")
             } else {
@@ -135,6 +138,8 @@ object FirebaseTeamRoomService {
                     taskCompletedMemberIds = (snapshot.get("taskCompletedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     foundFragmentIds = (snapshot.get("foundFragmentIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     taskClaimedMemberIds = (snapshot.get("taskClaimedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+                    huntSessionId = snapshot.getString("huntSessionId")
+                        ?: "legacy:${snapshot.id}:${snapshot.getTimestamp("createdAt")?.seconds ?: 0}:${snapshot.getString("taskId").orEmpty()}",
                 ), null)
             }
         }
@@ -153,6 +158,7 @@ object FirebaseTeamRoomService {
             val snapshot = transaction.get(room)
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             if (userId !in members) throw IllegalStateException("You are not a member of this room")
+            if (snapshot.getString("taskStatus") == "hunting") throw IllegalStateException("Terminate the current hunt before choosing another destination")
             transaction.update(room, mapOf(
                 "taskId" to taskId,
                 "taskTitle" to taskTitle,
@@ -169,6 +175,7 @@ object FirebaseTeamRoomService {
         onComplete: (String?) -> Unit,
     ) {
         val room = firestore.collection("teamRooms").document(roomId)
+        val huntSessionId = UUID.randomUUID().toString()
         firestore.runTransaction { transaction ->
             val snapshot = transaction.get(room)
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
@@ -179,6 +186,7 @@ object FirebaseTeamRoomService {
             if (snapshot.getString("taskId").isNullOrBlank()) throw IllegalStateException("Choose a destination before starting")
             transaction.update(room, mapOf(
                 "taskStatus" to "hunting",
+                "huntSessionId" to huntSessionId,
                 "taskCompletedMemberIds" to emptyList<String>(),
                 "foundFragmentIds" to emptyList<String>(),
                 "taskClaimedMemberIds" to emptyList<String>(),
@@ -281,14 +289,24 @@ object FirebaseTeamRoomService {
                 "south_lawn_south_west", "south_lawn_south_east",
             )
             if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
-            if (taskId.isBlank() || !members.all { it in completedMembers }) {
+            if (taskId.isBlank() || members.size !in 2..4 || !members.all { it in completedMembers }) {
                 throw IllegalStateException("All explorers must complete the task before claiming the treasure")
             }
             if (taskId == "south_lawn_atlas" && !fragments.containsAll(requiredFragments)) {
                 throw IllegalStateException("Find all fragments before claiming the Atlas")
             }
-            if (!collectionItem.exists() || collectionItem.getString("ownerUid") != userId) {
-                throw IllegalStateException("Add this treasure to your collection before claiming it")
+            if (collectionItem.exists() && collectionItem.getString("ownerUid") != userId) {
+                throw IllegalStateException("This collection item belongs to another explorer")
+            }
+            // The Room claim button can claim directly. Persist discovery and shared claim
+            // together, after checking the database's completion state.
+            if (!collectionItem.exists()) {
+                transaction.set(collectionItem.reference, mapOf(
+                    "ownerUid" to userId,
+                    "treasureId" to taskId,
+                    "status" to "discovered",
+                    "discoveredAt" to FieldValue.serverTimestamp(),
+                ))
             }
             val claimed = (snapshot.get("taskClaimedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             val allClaimed = (claimed + userId).toSet().containsAll(members)

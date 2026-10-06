@@ -71,22 +71,23 @@ fun TreasureChallengeRoute(
     radarRadiusMeters: Double,
     preciseLocationEnabled: Boolean = true,
     debugSimulationEnabled: Boolean = false,
+    challengeSessionId: String = "",
     onChallengeCompleted: ((String?) -> Unit) -> Unit,
     onDiscoverySaved: (String?) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val simulation = remember(config.challengeId, debugSimulationEnabled) {
+    val simulation = remember(config.challengeId, challengeSessionId, debugSimulationEnabled) {
         if (debugSimulationEnabled) ChallengeSimulationFactory.create(config) else null
     }
     val viewModel: TreasureChallengeViewModel = viewModel(
-        key = "treasure_challenge_${config.challengeId}_${preciseLocationEnabled}_$debugSimulationEnabled",
+        key = "treasure_challenge_${config.challengeId}_${preciseLocationEnabled}_${debugSimulationEnabled}_$challengeSessionId",
         factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled,
             simulation?.let { session -> { _: kotlinx.coroutines.CoroutineScope -> session.engine } }),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val discoverySave = remember(config.challengeId) { ChallengeDiscoverySave() }
+    val discoverySave = remember(config.challengeId, challengeSessionId) { ChallengeDiscoverySave() }
 
     LaunchedEffect(config.challengeId, state.completed) {
         if (state.completed) discoverySave.onChallengeCompleted(onChallengeCompleted)
