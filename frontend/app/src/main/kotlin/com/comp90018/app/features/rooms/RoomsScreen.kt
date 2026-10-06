@@ -65,6 +65,7 @@ fun RoomsScreen(
     treasuresLoading: Boolean,
     treasuresError: String?,
     onStartHunt: (String) -> Unit,
+    onClaimTreasure: (TeamRoomChatViewModel) -> Unit = { it.claimCompletedHuntTreasure() },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var mockActiveRoomId by remember { mutableStateOf<String?>(null) }
@@ -84,6 +85,7 @@ fun RoomsScreen(
             treasuresLoading = treasuresLoading,
             treasuresError = treasuresError,
             onStartHunt = onStartHunt,
+            onClaimTreasure = onClaimTreasure,
         )
         else -> RoomEntryScreen(
             state = state,
@@ -133,6 +135,7 @@ private fun TeamRoomChatScreen(
     treasuresLoading: Boolean,
     treasuresError: String?,
     onStartHunt: (String) -> Unit,
+    onClaimTreasure: (TeamRoomChatViewModel) -> Unit = { it.claimCompletedHuntTreasure() },
 ) {
     val repository = remember(firestore) { FirebaseTeamRoomRepository(firestore) }
     val viewModel: TeamRoomChatViewModel = viewModel(
@@ -217,7 +220,7 @@ private fun TeamRoomChatScreen(
                 updating = state.updatingTask,
                 onContinue = { onStartHunt(room.taskId) },
                 onTerminate = viewModel::terminateHunt,
-                onClaimAtlas = viewModel::claimCompletedHuntTreasure,
+                onClaimAtlas = { onClaimTreasure(viewModel) },
             )
         } else {
             RoomHuntControls(
@@ -298,7 +301,7 @@ private fun TeamRoomChatScreen(
 }
 
 @Composable
-private fun ActiveHuntHeader(
+internal fun ActiveHuntHeader(
     room: TeamRoom,
     currentUserId: String,
     updating: Boolean,

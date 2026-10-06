@@ -15,4 +15,6 @@ data class LocationOutput(
     val availability: LocationAvailabilityState = LocationAvailabilityState.UNKNOWN,
     val accuracyMeters: Double? = null,
     val timestampNanos: Long? = null,
+    /** Provider metadata for consumers that must exclude mock GPS events. */
+    val isMock: Boolean = false,
 )

@@ -2,6 +2,8 @@
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
+/tests/firestore-rules/firestore-debug.log
+/tests/firestore-rules/node_modules/
 
 # Local config
 local.properties

@@ -2,6 +2,7 @@ package com.comp90018.app.features.map
 
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.location.GeoCoordinate
+import com.comp90018.app.sensors.location.FakeLocationSensor
 import com.comp90018.app.sensors.location.LocationConfig
 import com.comp90018.app.sensors.location.LocationOutput
 import com.comp90018.app.sensors.location.LocationPermissionState
@@ -15,6 +16,61 @@ import org.junit.Test
 class LocationActionPolicyTest {
     private val target = GeoCoordinate(-37.798156, 144.960481)
     private val nearby = GeoCoordinate(-37.798170, 144.960490)
+
+    @Test
+    fun missingGpsStillShowsCampusMarkersWithoutUnlockingHunts() {
+        val location = LocationOutput()
+        val relic = MapRelic("campus", "Campus relic", "Campus", coordinate = DEFAULT_CAMPUS_CENTRE)
+        val display = LocationActionPolicy.mapDisplayCoordinate(location, runningInEmulator = false)
+
+        assertEquals(listOf(relic), visibleMapRelics(listOf(relic), display, REVEAL_RADIUS_METERS))
+        assertNull(LocationActionPolicy.actionableCoordinate(location))
+        assertNull(targetOutput(location).distanceToTargetMeters)
+        assertFalse(LocationActionPolicy.isWithinRadius(location, relic.coordinate, 10.0))
+    }
+
+    @Test
+    fun staleGpsKeepsNearbyMarkersVisibleWithoutUnlockingHunts() {
+        val location = liveLocation().copy(currentLocation = null, validity = SensorValidity.UNRELIABLE)
+        val relic = MapRelic("nearby", "Nearby relic", "Campus", coordinate = target)
+        val display = LocationActionPolicy.mapDisplayCoordinate(location, runningInEmulator = false)
+
+        assertEquals(nearby, display)
+        assertEquals(listOf(relic), visibleMapRelics(listOf(relic), display, REVEAL_RADIUS_METERS))
+        assertNull(targetOutput(location).distanceToTargetMeters)
+        assertFalse(LocationActionPolicy.isWithinRadius(location, target, 10.0))
+    }
+
+    @Test
+    fun emulatorCampusDisplayDoesNotReplaceLiveGpsForHuntActions() {
+        val location = liveLocation().copy(currentLocation = GeoCoordinate(37.422, -122.084))
+
+        assertEquals(DEFAULT_CAMPUS_CENTRE,
+            LocationActionPolicy.mapDisplayCoordinate(location, runningInEmulator = true))
+        assertEquals(location.currentLocation, LocationActionPolicy.actionableCoordinate(location))
+        assertFalse(LocationActionPolicy.isWithinRadius(location, target, 10.0))
+        assertEquals(location.currentLocation,
+            LocationActionPolicy.mapDisplayCoordinate(location, runningInEmulator = false))
+    }
+
+    @Test
+    fun sharedGpsWithoutTargetCalculatesTreasureDistanceAndUnlocksNearbyHunt() {
+        // AppShell's shared sensor has no target; Map calculates one per selected relic.
+        val sensor = FakeLocationSensor()
+        sensor.start()
+        sensor.updateCurrentLocation(nearby)
+        val location = sensor.output.value
+        val output = targetOutput(location)
+
+        assertNull(location.targetLocation)
+        assertEquals(nearby, LocationActionPolicy.actionableCoordinate(location))
+        assertTrue(requireNotNull(output.distanceToTargetMeters) < HUNT_READY_RADIUS_METERS)
+        assertEquals(SensorValidity.VALID, output.validity)
+        assertEquals(HuntProximityStage.HUNT_READY, HuntProximityResolver.resolve(
+            output.distanceToTargetMeters, output.validity,
+            config.nearbyRadiusMeters, config.insideRadiusMeters,
+        ))
+    }
 
     @Test
     fun validLiveLocationCanDriveTreasureActions() {
@@ -91,6 +147,31 @@ class LocationActionPolicyTest {
         assertNull(normalOutput.distanceToTargetMeters)
         assertEquals(SensorValidity.VALID, simulatedOutput.validity)
         assertEquals(ProximityState.INSIDE, simulatedOutput.proximity)
+    }
+
+    @Test
+    fun derivedOutputPreservesMockSourceWithoutChangingChallengeCalculations() {
+        val real = targetOutput(liveLocation())
+        val mock = targetOutput(liveLocation().copy(isMock = true))
+        assertFalse(real.isMock)
+        assertTrue(mock.isMock)
+        assertEquals(real.distanceToTargetMeters, mock.distanceToTargetMeters)
+        assertEquals(real.validity, mock.validity)
+        assertTrue(targetOutput(liveLocation().copy(currentLocation = null, isMock = true)).isMock)
+    }
+
+    @Test
+    fun simulatedCoordinateIsMarkedEvenWithOtherwiseFreshRealMetadata() {
+        val now = 20_000_000_000L
+        val raw = liveLocation().copy(timestampNanos = now, accuracyMeters = 5.0,
+            permission = LocationPermissionState.PRECISE,
+            availability = com.comp90018.app.sensors.location.LocationAvailabilityState.AVAILABLE)
+        val simulated = LocationActionPolicy.targetOutput(raw, target, config, nearby)
+        assertTrue(simulated.isMock)
+        assertEquals(SensorValidity.VALID, simulated.validity)
+        assertNull(com.comp90018.app.features.haptics.TreasureHapticProximity.usableCoordinate(simulated, now))
+        val rawMock = raw.copy(isMock = true)
+        assertNull(com.comp90018.app.features.haptics.TreasureHapticProximity.usableCoordinate(targetOutput(rawMock), now))
     }
 
     private fun liveLocation() = LocationOutput(

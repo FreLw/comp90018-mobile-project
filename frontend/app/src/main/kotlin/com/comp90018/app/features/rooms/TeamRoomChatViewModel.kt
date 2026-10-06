@@ -139,11 +139,18 @@ class TeamRoomChatViewModel(
         }
     }
 
-    fun claimCompletedHuntTreasure() {
-        if (mutableUiState.value.updatingTask) return
+    fun claimCompletedHuntTreasure() = claimCompletedHuntTreasureWithConfirmation {}
+
+    /** Exposes the existing transaction result to consumers such as success feedback. */
+    fun claimCompletedHuntTreasureWithConfirmation(onComplete: (String?) -> Unit) {
+        if (mutableUiState.value.updatingTask) {
+            onComplete("A hunt update is already in progress")
+            return
+        }
         mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
         repository.claimCompletedHuntTreasure(roomId, userId) { error ->
             mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+            onComplete(error)
         }
     }
 
