@@ -14,8 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.SideEffect
+import com.comp90018.app.features.haptics.TreasureHapticSessionBinding
 import com.comp90018.app.features.haptics.TreasureHapticSessionViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
@@ -126,25 +126,9 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     )
     // Unknown/failed profile settings must not enable automatic treasure feedback.
     val automaticHapticsPreference = settings?.haptics.takeIf { appState.profileError == null }
-    SideEffect {
-        hapticSession.setPreference(automaticHapticsPreference)
-        hapticSession.teamClaims.observeRoom(activeRoomHuntState.room)
-    }
+    TreasureHapticSessionBinding(hapticSession, automaticHapticsPreference)
+    SideEffect { hapticSession.teamClaims.observeRoom(activeRoomHuntState.room) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    val activity = LocalActivity.current
-    DisposableEffect(lifecycleOwner, hapticSession) {
-        hapticSession.beginSession()
-        hapticSession.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) hapticSession.setForeground(true)
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) hapticSession.setForeground(false)
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            hapticSession.detach(activity?.isChangingConfigurations == true)
-        }
-    }
 
     DisposableEffect(lifecycleOwner, userLocationViewModel) {
         val observer = LifecycleEventObserver { _, event ->
