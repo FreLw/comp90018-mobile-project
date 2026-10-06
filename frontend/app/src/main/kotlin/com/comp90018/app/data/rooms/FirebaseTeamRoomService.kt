@@ -364,7 +364,7 @@ object FirebaseTeamRoomService {
             if (url == null) return@upload onComplete(error)
             val message = mapOf(
                 "senderId" to senderId, "senderName" to senderName.take(30), "senderAvatarUrl" to senderAvatarUrl,
-                "text" to "", "imageUrl" to url, "createdAt" to FieldValue.serverTimestamp(),
+                "text" to "", "imageUrl" to url, "messageType" to ChatMessageTypes.Image, "createdAt" to FieldValue.serverTimestamp(),
             )
             sendTeamMessage(firestore, roomId, recipientId, message, onComplete)
         }

@@ -101,12 +101,6 @@ fun RoomsScreen(
 
 @Composable
 private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJoin: () -> Unit) {
-    var creating by remember { mutableStateOf(false) }
-    if (creating) {
-        RoomSettingsForm(title = "Create a room", working = state.working, error = state.actionError,
-            onCancel = { creating = false }, onSave = viewModel::createRoom)
-        return
-    }
     Column(Modifier.fillMaxSize().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.size(86.dp).background(BrandSoft, CircleShape), contentAlignment = Alignment.Center) {
             Image(painterResource(R.drawable.nav_rooms_symbol), null, modifier = Modifier.size(76.dp))
@@ -122,7 +116,7 @@ private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJo
             }
         }
         (state.actionError ?: state.membershipError)?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
-        Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
+        Button(onClick = { viewModel.createRoom("Treasure room", 4, "") }, modifier = Modifier.fillMaxWidth(), enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text(if (state.working && !state.joining) "Creating..." else "Create a room") }
     }
 }
 
@@ -266,6 +260,7 @@ private fun TeamRoomChatScreen(
             sending = state.sending,
             ownedTreasureStickerIds = treasureState.discoveredIds,
             onTreasureStickerSelected = { viewModel.sendTreasureSticker(it, profile?.username.orEmpty(), profile?.avatarUrl.orEmpty()) },
+            onPhotoSelected = { viewModel.sendImage(it, profile?.username.orEmpty(), profile?.avatarUrl.orEmpty()) },
         )
     }
     if (choosingDestination) DestinationPickerDialog(

@@ -1,6 +1,7 @@
 {
   "projects": {
-    "STAGING": "com90018-96a56"
+    "STAGING": "mobile-melbourne",
+    "default": "mobile-melbourne"
   },
   "targets": {},
   "etags": {}

@@ -14,17 +14,26 @@ import org.junit.Test
 
 class SocialViewModelTest {
     @Test
-    fun newExplorerReceivesTwentyMessageableStarterContacts() {
+    fun newExplorerHasNoInventedContacts() {
         val viewModel = FriendsViewModel(FakeSocialRepository(), "current-user", "current_user")
+        assertEquals(emptyList<FriendSummary>(), viewModel.uiState.value.friends)
+    }
 
-        assertEquals(20, viewModel.uiState.value.friends.size)
-        assertEquals(20, viewModel.uiState.value.friends.map { it.uid }.distinct().size)
+    @Test
+    fun realContactsRemainAvailableAndObsoleteDemoContactsAreHidden() {
+        val real = FriendSummary("real-user", "real_user", displayName = "Real User")
+        val demo = FriendSummary("starter_contact_01", "fake_user")
+        val viewModel = FriendsViewModel(FakeSocialRepository(friends = listOf(demo, real)), "current-user", "current_user")
+        assertEquals(listOf(real), viewModel.uiState.value.friends)
+        viewModel.openChat(real)
+        assertEquals(real.uid, viewModel.uiState.value.chatTarget?.friend?.uid)
+    }
 
-        val firstContact = viewModel.uiState.value.friends.first()
-        viewModel.openChat(firstContact)
-
-        assertEquals(firstContact.uid, viewModel.uiState.value.chatTarget?.friend?.uid)
-        assertEquals(firstContact.uid, viewModel.uiState.value.recentChatFriendIds.first())
+    @Test
+    fun obsoleteDemoChatsAreHidden() {
+        val viewModel = FriendsViewModel(FakeSocialRepository(directChats = listOf(
+            DirectChatSummary("starter_contact_01", 123L))), "current-user", "current_user")
+        assertEquals(emptyList<DirectChatSummary>(), viewModel.uiState.value.recentChats)
     }
 
     @Test
@@ -64,7 +73,7 @@ class SocialViewModelTest {
     @Test
     fun directChatKeepsLastMessageForTheChatsList() {
         val chat = DirectChatSummary(
-            friendUid = "starter_contact_01",
+            friendUid = "real-user",
             updatedAtMillis = 123L,
             lastMessageText = "Meet at the Old Quad?",
         )
@@ -80,6 +89,7 @@ class SocialViewModelTest {
 }
 
 private class FakeSocialRepository(
+    private val friends: List<FriendSummary> = emptyList(),
     private val outgoingRequests: List<OutgoingFriendRequest> = emptyList(),
     private val directChats: List<DirectChatSummary> = emptyList(),
 ) : SocialRepository {
@@ -145,7 +155,7 @@ private class FakeSocialRepository(
         currentUid: String,
         onChange: (List<FriendSummary>, String?) -> Unit,
     ): Subscription {
-        onChange(emptyList(), null)
+        onChange(friends, null)
         return Subscription { }
     }
 

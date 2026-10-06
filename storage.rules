@@ -2,6 +2,23 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function chatMember(chatType, roomId) {
+      return request.auth != null
+        && chatType in ['rooms', 'teamRooms']
+        && request.auth.uid in firestore.get(
+          /databases/(default)/documents/$(chatType)/$(roomId)).data.memberIds;
+    }
+
+    match /chatImages/{chatType}/{roomId}/{senderId}/{imageId} {
+      allow read: if chatMember(chatType, roomId);
+      allow create: if request.auth != null
+        && request.auth.uid == senderId
+        && chatMember(chatType, roomId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
     match /avatars/{userId}/profile.jpg {
       allow read: if request.auth != null;
       allow write: if request.auth != null
