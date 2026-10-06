@@ -8,11 +8,11 @@ Raw LocationOutput → independent proximity policy → nearest eligible target 
 
 Light: one 100ms pulse, amplitude 60 when supported, at distance <=20m. This threshold is independent of hunt radii. Requires a precise, available, valid, non-mock fix with a valid coordinate, finite nonnegative accuracy <= the existing LocationConfig maximum (50m), and monotonic age <= the existing 10-second stale timeout. Rejects future/missing timestamps, missing accuracy, last-known/display fallbacks and map simulation. This is a feedback filter, not a change to GPS or challenge validation.
 
-Only the active hunt/challenge target or nearest undiscovered candidate is evaluated. Nearby IDs remain remembered across map/detail navigation and Activity configuration changes. The session is Activity-retained and keyed by explorer; restarting the Activity/process creates a new session. Ordinary heading/motion updates and opening/closing details do not own feedback triggers.
+Only the active hunt/challenge target or nearest undiscovered candidate is evaluated. Nearby IDs remain remembered across map/detail navigation and Activity configuration changes. The session is Activity-retained and keyed by explorer. Rotation preserves it; sign-out permanently closes its controller and pending attempts. Re-entry creates a fresh session, and callbacks captured before logout remain inert. Ordinary heading/motion updates and opening/closing details do not own feedback triggers.
 
-Success: 150ms at amplitude 220, 100ms silence, then 200ms at amplitude 255. Without amplitude control, use device-default amplitude. Solo paths wait for the existing collection save callback. Team individual tasks never emit success: final feedback waits for both collection save and the existing team claim transaction confirmation. Already discovered solo collections do not emit new unlock feedback. Success is deduplicated per treasure within the session. Failed persistence/claim does not consume success eligibility, so a successful retry can notify. Disabled/background successes are consumed silently rather than replayed on resume.
+Success: 150ms at amplitude 220, 100ms silence, then 200ms at amplitude 255. Without amplitude control, use device-default amplitude. Solo paths wait for the existing collection save callback. Team individual tasks never emit success: final feedback waits for both collection save and the existing team claim transaction confirmation. Already discovered solo collections do not emit new unlock feedback. Solo success is deduplicated by discovery identity. Both Map and Rooms use one confirmed team-claim coordinator, deduplicating by room, observed hunt generation, user and treasure. A new observed team hunt can notify again for the same treasure, while proximity remains once per treasure per exploration session. Abandoning a Map challenge invalidates its feedback attempts without cancelling persistence or collection callbacks. Failed persistence/claim does not consume success eligibility, so a successful retry can notify. Disabled/background successes are consumed silently rather than replayed on resume.
 
-Haptics settings are applied from AppShell. Only RESUMED foreground playback is allowed. Pause/stop, disposal and disabled settings cancel active vibration. Missing hardware and driver exceptions are safe no-ops. No dependencies were added.
+Automatic treasure haptics remain disabled until settings load successfully and explicitly enable Haptics. Unrelated navigation feedback retains its existing preference behavior. Haptics settings are applied from AppShell. Only RESUMED foreground playback is allowed. Pause/stop, disposal and disabled settings cancel active vibration. Missing hardware and driver exceptions are safe no-ops. A monotonic 450ms success window suppresses proximity playback without consuming nearby eligibility; the next valid GPS update can notify after that window. No timer, queue or dependencies were added.
 
 ## Shared files changed and teammate review
 
@@ -22,7 +22,9 @@ Haptics settings are applied from AppShell. Only RESUMED foreground playback is 
 | frontend/app/src/main/kotlin/com/comp90018/app/AppShell.kt | Explorer-keyed session ViewModel, preferences/lifecycle, map driver and team claim callback wiring | Review with shell/navigation owner |
 | frontend/app/src/main/kotlin/com/comp90018/app/features/map/MapScreen.kt | Replace old proximity feedback; remove detail and sensor-readiness vibration; decorate existing saves; await team claim confirmation | Review with map and challenge owners |
 | frontend/app/src/main/kotlin/com/comp90018/app/features/rooms/TeamRoomChatViewModel.kt | Add confirmation method forwarding existing repository transaction result; preserve original no-argument API and busy guard | Review with team-hunt owner |
-| frontend/app/src/main/kotlin/com/comp90018/app/sensors/location/AndroidLocationSensor.kt | Forward Android mock-provider flag only | Review with location owner |
+| frontend/app/src/main/kotlin/com/comp90018/app/sensors/location/AndroidLocationSensor.kt | Preserve mock provenance, including stale outputs; no filtering change | Review with location owner |
+| frontend/app/src/main/kotlin/com/comp90018/app/features/map/LocationActionPolicy.kt | Preserve source mock metadata and flag simulated derived coordinates | Review with location/map owners |
+| frontend/app/src/main/kotlin/com/comp90018/app/features/rooms/RoomsScreen.kt | Route claim button through shared coordinator; retain default no-argument API; expose header internally for UI regression test | Review with Rooms owner |
 | frontend/app/src/main/kotlin/com/comp90018/app/sensors/location/LocationOutput.kt | Add defaulted isMock metadata | Inform location-output consumers |
 
 Context Engine, challenge criteria, compass/motion algorithms, hunt radii, GPS permission/accuracy algorithms, Firebase schemas/services and reveal animations are unchanged. Collection UI callbacks retain their original timing. Team claim errors still reside in existing Room state. RoomsScreen's original no-argument claim API is preserved. Unrelated bottom-navigation haptics are preserved.
@@ -42,6 +44,9 @@ All production files below are in `frontend/app/src/main/kotlin/com/comp90018/ap
 | AndroidTreasureHapticDriver.kt | Android Vibrator adapter |
 | TreasureHapticSessionViewModel.kt | Activity-retained driver/controller and cancellation |
 | TreasureHapticSave.kt | Decorate existing save/claim callbacks without changing persistence |
+| TreasureHapticAttempt.kt | Identity token for an asynchronous feedback attempt |
+| ConfirmedTeamClaimHaptics.kt | Shared confirmed Map/Rooms claims and observed hunt generations |
+| TreasureHapticSessionBinding.kt | Production Compose settings and Activity lifecycle binding |
 
 Tests in `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/`:
 
@@ -65,9 +70,17 @@ On 2026-10-06, from frontend:
 ./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Baseline unit tests passed before implementation. Final full suite: 186 tests, 0 failures, 0 errors, 0 skipped; 16 new tests. Final debug build: BUILD SUCCESSFUL. APK: frontend/app/build/outputs/apk/debug/app-debug.apk (generated, not committed).
+Final compatibility-fix verification on 2026-10-06:
 
-Initial sandbox cache access required approved execution; one initial invocation used the wrong working-directory path and was corrected. No failing test assertions or build errors remained. JVM tests simulate lifecycle gates and hardware boundaries; they do not prove actual Compose navigation, device vibration strength or physical GPS behavior. No physical-device or instrumentation test was executed.
+```
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:connectedDebugAndroidTest
+```
+
+204 JVM tests, 0 failures/errors/skipped, across 37 suites. Debug APK and AndroidTest APK compiled successfully. All 8 instrumentation tests passed on the headless Medium_Phone Android emulator: existing authentication tests, the actual production lifecycle/settings binding, and the real Rooms claim button with a delayed repository substitute. Final combined Gradle invocation: BUILD SUCCESSFUL.
+
+New JVM integration tests use the actual collection and team ViewModels and save/claim adapters with delayed repository substitutes. They cover failure/retry, Map/Rooms deduplication, abandoned and obsolete attempts, logout, rotation, repeat team hunts, and success/proximity ordering. LocationActionPolicy tests cover derived source metadata. These do not verify live Firebase transactions, physical GPS, full online map navigation, or vibration sensation. Physical-device testing remains pending. An early compilation attempt overlapped source edits; it was rerun successfully after editing finished. No failing assertions or build errors remain.
+
+Generated APKs and reports are not committed. JVM results are under `app/build/test-results/testDebugUnitTest`; instrumentation results are under `app/build/outputs/androidTest-results/connected/debug`.
 
 ## Physical-device checklist (not executed)
 
@@ -86,7 +99,7 @@ Initial sandbox cache access required approved execution; one initial invocation
 
 ## Integration concerns
 
-Review the additional team callback signature at MapScreen with teammates before merging; AppShell is updated and RoomsScreen's original ViewModel API remains compatible. The controller deduplicates success by treasure ID for the session, including repeated team hunts of that treasure. Team claim completion initiated exclusively from RoomsScreen keeps existing behavior; this feature's success integration is the map treasure-hunting flow. Haptic intensity varies by device; manually calibrate if necessary. Session termination is Activity/process lifetime rather than a persisted lifetime across application restarts.
+Review the shared AppShell/Map/Rooms claim wiring and lifecycle binding with navigation and multiplayer owners before merging. The existing no-argument claim API, Firebase repositories/schema and challenge rules are unchanged. Team completion identity uses observed room transitions because the schema has no durable hunt-run ID. If the subscription misses an entire reset and restart of the same treasure, feedback may be conservatively suppressed; a durable run ID would require a separate teammate/schema decision. Do not bypass production mock-location rejection to test emulator GPS. Physical-device intensity, real GPS and live Firebase/multiplayer end-to-end behavior remain unverified.
 
 ## Local commit evidence
 
@@ -167,3 +180,66 @@ The following chronological commits include modified files for contribution revi
 - `frontend/app/src/main/kotlin/com/comp90018/app/features/rooms/TeamRoomChatViewModel.kt`
 - `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/TreasureHapticSaveTest.kt`
 - `frontend/app/src/test/kotlin/com/comp90018/app/features/rooms/TeamHuntClaimConfirmationTest.kt`
+
+## Compatibility-fix commit evidence
+
+The original 16 commits remain intact. Follow-up commits completed before this final regression/documentation milestone:
+
+### 1c9ceeb fix: propagate mock location metadata through derived outputs
+
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/map/LocationActionPolicy.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/sensors/location/AndroidLocationSensor.kt`
+
+### f3eb438 test: verify derived location source metadata
+
+- `frontend/app/src/test/kotlin/com/comp90018/app/features/map/LocationActionPolicyTest.kt`
+
+### 96e1ddc fix: suppress automatic haptics until settings are loaded
+
+- `frontend/app/src/main/kotlin/com/comp90018/app/AppShell.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionViewModel.kt`
+- `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionViewModelTest.kt`
+
+### cb83ce9 fix: reset haptic session on sign-out
+
+- `frontend/app/src/main/kotlin/com/comp90018/app/AppShell.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticController.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionViewModel.kt`
+- `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionViewModelTest.kt`
+
+### 16d2504 feat: invalidate obsolete asynchronous haptic attempts
+
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticAttempt.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticController.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSave.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/map/MapScreen.kt`
+
+### 9341ac8 test: cover delayed save and session invalidation
+
+- `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/HapticCollectionIntegrationTest.kt`
+
+### 6de8a10 feat: unify confirmed team claim haptic events
+
+- `frontend/app/src/main/kotlin/com/comp90018/app/AppShell.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/ConfirmedTeamClaimHaptics.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticController.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSave.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionViewModel.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/map/MapScreen.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/rooms/RoomsScreen.kt`
+- `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/TreasureHapticSaveTest.kt`
+
+### 696a479 test: cover map and rooms claim entry points and activity lifecycle
+
+- `frontend/app/src/androidTest/kotlin/com/comp90018/app/features/haptics/HapticSessionBindingTest.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/AppShell.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionBinding.kt`
+- `frontend/app/src/test/kotlin/com/comp90018/app/features/haptics/TeamClaimHapticIntegrationTest.kt`
+
+### 26ad66d fix: prioritize success vibration over proximity feedback
+
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticController.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticPattern.kt`
+- `frontend/app/src/main/kotlin/com/comp90018/app/features/haptics/TreasureHapticSessionViewModel.kt`
+
+The final milestone adds repeated-hunt and priority regression tests, the Rooms claim-button instrumentation test, and this updated evidence. Its hash is available in Git history.

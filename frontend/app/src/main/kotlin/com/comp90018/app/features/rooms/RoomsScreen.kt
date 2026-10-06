@@ -306,7 +306,7 @@ private fun TeamRoomChatScreen(
 }
 
 @Composable
-private fun ActiveHuntHeader(
+internal fun ActiveHuntHeader(
     room: TeamRoom,
     currentUserId: String,
     updating: Boolean,

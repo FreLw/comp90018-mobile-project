@@ -76,6 +76,43 @@ class TeamClaimHapticIntegrationTest {
         assertTrue(events.isEmpty())
     }
 
+    @Test fun newHuntOfTheSameTreasureNotifiesAgainButProximityRemainsOneShot() {
+        coordinator.observeRoom(fixture.room)
+        controller.nearby("a", 20.0)
+        coordinator.claim(rooms, "user"); fixture.claims[0](null)
+        fixture.emit(fixture.room.copy(taskId = "", taskStatus = "unassigned"))
+        coordinator.observeRoom(fixture.room)
+        fixture.emit(fixture.room.copy(taskId = "a", taskStatus = "hunting", taskClaimedMemberIds = emptyList()))
+        coordinator.observeRoom(fixture.room)
+        coordinator.claim(rooms, "user"); fixture.claims[1](null)
+        controller.nearby("a", 20.0)
+        assertEquals(listOf(TreasureHapticEvent.Nearby("a"),
+            TreasureHapticEvent.Unlocked("a"), TreasureHapticEvent.Unlocked("a")), events)
+    }
+
+    @Test fun newRoomRunInvalidatesOldClaimCallbackWithoutCancellingItsTransaction() {
+        coordinator.observeRoom(fixture.room)
+        coordinator.claim(rooms, "user")
+        fixture.emit(fixture.room.copy(taskStatus = "assigned"))
+        coordinator.observeRoom(fixture.room)
+        fixture.emit(fixture.room.copy(taskStatus = "hunting"))
+        coordinator.observeRoom(fixture.room)
+        fixture.claims[0](null)
+        assertTrue(events.isEmpty())
+        assertFalse(rooms.uiState.value.updatingTask)
+        coordinator.claim(rooms, "user"); fixture.claims[1](null)
+        assertEquals(listOf(TreasureHapticEvent.Unlocked("a")), events)
+    }
+
+    @Test fun disabledConfirmedClaimIsNotReplayedWhenSettingsBecomeKnown() {
+        coordinator.observeRoom(fixture.room)
+        controller.enabled = false
+        coordinator.claim(rooms, "user"); fixture.claims[0](null)
+        controller.enabled = true
+        coordinator.claim(rooms, "user"); fixture.claims[1](null)
+        assertTrue(events.isEmpty())
+    }
+
     internal class RoomFixture {
         var room = TeamRoom("room", "user", listOf("user", "friend"), "a", "A", "hunting",
             taskCompletedMemberIds = listOf("user", "friend"))
