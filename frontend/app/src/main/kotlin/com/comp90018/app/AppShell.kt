@@ -126,7 +126,10 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     )
     // Unknown/failed profile settings must not enable automatic treasure feedback.
     val automaticHapticsPreference = settings?.haptics.takeIf { appState.profileError == null }
-    SideEffect { hapticSession.setPreference(automaticHapticsPreference) }
+    SideEffect {
+        hapticSession.setPreference(automaticHapticsPreference)
+        hapticSession.teamClaims.observeRoom(activeRoomHuntState.room)
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = LocalActivity.current
     DisposableEffect(lifecycleOwner, hapticSession) {
@@ -192,6 +195,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     treasures = treasureCatalogState.treasures,
                     treasuresLoading = treasureCatalogState.loading,
                     treasuresError = treasureCatalogState.error,
+                    onClaimTreasure = { model -> hapticSession.teamClaims.claim(model, user.uid) },
                     onStartHunt = { treasureId ->
                         activeHuntTreasureId = treasureId
                         destination = AppDestination.Map
@@ -221,9 +225,10 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     currentUserId = user.uid,
                     onCompleteActiveHuntTask = activeRoomHuntViewModel?.let { it::completeHuntTask } ?: {},
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
-                    onClaimCompletedHuntTreasure = { complete ->
-                        activeRoomHuntViewModel?.claimCompletedHuntTreasureWithConfirmation(complete)
-                            ?: complete("No active team hunt")
+                    onClaimCompletedHuntTreasure = { attempt, complete ->
+                        activeRoomHuntViewModel?.let { model ->
+                            hapticSession.teamClaims.claim(model, user.uid, attempt, complete)
+                        } ?: complete("No active team hunt")
                     },
                     requestedTreasureId = requestedMapTreasureId,
                     onTreasureRequestConsumed = { requestedMapTreasureId = null },

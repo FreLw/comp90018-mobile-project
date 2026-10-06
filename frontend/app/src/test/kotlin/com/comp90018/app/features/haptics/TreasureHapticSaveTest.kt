@@ -36,7 +36,13 @@ class TreasureHapticSaveTest {
         var claimCallback: ((String?) -> Unit)? = null
         var claimCount = 0
         val save: (String, (String?) -> Unit) -> Unit = { _, complete -> complete(null) }
-        val claim: ((String?) -> Unit) -> Unit = { complete -> claimCount++; claimCallback = complete }
+        val claim: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { attempt, complete ->
+            claimCount++
+            claimCallback = { error ->
+                if (attempt != null) controller.completeAttempt(attempt, error, completionId = "team:confirmed")
+                complete(error)
+            }
+        }
         TreasureHapticSave.collectTeam("a", controller, save, claim, {})
         assertTrue(events.isEmpty())
         requireNotNull(claimCallback)("claim failed")

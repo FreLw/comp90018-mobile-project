@@ -14,9 +14,14 @@ class TreasureHapticSessionViewModel(
 ) : ViewModel() {
     var controller by mutableStateOf(TreasureHapticController(driver))
         private set
+    var teamClaims = ConfirmedTeamClaimHaptics(controller)
+        private set
 
     fun beginSession() {
-        if (controller.ended) controller = TreasureHapticController(driver)
+        if (controller.ended) {
+            controller = TreasureHapticController(driver)
+            teamClaims = ConfirmedTeamClaimHaptics(controller)
+        }
     }
 
     fun endSession() {

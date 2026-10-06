@@ -113,6 +113,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import com.comp90018.app.features.haptics.TreasureHapticAttempt
 import com.comp90018.app.features.haptics.TreasureHapticController
 import com.comp90018.app.features.haptics.TreasureHapticSave
 import com.comp90018.app.features.haptics.TreasureHapticTarget
@@ -201,7 +202,7 @@ fun MapScreen(
     currentUserId: String = "",
     onCompleteActiveHuntTask: () -> Unit = {},
     onFindActiveHuntFragment: (String) -> Unit = {},
-    onClaimCompletedHuntTreasure: ((String?) -> Unit) -> Unit = { it("No active team hunt") },
+    onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     requestedTreasureId: String? = null,
     onTreasureRequestConsumed: () -> Unit = {},
 ) {

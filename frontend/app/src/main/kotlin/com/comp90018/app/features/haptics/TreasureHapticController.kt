@@ -37,6 +37,9 @@ class TreasureHapticController(private val driver: TreasureHapticDriver) {
     fun isCurrent(attempt: TreasureHapticAttempt): Boolean = !ended && attempt in attempts
 
     @Synchronized
+    fun abandonAttempt(attempt: TreasureHapticAttempt) { attempts.remove(attempt) }
+
+    @Synchronized
     fun abandonTreasure(owner: String, treasureId: String) {
         attempts.removeAll { it.owner == owner && it.treasureId == treasureId }
     }
