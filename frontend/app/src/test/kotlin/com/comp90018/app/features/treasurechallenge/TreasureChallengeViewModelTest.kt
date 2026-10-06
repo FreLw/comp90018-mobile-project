@@ -209,6 +209,80 @@ class TreasureChallengeViewModelTest {
         }
     }
 
+    @Test fun gardenRequiresSuccessfulCaptureAndCanRetryWithoutLeveling() {
+        withHarness(RelicChallengeConfigs.systemGardenGlasshouse("garden", target, 22.0)) { model, engine, _ ->
+            model.start()
+            model.onPhotoCaptured("content://media/external/images/1")
+            assertFalse(model.uiState.value.completed)
+            engine.emit(snapshot(horizontal = false, stationary = false, stable = false, rotationStill = false))
+            engine.emit(snapshot(horizontal = false, stationary = false, stable = false, rotationStill = false))
+            assertTrue(model.uiState.value.actionReady)
+            model.onPhotoCaptured("content://media/external/images/1")
+            assertFalse(model.uiState.value.completed)
+            model.onPhotoCaptureStarted()
+            assertFalse(model.uiState.value.completed)
+            model.onCameraError("Capture failed")
+            model.onPhotoCaptured("content://media/external/images/1")
+            assertFalse(model.uiState.value.completed)
+            model.onPhotoCaptureStarted()
+            model.onPhotoCaptured("")
+            assertEquals(ChallengeCameraState.ERROR, model.uiState.value.cameraState)
+            assertFalse(model.uiState.value.completed)
+            model.onPhotoCaptureStarted()
+            model.onPhotoCaptured("content://media/external/images/1")
+            assertTrue(model.uiState.value.completed)
+        }
+    }
+
+    @Test fun unionCannotStartPhotoWhileHeadingIsMisaligned() {
+        withHarness(unionConfig()) { model, engine, clock ->
+            model.start()
+            engine.emit(snapshot(headingDegrees = 90.0))
+            engine.emit(snapshot(headingDegrees = 90.0))
+            clock.now = 3_000_000_000L
+            engine.emit(snapshot(headingDegrees = 90.0))
+            model.onPhotoCaptureStarted()
+            model.onPhotoCaptured("content://media/external/images/1")
+            assertFalse(model.uiState.value.actionReady)
+            assertFalse(model.uiState.value.completed)
+        }
+    }
+
+    @Test fun microphoneUnavailableCannotCompleteAndRestartResetsHold() {
+        withHarness(toneToolConfig()) { model, engine, clock ->
+            model.start()
+            engine.emit(snapshot())
+            engine.emit(snapshot())
+            clock.now = 2_000_000_000L
+            engine.emit(snapshot())
+            assertFalse(model.uiState.value.completed)
+            model.restart()
+            assertTrue(engine.isStarted)
+            assertFalse(model.uiState.value.completed)
+            engine.emit(snapshot())
+            engine.emit(snapshot())
+            val sound = com.comp90018.app.sensors.audio.SoundLevelOutput(
+                decibels = -20.0, validity = SensorValidity.VALID, timestampNanos = clock.now)
+            engine.emit(snapshot().copy(sound = sound))
+            clock.now += 500_000_000L
+            engine.emit(snapshot().copy(sound = sound))
+            assertFalse(model.uiState.value.completed)
+            engine.emit(snapshot())
+            clock.now += 1_000_000_000L
+            engine.emit(snapshot().copy(sound = sound))
+            assertFalse(model.uiState.value.completed)
+            clock.now += 1_000_000_000L
+            engine.emit(snapshot().copy(sound = sound))
+            assertTrue(model.uiState.value.completed)
+        }
+    }
+
+    @Test fun capturedUriMustBeLocalNonEmptyContentAddress() {
+        listOf("", " ", "content://media", "not a uri", "https://example.com/photo", "android.resource://app/image")
+            .forEach { assertFalse(it, isCapturedPhotoUri(it)) }
+        assertTrue(isCapturedPhotoUri("content://media/external/images/media/7"))
+    }
+
     private inline fun withHarness(
         config: com.comp90018.app.contextengine.challenge.RelicChallengeConfig,
         block: (TreasureChallengeViewModel, FakeDeviceContextEngine, FakeClock) -> Unit,
