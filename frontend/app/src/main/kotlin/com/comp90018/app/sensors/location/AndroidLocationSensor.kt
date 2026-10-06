@@ -224,6 +224,7 @@ class AndroidLocationSensor(
                 availability = availability,
                 accuracyMeters = lastReading?.accuracyMeters,
                 timestampNanos = lastReading?.timestampNanos,
+                isMock = lastReadingIsMock,
             )
         } else {
             LocationCalculator.buildOutput(
