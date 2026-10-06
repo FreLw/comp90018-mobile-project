@@ -155,6 +155,7 @@ import com.comp90018.app.BuildConfig
 import com.comp90018.app.RelicRed
 import com.comp90018.app.features.treasure.RemoteTreasureImage
 import com.comp90018.app.features.treasure.TreasurePrototypeImage
+import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules
 import com.comp90018.app.features.treasurechallenge.TreasureChallengeRoute
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -466,7 +467,7 @@ fun MapScreen(
     }
 
     challengeRelic?.let { relic ->
-        relic.challengeConfig?.let { config ->
+        relic.challengeConfig?.takeIf { it.hasRequiredTaskRules() }?.let { config ->
             TreasureChallengeRoute(
                 config = config,
                 treasureId = relic.id,
