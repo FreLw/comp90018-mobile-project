@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +34,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
+import com.comp90018.app.GothicTreasureFontFamily
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -168,72 +171,77 @@ fun TreasureChallengeScreen(
     testPanelToggle: (@Composable () -> Unit)? = null,
 ) {
     Scaffold(
+        containerColor = Color(0xFF142D25),
+        contentColor = Color(0xFFFFE6B1),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text(state.title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to map")
-                    }
-                },
-            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to map")
+                }
+                Text(state.title, fontFamily = GothicTreasureFontFamily,
+                    style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            }
         },
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (testPanelToggle != null || (simulation != null && !state.completed)) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    testPanelToggle?.invoke()
-                    if (simulation != null && !state.completed) {
-                        simulation.Controls(
-                            state = state,
-                            onPhotoCaptured = onPhotoCaptured,
-                            onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
-                        )
-                    }
-                }
-            }
-            ChallengeExperience(state)
-            ChallengeStatusCard(state)
-            LinearProgressIndicator(
-                progress = { state.holdProgress.toFloat() },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
-                (state.actionReady || state.capturedPhotoUri != null)
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            QuestBackdrop(state, Modifier.fillMaxSize())
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                UnionPhotoPanel(
-                    state = state,
-                    onPhotoCaptureStarted = onPhotoCaptureStarted,
-                    onPhotoCaptured = onPhotoCaptured,
-                    onCameraError = onCameraError,
-                )
-            }
-            if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed) {
-                MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
-            }
-            if (debugCalibrationInfo != null) {
-                var showDiagnostics by remember { mutableStateOf(false) }
-                androidx.compose.material3.TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
-                    Text(if (showDiagnostics) "Hide diagnostics" else "Developer diagnostics")
-                }
-                if (showDiagnostics) debugCalibrationInfo.invoke()
-            }
-            if (state.completed) {
-                when (saveStatus) {
-                    DiscoverySaveStatus.WAITING, DiscoverySaveStatus.SAVING -> {
-                        CircularProgressIndicator()
-                        Text("Saving discovery…")
+                if (testPanelToggle != null || (simulation != null && !state.completed)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        testPanelToggle?.invoke()
+                        if (simulation != null && !state.completed) {
+                            simulation.Controls(
+                                state = state,
+                                onPhotoCaptured = onPhotoCaptured,
+                                onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
+                            )
+                        }
                     }
-                    DiscoverySaveStatus.SAVED -> Text("Discovery saved to your collection")
-                    DiscoverySaveStatus.FAILED -> {
-                        Text("Couldn't save discovery: ${saveError ?: "Please try again."}",
-                            color = MaterialTheme.colorScheme.error)
-                        Button(onClick = onRetrySave, modifier = Modifier.fillMaxWidth()) {
-                            Text("Retry Save")
+                }
+                ChallengeExperience(state)
+                ChallengeStatusCard(state)
+                LinearProgressIndicator(
+                    progress = { state.holdProgress.toFloat() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
+                    (state.actionReady || state.capturedPhotoUri != null)
+                ) {
+                    UnionPhotoPanel(
+                        state = state,
+                        onPhotoCaptureStarted = onPhotoCaptureStarted,
+                        onPhotoCaptured = onPhotoCaptured,
+                        onCameraError = onCameraError,
+                    )
+                }
+                if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed) {
+                    MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
+                }
+                if (debugCalibrationInfo != null) {
+                    var showDiagnostics by remember { mutableStateOf(false) }
+                    androidx.compose.material3.TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
+                        Text(if (showDiagnostics) "Hide diagnostics" else "Developer diagnostics")
+                    }
+                    if (showDiagnostics) debugCalibrationInfo.invoke()
+                }
+                if (state.completed) {
+                    when (saveStatus) {
+                        DiscoverySaveStatus.WAITING, DiscoverySaveStatus.SAVING -> {
+                            CircularProgressIndicator()
+                            Text("Saving discovery…")
+                        }
+                        DiscoverySaveStatus.SAVED -> Text("Discovery saved to your collection")
+                        DiscoverySaveStatus.FAILED -> {
+                            Text("Couldn't save discovery: ${saveError ?: "Please try again."}",
+                                color = MaterialTheme.colorScheme.error)
+                            Button(onClick = onRetrySave, modifier = Modifier.fillMaxWidth()) {
+                                Text("Retry Save")
+                            }
                         }
                     }
                 }
@@ -244,16 +252,17 @@ fun TreasureChallengeScreen(
 
 @Composable
 private fun ChallengeStatusCard(state: TreasureChallengeUiState) {
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xCC203C30), contentColor = Color(0xFFFFE6B1))) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(22.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (state.completed) {
                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
-            Text(state.instructionText, style = MaterialTheme.typography.headlineSmall)
+            Text(state.instructionText, style = MaterialTheme.typography.titleMedium, fontFamily = GothicTreasureFontFamily)
             state.conditionStates.forEach { condition ->
                 Text("${if (condition.satisfied) "✓" else "○"} ${condition.condition.displayLabel()}",
                     style = MaterialTheme.typography.bodyMedium)

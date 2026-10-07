@@ -50,7 +50,7 @@ internal fun TreasureDiscoveryReveal(relic: MapRelic, onViewTreasure: () -> Unit
     val density = LocalDensity.current
     LaunchedEffect(movingToStory, targetBounds) {
         if (movingToStory && targetBounds != null) {
-            transfer.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
+            transfer.animateTo(1f, tween(1600, easing = FastOutSlowInEasing))
             onViewTreasure()
         }
     }
@@ -64,7 +64,7 @@ internal fun TreasureDiscoveryReveal(relic: MapRelic, onViewTreasure: () -> Unit
     Box(Modifier.fillMaxSize().onGloballyPositioned { rootBounds = it.boundsInRoot() }) {
         if (movingToStory) {
             TreasureStoryPanel(relic, false, null, null,
-                headerArtworkVisible = false,
+                headerArtworkVisible = transfer.value >= .7f,
                 onHeaderArtworkBounds = { if (targetBounds == null) targetBounds = it })
         } else Column(
             Modifier.fillMaxSize().background(Color(0xFFF5ECD9)).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -109,15 +109,20 @@ internal fun TreasureDiscoveryReveal(relic: MapRelic, onViewTreasure: () -> Unit
             val source = sourceBounds
             val target = targetBounds ?: source
             if (source != null && target != null) {
-                val fraction = transfer.value
+                val fraction = (transfer.value / .7f).coerceIn(0f, 1f)
                 val left = source.left + (target.left - source.left) * fraction - rootBounds.left
                 val top = source.top + (target.top - source.top) * fraction - rootBounds.top
                 val width = source.width + (target.width - source.width) * fraction
                 val height = source.height + (target.height - source.height) * fraction
                 TreasurePrototypeImage(relic, true, Modifier
                     .offset { IntOffset(left.toInt(), top.toInt()) }
-                    .size(with(density) { width.toDp() }, with(density) { height.toDp() }))
+                    .size(with(density) { width.toDp() }, with(density) { height.toDp() })
+                    .graphicsLayer {
+                        rotationZ = sin(fraction * Math.PI).toFloat() * -9f
+                        alpha = if (transfer.value >= .7f) 0f else 1f
+                    })
             }
+            BookInsertionLeaf(transfer.value)
         }
     }
 
