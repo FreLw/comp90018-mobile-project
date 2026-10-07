@@ -7,6 +7,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +36,7 @@ import com.comp90018.app.features.map.UserLocationViewModel
 import com.comp90018.app.features.map.rememberTeamHuntLocations
 import com.comp90018.app.features.map.LocationActionPolicy
 import com.comp90018.app.features.navigation.RelicNavigationScreen
+import com.comp90018.app.features.navigation.shouldCancelRelicNavigation
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.RoomsViewModel
@@ -143,10 +145,19 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val navigationTreasure = navigationTreasureId?.let { id ->
+        treasureCatalogState.treasures.firstOrNull { it.id == id }
+    }
+    LaunchedEffect(navigationTreasureId, navigationTreasure?.id, treasureCatalogState.loading) {
+        if (shouldCancelRelicNavigation(navigationTreasureId, navigationTreasure != null, treasureCatalogState.loading)) {
+            navigationTreasureId = null
+        }
+    }
+
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            if (navigationTreasureId == null) {
+            if (navigationTreasure == null) {
                 AppBottomNavigation(
                     selected = destination,
                     unreadFriendMessages = if (notificationsEnabled) unreadFriendMessages else 0,
@@ -162,24 +173,23 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
             .fillMaxSize()
             .padding(padding)
             .then(
-                if (destination == AppDestination.Map || navigationTreasureId != null) Modifier
+                if (destination == AppDestination.Map || navigationTreasure != null) Modifier
                 else Modifier.padding(horizontal = 20.dp),
             )
         Box(contentModifier) {
-            val navigationTreasure = navigationTreasureId?.let { id ->
-                treasureCatalogState.treasures.firstOrNull { it.id == id }
-            }
             if (navigationTreasure != null) {
-                RelicNavigationScreen(
-                    relic = navigationTreasure,
-                    userLocation = userLocation,
-                    onStopNavigation = { navigationTreasureId = null },
-                    onStartHunting = { treasureId ->
-                        navigationTreasureId = null
-                        requestedHuntTreasureId = treasureId
-                        destination = AppDestination.Map
-                    },
-                )
+                key(navigationTreasure.id) {
+                    RelicNavigationScreen(
+                        relic = navigationTreasure,
+                        userLocation = userLocation,
+                        onStopNavigation = { navigationTreasureId = null },
+                        onStartHunting = { treasureId ->
+                            navigationTreasureId = null
+                            requestedHuntTreasureId = treasureId
+                            destination = AppDestination.Map
+                        },
+                    )
+                }
                 return@Box
             }
             when (destination) {

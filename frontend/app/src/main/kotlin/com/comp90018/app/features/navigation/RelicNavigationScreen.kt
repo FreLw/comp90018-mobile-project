@@ -1,5 +1,6 @@
 package com.comp90018.app.features.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -10,8 +11,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -73,6 +77,7 @@ fun RelicNavigationScreen(
     onStopNavigation: () -> Unit,
     onStartHunting: (String) -> Unit,
 ) {
+    BackHandler(onBack = onStopNavigation)
     val orientationOutput = rememberNavigationOrientationOutput()
     var recenterRequestKey by remember { mutableIntStateOf(0) }
     var distanceSimulation by remember(relic.id) { mutableStateOf(RelicNavigationSimulation()) }
@@ -107,7 +112,7 @@ fun RelicNavigationScreen(
     var arrivalConfirmation by remember(relic.id, isSimulating) {
         mutableStateOf(RelicArrivalConfirmationState())
     }
-    val updatedConfirmation = remember(arrivalSample, arrivalConfirmation) {
+    val updatedConfirmation = remember(relic.id, isSimulating, arrivalSample, arrivalConfirmation) {
         updateRelicArrivalConfirmation(arrivalConfirmation, arrivalSample)
     }
     // Present the transition immediately so stale arrival cannot keep the button visible.
@@ -163,7 +168,8 @@ fun RelicNavigationScreen(
     )
     val trailPhase by remember { derivedStateOf { (trailPhaseRaw * 24).roundToInt() / 24f } }
     val mapPresentationHeading = uiState.deviceHeadingDegrees?.toFloat() ?: 0f
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val maximumCardHeight = maxHeight * 0.65f
         GoogleMapView(
             relics = listOf(relic),
             selectedRelic = relic,
@@ -177,6 +183,7 @@ fun RelicNavigationScreen(
             allowRotateGestures = false,
             allowTiltGestures = false,
             recenterRequestKey = recenterRequestKey,
+            navigationOnlyUpdates = true,
             navigationTrailTarget = relic.coordinate.takeIf { navigationGuidingThreadAvailable(uiState) },
             navigationTrailStrength = energyProgress,
             navigationTrailPhase = trailPhase,
@@ -232,6 +239,7 @@ fun RelicNavigationScreen(
                 }
                 Text(
                     "Relic Resonance",
+                    modifier = Modifier.weight(1f),
                     color = Ink,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge,
@@ -240,26 +248,27 @@ fun RelicNavigationScreen(
         }
 
         Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp)
+                .heightIn(max = maximumCardHeight),
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
             shadowElevation = 10.dp,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(11.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            navigationDistanceLabel(uiState.distanceMeters),
+                            color = Ink,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                     }
-                    Text(
-                        navigationDistanceLabel(uiState.distanceMeters),
-                        color = Ink,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
                     Spacer(Modifier.width(12.dp))
                     OutlinedButton(onClick = onStopNavigation) {
                         Text("Stop")
@@ -291,11 +300,13 @@ fun RelicNavigationScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if (arrivalPresentation.showBeginHunt) {
-                        Spacer(Modifier.width(10.dp))
-                        Button(onClick = { onStartHunting(relic.id) }) {
-                            Text("Begin Hunt")
-                        }
+                }
+                if (arrivalPresentation.showBeginHunt) {
+                    Button(
+                        onClick = { onStartHunting(relic.id) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) {
+                        Text("Begin Hunt")
                     }
                 }
             }
