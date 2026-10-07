@@ -40,6 +40,19 @@ class RelicArrivalPresentationTest {
         }
     }
 
+    @Test
+    fun stageAndReadinessDescriptionsUseResonanceVocabulary() {
+        val states = RelicResonanceStage.entries.map {
+            RelicNavigationUiState(resonanceStage = it, locationReadiness = NavigationLocationReadiness.READY)
+        } +
+            NavigationLocationReadiness.entries.map { RelicNavigationUiState(locationReadiness = it) }
+        states.forEach { state ->
+            val description = relicArrivalPresentation(state, true).stateDescription.lowercase()
+            assertFalse(description.contains("energy"))
+            assertFalse(description.contains("battery"))
+        }
+    }
+
     private fun arrived(): Pair<RelicNavigationUiState, RelicArrivalConfirmationState> {
         val first = RelicArrivalSample(true, 8.0, 5.0, 100)
         val pending = updateRelicArrivalConfirmation(RelicArrivalConfirmationState(), first)

@@ -11,14 +11,6 @@ import kotlin.math.sin
 
 internal const val NAVIGATION_ENERGY_RANGE_METERS = RelicNavigationConfig.resonanceRangeMeters
 internal const val NAVIGATION_ARRIVAL_METERS = RelicNavigationConfig.huntArrivalEntryRadiusMeters
-internal const val NAVIGATION_ARRIVAL_RESET_METERS = RelicNavigationConfig.huntArrivalExitRadiusMeters
-
-/** Unused runtime compatibility helper retained for existing tests until later cleanup. */
-internal fun navigationArrivalReached(previouslyReached: Boolean, distanceMeters: Double?): Boolean = when {
-    distanceMeters == null || !distanceMeters.isFinite() || distanceMeters < 0.0 -> false
-    previouslyReached -> distanceMeters <= NAVIGATION_ARRIVAL_RESET_METERS
-    else -> distanceMeters <= NAVIGATION_ARRIVAL_METERS
-}
 
 internal fun navigationEnergyProgress(distanceMeters: Double?): Float = when {
     distanceMeters == null || !distanceMeters.isFinite() || distanceMeters < 0.0 -> 0f

@@ -41,7 +41,7 @@ class RelicNavigationUiStateTest {
     }
 
     @Test
-    fun firstInsideFixCanFillBatteryWithoutPermittingHunt() {
+    fun firstInsideFixCanReachFullResonanceWithoutPermittingHunt() {
         val state = uiState(fix(100))
 
         assertEquals(RelicResonanceStage.CONFIRMING, state.resonanceStage)
@@ -73,7 +73,7 @@ class RelicNavigationUiStateTest {
     }
 
     @Test
-    fun hysteresisRetainsArrivalAndFullBatteryUntilExitRadiusIsExceeded() {
+    fun hysteresisRetainsArrivalAndFullResonanceUntilExitRadiusIsExceeded() {
         var confirmation = arrived()
         listOf(12.0, 15.0).forEachIndexed { index, distance ->
             val sample = fix(300L + index, distance)

@@ -3,13 +3,11 @@ package com.comp90018.app.features.navigation
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NavigationEnergyTest {
     @Test
-    fun energyUsesFixedRangeAndReachesFullAtHuntDistance() {
+    fun resonanceUsesFixedRangeAndReachesFullAtEntryDistance() {
         assertEquals(0, navigationEnergyPercent(null))
         assertEquals(0, navigationEnergyPercent(300.0))
         assertEquals(0, navigationEnergyPercent(150.0))
@@ -23,7 +21,7 @@ class NavigationEnergyTest {
     }
 
     @Test
-    fun invalidDistancesNeverChargeTheEnergyBar() {
+    fun invalidDistancesNeverProvideResonanceProgress() {
         assertEquals(0, navigationEnergyPercent(Double.NaN))
         assertEquals(0, navigationEnergyPercent(Double.POSITIVE_INFINITY))
         assertEquals(0, navigationEnergyPercent(-1.0))
@@ -56,12 +54,4 @@ class NavigationEnergyTest {
         assertEquals(1_500, navigationTrailDurationMillis(0.0, 0.0))
     }
 
-    @Test
-    fun arrivalUsesHysteresisToAvoidButtonFlicker() {
-        assertFalse(navigationArrivalReached(false, 10.1))
-        assertTrue(navigationArrivalReached(false, 10.0))
-        assertTrue(navigationArrivalReached(true, 14.9))
-        assertFalse(navigationArrivalReached(true, 15.1))
-        assertFalse(navigationArrivalReached(true, null))
-    }
 }

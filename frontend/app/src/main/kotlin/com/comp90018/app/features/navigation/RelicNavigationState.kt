@@ -92,7 +92,7 @@ internal fun deriveRelicNavigationUiState(
     return RelicNavigationUiState(
         resonanceStage = stage,
         distanceMeters = distance,
-        // Preserve the current full battery while confirmed arrival is retained by hysteresis.
+        // Keep full resonance while confirmed arrival is retained by hysteresis.
         resonanceProgress = if (arrived) 1f else navigationEnergyProgress(distance),
         targetBearingDegrees = bearing,
         directionHint = direction,

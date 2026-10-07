@@ -145,12 +145,12 @@ fun RelicNavigationScreen(
         }
     }
     val arrivalPresentation = relicArrivalPresentation(uiState, arrivalAnimationComplete)
-    val energyProgress by animateFloatAsState(
+    val resonanceProgress by animateFloatAsState(
         targetValue = uiState.resonanceProgress,
         animationSpec = tween(650),
-        label = "relic_energy_progress",
+        label = "relic_resonance_progress",
     )
-    val trailAnimation = rememberInfiniteTransition(label = "relic_energy_trail")
+    val trailAnimation = rememberInfiniteTransition(label = "relic_guiding_thread")
     val trailPhaseRaw by trailAnimation.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -164,7 +164,7 @@ fun RelicNavigationScreen(
             ),
             repeatMode = RepeatMode.Restart,
         ),
-        label = "relic_energy_trail_phase",
+        label = "relic_guiding_thread_phase",
     )
     val trailPhase by remember { derivedStateOf { (trailPhaseRaw * 24).roundToInt() / 24f } }
     val mapPresentationHeading = uiState.deviceHeadingDegrees?.toFloat() ?: 0f
@@ -185,7 +185,7 @@ fun RelicNavigationScreen(
             recenterRequestKey = recenterRequestKey,
             navigationOnlyUpdates = true,
             navigationTrailTarget = relic.coordinate.takeIf { navigationGuidingThreadAvailable(uiState) },
-            navigationTrailStrength = energyProgress,
+            navigationTrailStrength = resonanceProgress,
             navigationTrailPhase = trailPhase,
             onRelicSelected = {},
             modifier = Modifier.fillMaxSize(),

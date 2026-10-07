@@ -71,6 +71,6 @@ class RelicNavigationStateTest {
         assertEquals(15.0, RelicNavigationConfig.huntArrivalExitRadiusMeters, 0.0)
         assertEquals(RelicNavigationConfig.resonanceRangeMeters, NAVIGATION_ENERGY_RANGE_METERS, 0.0)
         assertEquals(RelicNavigationConfig.huntArrivalEntryRadiusMeters, NAVIGATION_ARRIVAL_METERS, 0.0)
-        assertEquals(RelicNavigationConfig.huntArrivalExitRadiusMeters, NAVIGATION_ARRIVAL_RESET_METERS, 0.0)
+        assertEquals(2, RelicNavigationConfig.requiredArrivalFixes)
     }
 }

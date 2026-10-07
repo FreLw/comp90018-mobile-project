@@ -76,6 +76,19 @@ class NavigationDirectionGuidanceTest {
         }
     }
 
+    @Test
+    fun alignedFullResonanceWithUnreliableArrivalEvidenceCannotAllowHunt() {
+        val sample = RelicArrivalSample(true, 8.0, 20.0, 100)
+        val evidence = updateRelicArrivalConfirmation(RelicArrivalConfirmationState(), sample)
+        val state = deriveRelicNavigationUiState(sample, evidence, 0.0, 0.0)
+        assertEquals(NavigationDirectionHint.ALIGNED, state.directionHint)
+        assertEquals(1f, state.resonanceProgress, 0f)
+        assertEquals(RelicResonanceStage.STRONG, state.resonanceStage)
+        assertFalse(state.arrivalConfirmed)
+        assertFalse(state.canBeginHunt)
+        assertFalse(relicArrivalPresentation(state, true).showBeginHunt)
+    }
+
     private fun assertDirection(heading: Double, target: Double, error: Double, hint: NavigationDirectionHint) {
         val state = deriveRelicNavigationUiState(
             RelicArrivalSample(true, 50.0, 5.0, 100), RelicArrivalConfirmationState(), target, heading,
