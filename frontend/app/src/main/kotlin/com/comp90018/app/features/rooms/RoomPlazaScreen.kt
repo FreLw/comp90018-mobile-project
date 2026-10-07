@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +27,7 @@ import com.comp90018.app.BrandSoft
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.data.rooms.TeamRoom
+import com.comp90018.app.data.rooms.TEAM_ROOM_CAPACITY
 
 @Composable
 internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onBack: () -> Unit) {
@@ -45,7 +45,7 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
                 Text("Find fellow explorers", color = Muted)
             }
         }
-        Text("Bright: occupied · Gray: empty · Lock: unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Text("Bright: occupied · Gray: waiting for a teammate", color = Muted, style = MaterialTheme.typography.bodySmall)
         when {
             state.browsingLoading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Brand) }
             state.browsingError != null -> Column { Text(state.browsingError, color = MaterialTheme.colorScheme.error)
@@ -87,8 +87,9 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
 
 @Composable
 internal fun RoomDiamond(room: TeamRoom, modifier: Modifier = Modifier.size(128.dp)) {
-    val positions = listOf(Alignment.TopCenter, Alignment.CenterEnd, Alignment.BottomCenter, Alignment.CenterStart)
-    Box(modifier.semantics { contentDescription = "${room.name}, ${room.memberIds.size} occupied seats, ${room.maxMembers-room.memberIds.size} empty seats, ${4-room.maxMembers} locked seats" }) {
+    val positions = if (room.maxMembers == TEAM_ROOM_CAPACITY) listOf(Alignment.CenterStart, Alignment.CenterEnd)
+        else listOf(Alignment.TopCenter, Alignment.CenterEnd, Alignment.BottomCenter, Alignment.CenterStart).take(room.maxMembers)
+    Box(modifier.semantics { contentDescription = "${room.name}, ${room.memberIds.size} occupied seats, ${(room.maxMembers-room.memberIds.size).coerceAtLeast(0)} empty seats" }) {
         Canvas(Modifier.fillMaxSize().padding(12.dp)) {
             val path = Path().apply {
                 moveTo(size.width/2, 0f); lineTo(size.width, size.height/2)
@@ -99,9 +100,7 @@ internal fun RoomDiamond(room: TeamRoom, modifier: Modifier = Modifier.size(128.
             drawCircle(Brand.copy(alpha=.12f), 15.dp.toPx(), Offset(size.width/2, size.height/2))
         }
         positions.forEachIndexed { index, alignment ->
-            Box(Modifier.align(alignment).size(24.dp).background(if (index < room.memberIds.size) Brand else Muted.copy(alpha=.25f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                if (index >= room.maxMembers) Icon(Icons.Rounded.Lock, null, tint = Muted, modifier = Modifier.size(14.dp))
-            }
+            Box(Modifier.align(alignment).size(24.dp).background(if (index < room.memberIds.size) Brand else Muted.copy(alpha=.25f), androidx.compose.foundation.shape.CircleShape))
         }
         Text("${room.memberIds.size}", color = Brand, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
     }

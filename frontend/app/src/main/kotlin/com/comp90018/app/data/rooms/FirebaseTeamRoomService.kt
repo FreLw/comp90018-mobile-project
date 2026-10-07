@@ -106,7 +106,7 @@ object FirebaseTeamRoomService {
             if (!roomSnapshot.exists()) throw IllegalStateException("Room not found")
             if (publicEntry && roomSnapshot.getBoolean("idOnly") != false) throw IllegalStateException("This room now requires a room ID")
             val members = roomSnapshot.get("memberIds") as? List<*> ?: emptyList<String>()
-            if (members.size >= (roomSnapshot.getLong("maxMembers") ?: 4L)) throw IllegalStateException("This room is full")
+            if (members.size >= (roomSnapshot.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong())) throw IllegalStateException("This room is full")
             transaction.update(room, mapOf(
                 "memberIds" to FieldValue.arrayUnion(userId),
                 "updatedAt" to FieldValue.serverTimestamp(),
@@ -123,7 +123,7 @@ object FirebaseTeamRoomService {
                     memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     taskId = doc.getString("taskId").orEmpty(), taskTitle = doc.getString("taskTitle").orEmpty(),
                     taskStatus = doc.getString("taskStatus").orEmpty(), name = doc.getString("name").orEmpty(),
-                    maxMembers = (doc.getLong("maxMembers") ?: 4).toInt().coerceIn(2, 4),
+                    maxMembers = (doc.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong()).toInt().coerceIn(2, 4),
                     description = doc.getString("description").orEmpty(), idOnly = false)
             }.sortedBy { it.name.lowercase() }, null)
         }
@@ -164,7 +164,7 @@ object FirebaseTeamRoomService {
                 onChange(TeamRoom(
                     id = snapshot.id,
                     name = snapshot.getString("name").orEmpty().trim(),
-                    maxMembers = (snapshot.getLong("maxMembers") ?: 4L).toInt().coerceIn(2, 4),
+                    maxMembers = (snapshot.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong()).toInt().coerceIn(2, 4),
                     description = snapshot.getString("description").orEmpty(),
                     idOnly = snapshot.getBoolean("idOnly") ?: true,
                     creatorId = snapshot.getString("creatorId").orEmpty(),

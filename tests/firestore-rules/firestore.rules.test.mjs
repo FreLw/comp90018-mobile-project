@@ -268,6 +268,46 @@ describe("room plaza and owner removal", () => {
 
 
 describe("room join modes", () => {
+  test("room creation atomically saves membership for both join modes", async () => {
+    for (const idOnly of [true, false]) {
+      const uid = `creator-${idOnly}`;
+      const roomId = `created-${idOnly}`;
+      const db = authenticatedDb(uid);
+      const batch = writeBatch(db);
+      batch.set(doc(db, `teamRooms/${roomId}`), {
+        creatorId: uid, name: "Explorers", description: "Campus hunt", maxMembers: 4, idOnly,
+        memberIds: [uid], taskId: "", taskTitle: "", taskStatus: "unassigned",
+        taskCompletedMemberIds: [], foundFragmentIds: [], taskClaimedMemberIds: [],
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, `teamMemberships/${uid}`), {
+        roomId, createdAt: serverTimestamp(), unreadCount: 0,
+      });
+      await assertSucceeds(batch.commit());
+      const membership = await getDoc(doc(db, `teamMemberships/${uid}`));
+      if (membership.data().roomId !== roomId) throw new Error("Created room membership is missing");
+    }
+  });
+
+  test("room creation rejects invalid join modes and impersonated owners", async () => {
+    const db = authenticatedDb("alice");
+    for (const [roomId, creatorId, idOnly] of [
+      ["invalid-mode", "alice", "private"], ["impersonated-owner", "bob", true],
+    ]) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, `teamRooms/${roomId}`), {
+        creatorId, name: "Explorers", description: "", maxMembers: 4, idOnly,
+        memberIds: [creatorId], taskId: "", taskTitle: "", taskStatus: "unassigned",
+        taskCompletedMemberIds: [], foundFragmentIds: [], taskClaimedMemberIds: [],
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, "teamMemberships/alice"), {
+        roomId, createdAt: serverTimestamp(), unreadCount: 0,
+      });
+      await assertFails(batch.commit());
+    }
+  });
+
   test("public and ID-only rooms both allow direct joining, but full rooms reject it", async () => {
     for (const [roomId, idOnly, memberIds] of [
       ["public", false, ["alice"]], ["private", true, ["alice"]], ["full", false, ["alice", "bob"]],

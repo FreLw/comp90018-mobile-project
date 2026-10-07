@@ -274,6 +274,9 @@ fun MapScreen(
             .apply()
     }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
+    var debugTaskRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var debugTaskSession by remember { mutableIntStateOf(0) }
+    val debugTasks = remember { debugChallengeRelics() }
     val revealCoordinator = remember(activeHuntSessionId) { PostChallengeRevealCoordinator() }
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
@@ -529,6 +532,23 @@ fun MapScreen(
         return
     }
 
+    if (BuildConfig.DEBUG) debugTaskRelic?.let { relic ->
+        BackHandler { debugTaskRelic = null }
+        TreasureChallengeRoute(
+            config = requireNotNull(relic.validatedChallengeConfig()),
+            treasureId = relic.id,
+            radarRadiusMeters = relic.radarRadiusMeters,
+            preciseLocationEnabled = true,
+            debugSimulationEnabled = true,
+            challengeSessionId = "debug-task-$debugTaskSession",
+            // UI previews complete locally, without changing collection or Room progress.
+            onChallengeCompleted = { complete -> complete(null) },
+            onDiscoverySaved = {},
+            onBack = { debugTaskRelic = null },
+        )
+        return
+    }
+
     challengeRelic?.let { relic ->
         relic.validatedChallengeConfig()?.let { config ->
             TreasureChallengeRoute(
@@ -770,12 +790,12 @@ fun MapScreen(
             }
         }
 
-        if (BuildConfig.DEBUG && selectedRelic == null && (!teamHuntActive ||
-                (teamHuntIsOwner && teamHuntTaskPendingForCurrentUser))) {
+        if (BuildConfig.DEBUG) {
             DebugChallengeLauncher(
-                relics = resolvedTreasures,
+                relics = debugTasks,
                 onLaunch = { relic ->
-                    openHunt(relic, simulateChallenge = true)
+                    debugTaskSession += 1
+                    debugTaskRelic = relic
                 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
@@ -1071,28 +1091,20 @@ private fun MemberHuntQuiz(
     }
 }
 
-private val DEBUG_SENSOR_CHALLENGES = setOf(
-    RelicChallengeType.UNION_LAWN_PHOTO,
-    RelicChallengeType.WILSON_HALL_OBSERVATION,
-    RelicChallengeType.OLD_QUAD_EXCAVATION,
-    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE,
-    // Use System Garden for the local test flow; unlike Grainger Museum, it never requests audio.
-    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
-)
-
 @Composable
 private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) -> Unit, modifier: Modifier = Modifier) {
-    val challenges = relics.filter { it.challengeConfig?.type in DEBUG_SENSOR_CHALLENGES }
-    if (challenges.isEmpty()) return
+    if (relics.isEmpty()) return
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
-        Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
-            IconButton(onClick = { expanded = true }) {
-                Icon(Icons.Rounded.Star, "Open debug tasks", tint = Brand)
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
+            TextButton(onClick = { expanded = true }) {
+                Icon(Icons.Rounded.Star, "Open debug tasks", tint = Brand, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("task", color = Brand, fontWeight = FontWeight.SemiBold)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            challenges.forEach { relic ->
+            relics.forEach { relic ->
                 DropdownMenuItem(text = { Text(relic.locationName) }, onClick = { expanded = false; onLaunch(relic) })
             }
         }
