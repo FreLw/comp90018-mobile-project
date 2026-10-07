@@ -121,23 +121,24 @@ fun RelicNavigationScreen(
         arrivalConfirmation = updatedConfirmation
     }
     var arrivalAnimationComplete by remember(relic.id, isSimulating) { mutableStateOf(false) }
-    val arrivalSweep = remember(relic.id) { Animatable(-0.25f) }
+    val arrivalSweep = remember(relic.id) { Animatable(0f) }
     val arrivalScale = remember(relic.id) { Animatable(1f) }
     LaunchedEffect(relic.id, isSimulating, uiState.arrivalConfirmed) {
         arrivalAnimationComplete = false
-        arrivalSweep.snapTo(-0.25f)
+        arrivalSweep.snapTo(0f)
         arrivalScale.snapTo(1f)
         if (uiState.arrivalConfirmed) {
             coroutineScope {
-                launch { arrivalSweep.animateTo(1.25f, tween(950, easing = FastOutSlowInEasing)) }
+                launch { arrivalSweep.animateTo(1f, tween(650, easing = FastOutSlowInEasing)) }
                 launch {
-                    arrivalScale.animateTo(1.08f, tween(260, easing = FastOutSlowInEasing))
-                    arrivalScale.animateTo(1f, tween(460, easing = FastOutSlowInEasing))
+                    arrivalScale.animateTo(1.04f, tween(200, easing = FastOutSlowInEasing))
+                    arrivalScale.animateTo(1f, tween(320, easing = FastOutSlowInEasing))
                 }
             }
             arrivalAnimationComplete = true
         }
     }
+    val arrivalPresentation = relicArrivalPresentation(uiState, arrivalAnimationComplete)
     val energyProgress by animateFloatAsState(
         targetValue = uiState.resonanceProgress,
         animationSpec = tween(650),
@@ -229,7 +230,7 @@ fun RelicNavigationScreen(
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Stop navigation", tint = Ink)
                 }
                 Text(
-                    "Navigation",
+                    "Relic Resonance",
                     color = Ink,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge,
@@ -275,7 +276,7 @@ fun RelicNavigationScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("Relic Resonance", color = Ink, fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.bodyMedium)
-                        Text(resonanceStageLabel(uiState.resonanceStage), color = Muted,
+                        Text(arrivalPresentation.stateDescription, color = Muted,
                             style = MaterialTheme.typography.bodySmall)
                         Text(
                             when (uiState.directionHint) {
@@ -288,10 +289,10 @@ fun RelicNavigationScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if (uiState.canBeginHunt && arrivalAnimationComplete) {
+                    if (arrivalPresentation.showBeginHunt) {
                         Spacer(Modifier.width(10.dp))
                         Button(onClick = { onStartHunting(relic.id) }) {
-                            Text("Start Hunting")
+                            Text("Begin Hunt")
                         }
                     }
                 }

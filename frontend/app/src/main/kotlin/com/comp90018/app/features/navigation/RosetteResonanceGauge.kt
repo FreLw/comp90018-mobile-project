@@ -99,20 +99,29 @@ internal fun RosetteResonanceGauge(
                 style = Stroke(0.7.dp.toPx()))
         }
         drawCircle(RelicGold.copy(alpha = emphasis), radius * 0.09f, centre)
-        if (stage == RelicResonanceStage.ARRIVED && arrivalSweep in 0f..1f) {
-            drawArc(RelicGold, arrivalSweep * 360f - 90f, 25f, false,
+        if (stage == RelicResonanceStage.ARRIVED) {
+            val resolve = arrivalSweep.coerceIn(0f, 1f)
+            drawArc(RelicGold, -90f, resolve * 360f, false,
                 centre - Offset(radius * 0.87f, radius * 0.87f),
                 Size(radius * 1.74f, radius * 1.74f), style = Stroke(1.6.dp.toPx()))
+            // Four flat cartographic accents resolve with the same arrival sweep.
+            repeat(4) { index ->
+                val accent = point(index * Math.PI / 2.0 + Math.PI / 4.0, radius * 0.6f)
+                val reach = radius * 0.08f
+                val star = Path().apply {
+                    moveTo(accent.x, accent.y - reach)
+                    lineTo(accent.x + reach * 0.3f, accent.y - reach * 0.3f)
+                    lineTo(accent.x + reach, accent.y)
+                    lineTo(accent.x + reach * 0.3f, accent.y + reach * 0.3f)
+                    lineTo(accent.x, accent.y + reach)
+                    lineTo(accent.x - reach * 0.3f, accent.y + reach * 0.3f)
+                    lineTo(accent.x - reach, accent.y)
+                    lineTo(accent.x - reach * 0.3f, accent.y - reach * 0.3f)
+                    close()
+                }
+                drawPath(star, RelicGold.copy(alpha = resolve))
+            }
+            drawCircle(Brand, radius * 0.12f, centre, style = Stroke(0.8.dp.toPx()))
         }
     }
-}
-
-internal fun resonanceStageLabel(stage: RelicResonanceStage): String = when (stage) {
-    RelicResonanceStage.ACQUIRING -> "Acquiring position"
-    RelicResonanceStage.DORMANT -> "Outside resonance"
-    RelicResonanceStage.FAINT -> "Faint resonance"
-    RelicResonanceStage.DRAWN -> "Drawn closer"
-    RelicResonanceStage.STRONG -> "Strong resonance"
-    RelicResonanceStage.CONFIRMING -> "Confirming arrival"
-    RelicResonanceStage.ARRIVED -> "Search area reached"
 }
