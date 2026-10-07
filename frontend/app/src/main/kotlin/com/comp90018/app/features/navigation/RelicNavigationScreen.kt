@@ -74,6 +74,7 @@ import com.comp90018.app.features.map.HeadingSimulationControl
 import com.comp90018.app.sensors.location.LocationConfig
 import com.comp90018.app.sensors.location.LocationOutput
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /** Standalone target-focused map. It does not own or mutate the existing hunt state machine. */
 @Composable
@@ -89,10 +90,6 @@ fun RelicNavigationScreen(
     val simulatedDistance = distanceSimulation.distanceMeters.takeIf { BuildConfig.DEBUG }
     val isSimulating = simulatedDistance != null
     var simulatedHeading by remember(relic.id) { androidx.compose.runtime.mutableStateOf<Double?>(null) }
-    val deviceHeading = navigationDeviceHeading(
-        orientation = orientationOutput,
-        simulatedHeadingDegrees = simulatedHeading.takeIf { BuildConfig.DEBUG },
-    )
     val simulatedCoordinate = simulatedDistance?.let { navigationTestCoordinate(relic.coordinate, it) }
     val navigationLocation = LocationActionPolicy.targetOutput(
         location = userLocation,
@@ -102,6 +99,14 @@ fun RelicNavigationScreen(
             nearbyRadiusMeters = NAVIGATION_ENERGY_RANGE_METERS,
         ),
         simulatedCoordinate = simulatedCoordinate,
+    )
+    val declination = rememberNavigationDeclination(
+        simulatedCoordinate ?: LocationActionPolicy.actionableCoordinate(userLocation),
+    )
+    val deviceHeading = navigationTrueHeading(
+        magneticHeadingDegrees = navigationDeviceHeading(orientationOutput),
+        declinationDegrees = declination,
+        simulatedTrueHeadingDegrees = simulatedHeading.takeIf { BuildConfig.DEBUG },
     )
     val arrivalSample = if (isSimulating) distanceSimulation.arrivalSample() else RelicArrivalSample(
         hasActionableLocation = LocationActionPolicy.actionableCoordinate(userLocation) != null,
@@ -290,6 +295,16 @@ fun RelicNavigationScreen(
                         }
                     }
                 }
+                Text(
+                    when (uiState.directionHint) {
+                        NavigationDirectionHint.UNAVAILABLE -> "Finding direction…"
+                        NavigationDirectionHint.ALIGNED -> "Trail aligned"
+                        NavigationDirectionHint.TURN_LEFT -> "Turn left · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
+                        NavigationDirectionHint.TURN_RIGHT -> "Turn right · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
+                    },
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }

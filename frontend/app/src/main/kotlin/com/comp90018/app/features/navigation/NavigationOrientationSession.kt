@@ -11,7 +11,7 @@ internal class NavigationOrientationSession(private val sensor: OrientationSenso
 
     fun start() {
         if (running) return
-        // GPS/sensor north-reference alignment belongs to the next integration step.
+        // Navigation compares true-north headings separately; challenge target sensing stays unset.
         sensor.setTargetBearing(null)
         sensor.start()
         running = true

@@ -1,5 +1,8 @@
 package com.comp90018.app.features.navigation
 
+import com.comp90018.app.sensors.DirectionProcessor
+import kotlin.math.abs
+
 /** Navigation guides the user; hunt and Context Engine own challenge eligibility. */
 internal object RelicNavigationConfig {
     const val resonanceRangeMeters = 250.0
@@ -8,6 +11,7 @@ internal object RelicNavigationConfig {
     const val huntArrivalEntryRadiusMeters = 10.0
     const val huntArrivalExitRadiusMeters = 15.0
     const val requiredArrivalFixes = 2
+    const val directionAlignmentToleranceDegrees = 12.0
 }
 
 internal enum class RelicResonanceStage {
@@ -69,16 +73,27 @@ internal fun deriveRelicNavigationUiState(
         sample.hasActionableLocation && it.isFinite() && it >= 0.0
     }
     val arrived = stage == RelicResonanceStage.ARRIVED
+    val bearing = targetBearingDegrees?.takeIf { distance != null && it.isFinite() }
+    val heading = deviceHeadingDegrees?.takeIf { it.isFinite() }
+    // Both inputs use true north. Negative error means left; exactly opposite means -180.
+    val error = if (bearing != null && heading != null) DirectionProcessor.angularDifference(heading, bearing)
+        else null
+    val direction = when {
+        error == null -> NavigationDirectionHint.UNAVAILABLE
+        abs(error) <= RelicNavigationConfig.directionAlignmentToleranceDegrees -> NavigationDirectionHint.ALIGNED
+        error < 0.0 -> NavigationDirectionHint.TURN_LEFT
+        else -> NavigationDirectionHint.TURN_RIGHT
+    }
     return RelicNavigationUiState(
         resonanceStage = stage,
         distanceMeters = distance,
         // Preserve the current full battery while confirmed arrival is retained by hysteresis.
         resonanceProgress = if (arrived) 1f else navigationEnergyProgress(distance),
-        targetBearingDegrees = targetBearingDegrees?.takeIf { distance != null && it.isFinite() },
-        directionHint = NavigationDirectionHint.UNAVAILABLE,
-        headingErrorDegrees = null,
+        targetBearingDegrees = bearing,
+        directionHint = direction,
+        headingErrorDegrees = error,
         arrivalConfirmed = arrived,
         canBeginHunt = arrived,
-        deviceHeadingDegrees = deviceHeadingDegrees?.takeIf { it.isFinite() },
+        deviceHeadingDegrees = heading,
     )
 }

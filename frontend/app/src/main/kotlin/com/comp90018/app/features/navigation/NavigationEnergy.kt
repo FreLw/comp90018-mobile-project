@@ -1,6 +1,7 @@
 package com.comp90018.app.features.navigation
 
 import com.comp90018.app.sensors.location.GeoCoordinate
+import com.comp90018.app.sensors.DirectionProcessor
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
@@ -56,7 +57,7 @@ internal fun navigationHeadingError(targetBearingDegrees: Double?, deviceHeading
     if (targetBearingDegrees == null || !targetBearingDegrees.isFinite() ||
         deviceHeadingDegrees == null || !deviceHeadingDegrees.isFinite()
     ) return null
-    return abs(((targetBearingDegrees - deviceHeadingDegrees + 540.0) % 360.0) - 180.0)
+    return abs(DirectionProcessor.angularDifference(deviceHeadingDegrees, targetBearingDegrees))
 }
 
 internal fun navigationTrailDurationMillis(
