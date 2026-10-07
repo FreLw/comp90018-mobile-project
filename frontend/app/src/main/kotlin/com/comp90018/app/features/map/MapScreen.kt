@@ -536,7 +536,7 @@ fun MapScreen(
                 treasureId = relic.id,
                 radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                // Only the explicit debug launcher enables simulation; normal hunts use sensors.
+                // The debug launcher starts simulation immediately; each task also has a Test panel toggle.
                 debugSimulationEnabled = debugSimulationEnabled,
                 challengeSessionId = activeHuntSessionId.orEmpty(),
                 onChallengeCompleted = { onComplete ->

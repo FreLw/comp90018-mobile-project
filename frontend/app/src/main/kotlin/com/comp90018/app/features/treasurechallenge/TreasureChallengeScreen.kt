@@ -78,11 +78,14 @@ fun TreasureChallengeRoute(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val simulation = remember(config.challengeId, challengeSessionId, debugSimulationEnabled) {
-        if (debugSimulationEnabled) ChallengeSimulationFactory.create(config) else null
+    var testPanelEnabled by remember(config.challengeId, challengeSessionId) {
+        mutableStateOf(BuildConfig.DEBUG && debugSimulationEnabled)
+    }
+    val simulation = remember(config.challengeId, challengeSessionId, testPanelEnabled) {
+        if (testPanelEnabled) ChallengeSimulationFactory.create(config) else null
     }
     val viewModel: TreasureChallengeViewModel = viewModel(
-        key = "treasure_challenge_${config.challengeId}_${preciseLocationEnabled}_${debugSimulationEnabled}_$challengeSessionId",
+        key = "treasure_challenge_${config.challengeId}_${preciseLocationEnabled}_${testPanelEnabled}_$challengeSessionId",
         factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled,
             simulation?.let { session -> { _: kotlinx.coroutines.CoroutineScope -> session.engine } }),
     )
@@ -120,6 +123,13 @@ fun TreasureChallengeRoute(
         saveError = discoverySave.error,
         onRetrySave = { discoverySave.retry(onChallengeCompleted) },
         simulation = simulation,
+        testPanelToggle = if (BuildConfig.DEBUG && !state.completed) {
+            {
+                Button(onClick = { testPanelEnabled = !testPanelEnabled }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (testPanelEnabled) "Test ON · Use phone sensors" else "Test · Simulate sensors", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        } else null,
         debugCalibrationInfo = if (BuildConfig.DEBUG) {
             {
                 ChallengeSimulationFactory.CalibrationPanel(
@@ -155,6 +165,7 @@ fun TreasureChallengeScreen(
     onCameraError: (String) -> Unit,
     onMicPermissionGranted: () -> Unit = {},
     onCompleteWithDebugSnapshot: (com.comp90018.app.contextengine.DeviceContextSnapshot) -> Unit = {},
+    testPanelToggle: (@Composable () -> Unit)? = null,
 ) {
     Scaffold(
         topBar = {
@@ -173,6 +184,18 @@ fun TreasureChallengeScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (testPanelToggle != null || (simulation != null && !state.completed)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    testPanelToggle?.invoke()
+                    if (simulation != null && !state.completed) {
+                        simulation.Controls(
+                            state = state,
+                            onPhotoCaptured = onPhotoCaptured,
+                            onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
+                        )
+                    }
+                }
+            }
             ChallengeExperience(state)
             ChallengeStatusCard(state)
             LinearProgressIndicator(
@@ -191,13 +214,6 @@ fun TreasureChallengeScreen(
             }
             if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed) {
                 MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
-            }
-            if (simulation != null && !state.completed) {
-                simulation.Controls(
-                    state = state,
-                    onPhotoCaptured = onPhotoCaptured,
-                    onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
-                )
             }
             if (debugCalibrationInfo != null) {
                 var showDiagnostics by remember { mutableStateOf(false) }

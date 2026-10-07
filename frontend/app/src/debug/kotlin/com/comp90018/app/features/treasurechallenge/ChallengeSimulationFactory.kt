@@ -2,12 +2,16 @@ package com.comp90018.app.features.treasurechallenge
 
 import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -224,40 +228,48 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
                 delay(250L)
             }
         }
+        var showSensorControls by remember { mutableStateOf(false) }
         Card(Modifier.fillMaxWidth()) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text("DEBUG · Fake sensor context")
-                debugScenarios(config).forEach { scenario ->
-                    OutlinedButton(onClick = {
-                        controls = scenario.controls
-                        // This remains a real evaluator completion, then uses the normal save/reveal flow.
-                        if (!config.photoActionRequired && scenario.label.startsWith("All valid")) {
-                            onCompleteWithDebugSnapshot(
-                                scenario.controls.snapshot(config, SystemClock.elapsedRealtimeNanos()),
-                            )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    debugScenarios(config).forEach { scenario ->
+                        OutlinedButton(onClick = {
+                            controls = scenario.controls
+                            // This remains a real evaluator completion, then uses the normal save/reveal flow.
+                            if (!config.photoActionRequired && scenario.label.startsWith("All valid")) {
+                                onCompleteWithDebugSnapshot(
+                                    scenario.controls.snapshot(config, SystemClock.elapsedRealtimeNanos()),
+                                )
+                            }
+                        }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                            Text(scenario.label, style = MaterialTheme.typography.labelSmall)
                         }
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        Text(scenario.label)
                     }
                 }
-                Toggle("Location valid", controls.locationValid) { controls = controls.copy(locationValid = it) }
-                NumberControl("Distance", controls.distanceMeters, 0f..200f) { controls = controls.copy(distanceMeters = it) }
-                NumberControl("GPS accuracy", controls.accuracyMeters, 0f..100f) { controls = controls.copy(accuracyMeters = it) }
-                NumberControl("Heading", controls.headingDegrees, 0f..359f) { controls = controls.copy(headingDegrees = it) }
-                NumberControl("Pitch", controls.pitchDegrees, -90f..90f) { controls = controls.copy(pitchDegrees = it) }
-                NumberControl("Roll", controls.rollDegrees, -90f..90f) { controls = controls.copy(rollDegrees = it) }
-                Toggle("Horizontal", controls.horizontal) { controls = controls.copy(horizontal = it) }
-                Toggle("Stationary", controls.stationary) { controls = controls.copy(stationary = it) }
-                Toggle("Stable", controls.stable) { controls = controls.copy(stable = it) }
-                Toggle("Gyroscope still", controls.rotationStill) { controls = controls.copy(rotationStill = it) }
-                if (config.requiresSound) {
-                    Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it) }
+                TextButton(onClick = { showSensorControls = !showSensorControls }) {
+                    Text(if (showSensorControls) "Hide sensor controls" else "Adjust sensors",
+                        style = MaterialTheme.typography.labelMedium)
                 }
-                if (config.photoActionRequired) {
-                    Text("Use the CameraX panel to capture a real photo after sensor simulation is ready.")
+                if (showSensorControls) {
+                    Toggle("Location valid", controls.locationValid) { controls = controls.copy(locationValid = it) }
+                    NumberControl("Distance", controls.distanceMeters, 0f..200f) { controls = controls.copy(distanceMeters = it) }
+                    NumberControl("GPS accuracy", controls.accuracyMeters, 0f..100f) { controls = controls.copy(accuracyMeters = it) }
+                    NumberControl("Heading", controls.headingDegrees, 0f..359f) { controls = controls.copy(headingDegrees = it) }
+                    NumberControl("Pitch", controls.pitchDegrees, -90f..90f) { controls = controls.copy(pitchDegrees = it) }
+                    NumberControl("Roll", controls.rollDegrees, -90f..90f) { controls = controls.copy(rollDegrees = it) }
+                    Toggle("Horizontal", controls.horizontal) { controls = controls.copy(horizontal = it) }
+                    Toggle("Stationary", controls.stationary) { controls = controls.copy(stationary = it) }
+                    Toggle("Stable", controls.stable) { controls = controls.copy(stable = it) }
+                    Toggle("Gyroscope still", controls.rotationStill) { controls = controls.copy(rotationStill = it) }
+                    if (config.requiresSound) {
+                        Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it) }
+                    }
+                    if (config.photoActionRequired) {
+                        Text("Use the camera below when ready.", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
