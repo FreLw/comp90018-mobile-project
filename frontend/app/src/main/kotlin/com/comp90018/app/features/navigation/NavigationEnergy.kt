@@ -1,6 +1,7 @@
 package com.comp90018.app.features.navigation
 
 import com.comp90018.app.sensors.location.GeoCoordinate
+import com.comp90018.app.sensors.DirectionProcessor
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
@@ -8,15 +9,8 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-internal const val NAVIGATION_ENERGY_RANGE_METERS = 250.0
-internal const val NAVIGATION_ARRIVAL_METERS = 10.0
-internal const val NAVIGATION_ARRIVAL_RESET_METERS = 15.0
-
-internal fun navigationArrivalReached(previouslyReached: Boolean, distanceMeters: Double?): Boolean = when {
-    distanceMeters == null || !distanceMeters.isFinite() || distanceMeters < 0.0 -> false
-    previouslyReached -> distanceMeters <= NAVIGATION_ARRIVAL_RESET_METERS
-    else -> distanceMeters <= NAVIGATION_ARRIVAL_METERS
-}
+internal const val NAVIGATION_ENERGY_RANGE_METERS = RelicNavigationConfig.resonanceRangeMeters
+internal const val NAVIGATION_ARRIVAL_METERS = RelicNavigationConfig.huntArrivalEntryRadiusMeters
 
 internal fun navigationEnergyProgress(distanceMeters: Double?): Float = when {
     distanceMeters == null || !distanceMeters.isFinite() || distanceMeters < 0.0 -> 0f
@@ -51,12 +45,16 @@ internal fun navigationTestCoordinate(target: GeoCoordinate, distanceMeters: Dou
     return GeoCoordinate(Math.toDegrees(destinationLatitude), Math.toDegrees(destinationLongitude))
 }
 
-internal fun navigationHeadingError(targetBearingDegrees: Double?, deviceHeadingDegrees: Double): Double? =
-    targetBearingDegrees?.let { abs(((it - deviceHeadingDegrees + 540.0) % 360.0) - 180.0) }
+internal fun navigationHeadingError(targetBearingDegrees: Double?, deviceHeadingDegrees: Double?): Double? {
+    if (targetBearingDegrees == null || !targetBearingDegrees.isFinite() ||
+        deviceHeadingDegrees == null || !deviceHeadingDegrees.isFinite()
+    ) return null
+    return abs(DirectionProcessor.angularDifference(deviceHeadingDegrees, targetBearingDegrees))
+}
 
 internal fun navigationTrailDurationMillis(
     targetBearingDegrees: Double?,
-    deviceHeadingDegrees: Double,
+    deviceHeadingDegrees: Double?,
 ): Int {
     val error = navigationHeadingError(targetBearingDegrees, deviceHeadingDegrees) ?: return 4_200
     val alignment = 1.0 - (error / 180.0).coerceIn(0.0, 1.0)

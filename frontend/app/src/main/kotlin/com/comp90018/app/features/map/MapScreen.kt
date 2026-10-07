@@ -1,6 +1,7 @@
 package com.comp90018.app.features.map
 
 import com.comp90018.app.data.rooms.TeamHuntLocation
+import com.comp90018.app.features.navigation.NavigationMapUpdateGate
 
 import android.Manifest
 import android.app.Activity
@@ -166,10 +167,8 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.Circle
-import com.google.android.gms.maps.model.CircleOptions
-import com.google.android.gms.maps.model.Dash
-import com.google.android.gms.maps.model.Gap
+import com.google.android.gms.maps.model.Polygon
+import com.google.android.gms.maps.model.PolygonOptions
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.Marker
@@ -1248,6 +1247,7 @@ internal fun GoogleMapView(
     allowRotateGestures: Boolean = allowCameraGestures,
     allowTiltGestures: Boolean = true,
     recenterRequestKey: Int = 0,
+    navigationOnlyUpdates: Boolean = false,
     navigationTrailTarget: GeoCoordinate? = null,
     navigationTrailStrength: Float = 0f,
     navigationTrailPhase: Float = 0f,
@@ -1268,8 +1268,7 @@ internal fun GoogleMapView(
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
     val teammateMarkers = remember { mutableMapOf<String, Marker>() }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
-    var navigationTrail by remember { mutableStateOf<Polyline?>(null) }
-    var navigationTrailDots by remember { mutableStateOf<List<Circle>>(emptyList()) }
+    var navigationTrail by remember { mutableStateOf(GuidingThreadOverlay()) }
     var mapStyleConfigured by remember { mutableStateOf(false) }
     var cameraPerspective by remember { mutableStateOf(perspective) }
     var cameraMovedByUser by remember { mutableStateOf(false) }
@@ -1281,13 +1280,41 @@ internal fun GoogleMapView(
             onFlipFinished()
         }
     }
+    val navigationUpdates = remember(mapView) { NavigationMapUpdateGate() }
+    DisposableEffect(mapView) {
+        onDispose {
+            navigationUpdates.dispose()
+            navigationTrail.remove()
+        }
+    }
     MapLifecycle(mapView)
 
     AndroidView(
         factory = { mapView },
         modifier = modifier,
         update = { view ->
+            // Thread phase/strength/visibility do not require camera or marker updates.
+            val sceneInputs = listOf(
+                relics, selectedRelic, locationOutput, deviceHeading, markerPulse,
+                discoveredTreasureIds, activeHuntTreasureId, flippingRelicId, flip.value,
+                huntFragments, teammateLocations, huntMemberNames, huntOwnerId, foundFragmentIds,
+                focusSelectedRelic, perspective, allowCameraGestures, allowZoomGestures,
+                allowRotateGestures, allowTiltGestures, recenterRequestKey,
+            )
             view.getMapAsync { map ->
+                if (navigationUpdates.disposed) return@getMapAsync
+                // Only standalone Navigation opts in; ordinary Map/Hunt keeps its update path.
+                if (navigationOnlyUpdates && !navigationUpdates.shouldUpdateScene(sceneInputs)) {
+                    navigationTrail = updateNavigationTrail(
+                        map = map,
+                        currentLocation = locationOutput.currentLocation ?: locationOutput.lastKnownLocation,
+                        target = navigationTrailTarget,
+                        strength = navigationTrailStrength,
+                        phase = navigationTrailPhase,
+                        previous = navigationTrail,
+                    )
+                    return@getMapAsync
+                }
                 if (!mapStyleConfigured) {
                     map.setMapStyle(
                         MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style_retro),
@@ -1329,14 +1356,14 @@ internal fun GoogleMapView(
                 val fragmentSignature = huntFragments.joinToString("|") { fragment ->
                     "${fragment.id}:${fragment.coordinate.latitude}:${fragment.coordinate.longitude}:${fragment.id in foundFragmentIds}"
                 }
-                val trailTargetKey = navigationTrailTarget?.let { "${it.latitude}:${it.longitude}" }.orEmpty()
+                val trailTargetKey = if (navigationOnlyUpdates) "" else
+                    navigationTrailTarget?.let { "${it.latitude}:${it.longitude}" }.orEmpty()
                 val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature|$fragmentSignature|$trailTargetKey"
                 if (renderedMapKey != mapKey) {
                     map.clear()
                     teammateMarkers.clear()
                     currentLocationMarker = null
-                    navigationTrail = null
-                    navigationTrailDots = emptyList()
+                    navigationTrail = GuidingThreadOverlay()
                     renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, activeHuntTreasureId, markerPulse, discoveredTreasureIds)
                     renderHuntFragments(context, map, huntFragments, foundFragmentIds)
                     renderedMapKey = mapKey
@@ -1373,17 +1400,14 @@ internal fun GoogleMapView(
                     headingDegrees = deviceHeading,
                     stale = isStaleDisplay,
                 )
-                val trailResult = updateNavigationTrail(
+                navigationTrail = updateNavigationTrail(
                     map = map,
                     currentLocation = displayLocation,
                     target = navigationTrailTarget,
                     strength = navigationTrailStrength,
                     phase = navigationTrailPhase,
-                    polyline = navigationTrail,
-                    dots = navigationTrailDots,
+                    previous = navigationTrail,
                 )
-                navigationTrail = trailResult.first
-                navigationTrailDots = trailResult.second
                 val visibleTeammateIds = teammateLocations.map { it.uid }.toSet()
                 teammateMarkers.keys.filterNot { it in visibleTeammateIds }.forEach { uid ->
                     teammateMarkers.remove(uid)?.remove()
@@ -1455,70 +1479,70 @@ internal fun GoogleMapView(
     )
 }
 
+private data class GuidingThreadOverlay(
+    val base: Polyline? = null,
+    val active: Polyline? = null,
+    val glints: List<Polygon> = emptyList(),
+    val currentLocation: GeoCoordinate? = null,
+    val target: GeoCoordinate? = null,
+    val strength: Float = 0f,
+) {
+    fun remove() {
+        base?.remove()
+        active?.remove()
+        glints.forEach(Polygon::remove)
+    }
+}
+
+/** Optional Navigation overlay only; the ordinary Map/Hunt renderer has no thread target. */
 private fun updateNavigationTrail(
     map: GoogleMap,
     currentLocation: GeoCoordinate?,
     target: GeoCoordinate?,
     strength: Float,
     phase: Float,
-    polyline: Polyline?,
-    dots: List<Circle>,
-): Pair<Polyline?, List<Circle>> {
+    previous: GuidingThreadOverlay,
+): GuidingThreadOverlay {
     if (currentLocation == null || target == null) {
-        polyline?.remove()
-        dots.forEach(Circle::remove)
-        return null to emptyList()
+        previous.remove()
+        return GuidingThreadOverlay()
     }
 
     val start = currentLocation.toLatLng()
     val end = target.toLatLng()
-    val signalStrength = strength.coerceIn(0f, 1f)
-    val lineColor = android.graphics.Color.argb(
-        (95 + signalStrength * 90).toInt(),
-        181,
-        128,
-        45,
-    )
-    val line = polyline ?: map.addPolyline(
+    val resonance = if (strength.isFinite()) strength.coerceIn(0f, 1f) else 0f
+    val base = previous.base ?: map.addPolyline(
         PolylineOptions().add(start, end).geodesic(true).zIndex(1f),
     )
-    line.points = listOf(start, end)
-    line.width = 4f + signalStrength * 3f
-    line.color = lineColor
-    line.pattern = listOf(
-        Dash(14f + signalStrength * 18f),
-        Gap(24f - signalStrength * 15f),
+    val active = previous.active ?: map.addPolyline(
+        PolylineOptions().add(start, end).geodesic(true).zIndex(1.1f),
     )
+    if (previous.currentLocation != currentLocation || previous.target != target || previous.strength != resonance) {
+        base.points = listOf(start, end)
+        base.width = 3.5f
+        base.color = android.graphics.Color.argb(140, 122, 75, 42)
+        active.points = listOf(start, end)
+        active.width = 1.6f + resonance * 0.7f
+        active.color = android.graphics.Color.argb((60 + resonance * 150).toInt(), 183, 121, 31)
+    }
 
-    val trailDots = if (dots.size == NAVIGATION_TRAIL_DOT_COUNT) dots else {
-        dots.forEach(Circle::remove)
-        List(NAVIGATION_TRAIL_DOT_COUNT) {
-            map.addCircle(
-                CircleOptions().center(start).radius(2.0).strokeWidth(0f).zIndex(2f),
-            )
+    val glints = if (previous.glints.size == GUIDING_THREAD_GLINT_COUNT) previous.glints else {
+        previous.glints.forEach(Polygon::remove)
+        List(GUIDING_THREAD_GLINT_COUNT) { index ->
+            val centre = guidingThreadGlintCentre(target, currentLocation, phase, index)
+            map.addPolygon(PolygonOptions()
+                .addAll(guidingThreadGlintVertices(centre, 0.75).map { it.toLatLng() })
+                .strokeWidth(0.7f).strokeColor(android.graphics.Color.rgb(52, 35, 25))
+                .clickable(false).zIndex(2f))
         }
     }
-    trailDots.forEachIndexed { index, dot ->
-        val fraction = ((phase.coerceIn(0f, 1f) + index.toFloat() / NAVIGATION_TRAIL_DOT_COUNT) % 1f).toDouble()
-        // The relic emits energy toward the explorer, so particles travel target to user.
-        dot.center = interpolateTrailPoint(end, start, fraction)
-        dot.radius = 1.7 + signalStrength * 1.2
-        dot.fillColor = android.graphics.Color.argb(
-            (130 + signalStrength * 100).toInt(),
-            255,
-            206,
-            92,
-        )
+    glints.forEachIndexed { index, glint ->
+        val centre = guidingThreadGlintCentre(target, currentLocation, phase, index)
+        glint.points = guidingThreadGlintVertices(centre, 0.75 + resonance * 0.45).map { it.toLatLng() }
+        glint.fillColor = android.graphics.Color.argb((150 + resonance * 70).toInt(), 183, 121, 31)
     }
-    return line to trailDots
+    return GuidingThreadOverlay(base, active, glints, currentLocation, target, resonance)
 }
-
-private fun interpolateTrailPoint(start: LatLng, end: LatLng, fraction: Double): LatLng = LatLng(
-    start.latitude + (end.latitude - start.latitude) * fraction,
-    start.longitude + (end.longitude - start.longitude) * fraction,
-)
-
-private const val NAVIGATION_TRAIL_DOT_COUNT = 4
 
 @Composable
 private fun FindTreasurePrompt(

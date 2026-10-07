@@ -1,6 +1,6 @@
 package com.comp90018.app.features.navigation
 
-import androidx.compose.animation.animateColorAsState
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -10,19 +10,17 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,14 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.coroutineScope
@@ -71,10 +64,10 @@ import com.comp90018.app.features.map.LocationActionPolicy
 import com.comp90018.app.features.map.MapPerspective
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.HeadingSimulationControl
-import com.comp90018.app.features.map.rememberDeviceHeading
 import com.comp90018.app.sensors.location.LocationConfig
 import com.comp90018.app.sensors.location.LocationOutput
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /** Standalone target-focused map. It does not own or mutate the existing hunt state machine. */
 @Composable
@@ -84,11 +77,13 @@ fun RelicNavigationScreen(
     onStopNavigation: () -> Unit,
     onStartHunting: (String) -> Unit,
 ) {
-    val deviceHeading = rememberDeviceHeading()
+    BackHandler(onBack = onStopNavigation)
+    val orientationOutput = rememberNavigationOrientationOutput()
     var recenterRequestKey by remember { mutableIntStateOf(0) }
-    var simulatedDistance by remember(relic.id) { androidx.compose.runtime.mutableStateOf<Double?>(null) }
+    var distanceSimulation by remember(relic.id) { mutableStateOf(RelicNavigationSimulation()) }
+    val simulatedDistance = distanceSimulation.distanceMeters.takeIf { BuildConfig.DEBUG }
+    val isSimulating = simulatedDistance != null
     var simulatedHeading by remember(relic.id) { androidx.compose.runtime.mutableStateOf<Double?>(null) }
-    val effectiveHeading = simulatedHeading?.toFloat() ?: deviceHeading
     val simulatedCoordinate = simulatedDistance?.let { navigationTestCoordinate(relic.coordinate, it) }
     val navigationLocation = LocationActionPolicy.targetOutput(
         location = userLocation,
@@ -99,58 +94,87 @@ fun RelicNavigationScreen(
         ),
         simulatedCoordinate = simulatedCoordinate,
     )
-    val distanceMeters = navigationLocation.distanceToTargetMeters
-    var arrivalReached by remember(relic.id) { mutableStateOf(false) }
-    var arrivalAnimationComplete by remember(relic.id) { mutableStateOf(false) }
-    val arrivalSweep = remember(relic.id) { Animatable(-0.25f) }
-    val arrivalScale = remember(relic.id) { Animatable(1f) }
-    LaunchedEffect(distanceMeters) {
-        arrivalReached = navigationArrivalReached(arrivalReached, distanceMeters)
+    val declination = rememberNavigationDeclination(
+        simulatedCoordinate ?: LocationActionPolicy.actionableCoordinate(userLocation),
+    )
+    val deviceHeading = navigationTrueHeading(
+        magneticHeadingDegrees = navigationDeviceHeading(orientationOutput),
+        declinationDegrees = declination,
+        simulatedTrueHeadingDegrees = simulatedHeading.takeIf { BuildConfig.DEBUG },
+    )
+    val arrivalSample = if (isSimulating) distanceSimulation.arrivalSample() else RelicArrivalSample(
+        hasActionableLocation = LocationActionPolicy.actionableCoordinate(userLocation) != null,
+        distanceMeters = navigationLocation.distanceToTargetMeters,
+        accuracyMeters = userLocation.accuracyMeters,
+        timestampNanos = userLocation.timestampNanos,
+    )
+    // GPS and synthetic fix identities belong to separate target/session-local evidence streams.
+    var arrivalConfirmation by remember(relic.id, isSimulating) {
+        mutableStateOf(RelicArrivalConfirmationState())
     }
-    LaunchedEffect(arrivalReached) {
+    val updatedConfirmation = remember(relic.id, isSimulating, arrivalSample, arrivalConfirmation) {
+        updateRelicArrivalConfirmation(arrivalConfirmation, arrivalSample)
+    }
+    // Present the transition immediately so stale arrival cannot keep the button visible.
+    val uiState = deriveRelicNavigationUiState(
+        sample = arrivalSample,
+        confirmation = updatedConfirmation,
+        targetBearingDegrees = navigationLocation.targetBearingDegrees,
+        deviceHeadingDegrees = deviceHeading,
+        locationReadiness = navigationLocationReadiness(userLocation, isSimulating),
+    )
+    LaunchedEffect(relic.id, isSimulating, arrivalSample) {
+        arrivalConfirmation = updatedConfirmation
+    }
+    var arrivalAnimationComplete by remember(relic.id, isSimulating) { mutableStateOf(false) }
+    val arrivalSweep = remember(relic.id) { Animatable(0f) }
+    val arrivalScale = remember(relic.id) { Animatable(1f) }
+    LaunchedEffect(relic.id, isSimulating, uiState.arrivalConfirmed) {
         arrivalAnimationComplete = false
-        arrivalSweep.snapTo(-0.25f)
+        arrivalSweep.snapTo(0f)
         arrivalScale.snapTo(1f)
-        if (arrivalReached) {
+        if (uiState.arrivalConfirmed) {
             coroutineScope {
-                launch { arrivalSweep.animateTo(1.25f, tween(950, easing = FastOutSlowInEasing)) }
+                launch { arrivalSweep.animateTo(1f, tween(650, easing = FastOutSlowInEasing)) }
                 launch {
-                    arrivalScale.animateTo(1.08f, tween(260, easing = FastOutSlowInEasing))
-                    arrivalScale.animateTo(1f, tween(460, easing = FastOutSlowInEasing))
+                    arrivalScale.animateTo(1.04f, tween(200, easing = FastOutSlowInEasing))
+                    arrivalScale.animateTo(1f, tween(320, easing = FastOutSlowInEasing))
                 }
             }
             arrivalAnimationComplete = true
         }
     }
-    val targetEnergyProgress = if (arrivalReached) 1f else navigationEnergyProgress(distanceMeters)
-    val energyProgress by animateFloatAsState(
-        targetValue = targetEnergyProgress,
+    val arrivalPresentation = relicArrivalPresentation(uiState, arrivalAnimationComplete)
+    val resonanceProgress by animateFloatAsState(
+        targetValue = uiState.resonanceProgress,
         animationSpec = tween(650),
-        label = "relic_energy_progress",
+        label = "relic_resonance_progress",
     )
-    val trailAnimation = rememberInfiniteTransition(label = "relic_energy_trail")
+    val trailAnimation = rememberInfiniteTransition(label = "relic_guiding_thread")
     val trailPhaseRaw by trailAnimation.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(
                 durationMillis = navigationTrailDurationMillis(
-                    navigationLocation.targetBearingDegrees,
-                    effectiveHeading.toDouble(),
+                    uiState.targetBearingDegrees,
+                    uiState.deviceHeadingDegrees,
                 ),
                 easing = LinearEasing,
             ),
             repeatMode = RepeatMode.Restart,
         ),
-        label = "relic_energy_trail_phase",
+        label = "relic_guiding_thread_phase",
     )
     val trailPhase by remember { derivedStateOf { (trailPhaseRaw * 24).roundToInt() / 24f } }
-    Box(Modifier.fillMaxSize()) {
+    val mapPresentationHeading = uiState.deviceHeadingDegrees?.toFloat() ?: 0f
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val maximumCardHeight = maxHeight * 0.65f
         GoogleMapView(
             relics = listOf(relic),
             selectedRelic = relic,
             locationOutput = navigationLocation,
-            deviceHeading = effectiveHeading,
+            deviceHeading = mapPresentationHeading,
             activeHuntTreasureId = relic.id,
             focusSelectedRelic = false,
             perspective = MapPerspective.HUNT,
@@ -159,8 +183,9 @@ fun RelicNavigationScreen(
             allowRotateGestures = false,
             allowTiltGestures = false,
             recenterRequestKey = recenterRequestKey,
-            navigationTrailTarget = relic.coordinate,
-            navigationTrailStrength = energyProgress,
+            navigationOnlyUpdates = true,
+            navigationTrailTarget = relic.coordinate.takeIf { navigationGuidingThreadAvailable(uiState) },
+            navigationTrailStrength = resonanceProgress,
             navigationTrailPhase = trailPhase,
             onRelicSelected = {},
             modifier = Modifier.fillMaxSize(),
@@ -192,9 +217,9 @@ fun RelicNavigationScreen(
                 DraggableTestControl {
                     DistanceSimulationControl(
                         distance = simulatedDistance,
-                        onDistance = { simulatedDistance = it },
+                        onDistance = { distanceSimulation = distanceSimulation.withDistance(it) },
                         maximumDistance = 300f,
-                        initialDistance = 250.0,
+                        initialDistance = RelicNavigationConfig.resonanceRangeMeters,
                     )
                 }
             }
@@ -213,7 +238,8 @@ fun RelicNavigationScreen(
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Stop navigation", tint = Ink)
                 }
                 Text(
-                    "Navigation",
+                    "Relic Resonance",
+                    modifier = Modifier.weight(1f),
                     color = Ink,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge,
@@ -222,50 +248,65 @@ fun RelicNavigationScreen(
         }
 
         Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp)
+                .heightIn(max = maximumCardHeight),
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
             shadowElevation = 10.dp,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(11.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            navigationDistanceLabel(uiState.distanceMeters),
+                            color = Ink,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                     }
-                    Text(
-                        navigationDistanceLabel(distanceMeters),
-                        color = Ink,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
                     Spacer(Modifier.width(12.dp))
                     OutlinedButton(onClick = onStopNavigation) {
                         Text("Stop")
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RelicEnergyBattery(
-                        progress = energyProgress,
+                    RosetteResonanceGauge(
+                        progress = uiState.resonanceProgress,
+                        stage = uiState.resonanceStage,
+                        stateDescription = arrivalPresentation.stateDescription,
                         arrivalSweep = arrivalSweep.value,
                         scale = arrivalScale.value,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.size(64.dp),
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        "${(energyProgress * 100f).toInt()}%",
-                        color = energyColor(energyProgress),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    if (arrivalReached && arrivalAnimationComplete) {
-                        Spacer(Modifier.width(10.dp))
-                        Button(onClick = { onStartHunting(relic.id) }) {
-                            Text("Start Hunting")
-                        }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Relic Resonance", color = Ink, fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium)
+                        Text(arrivalPresentation.stateDescription, color = Muted,
+                            style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            when (uiState.directionHint) {
+                                NavigationDirectionHint.UNAVAILABLE -> "Finding direction…"
+                                NavigationDirectionHint.ALIGNED -> "Trail aligned"
+                                NavigationDirectionHint.TURN_LEFT -> "Turn left · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
+                                NavigationDirectionHint.TURN_RIGHT -> "Turn right · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
+                            },
+                            color = Muted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                if (arrivalPresentation.showBeginHunt) {
+                    Button(
+                        onClick = { onStartHunting(relic.id) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) {
+                        Text("Begin Hunt")
                     }
                 }
             }
@@ -304,58 +345,4 @@ private fun DraggableTestControl(content: @Composable () -> Unit) {
         }
         content()
     }
-}
-
-@Composable
-private fun RelicEnergyBattery(
-    progress: Float,
-    arrivalSweep: Float,
-    scale: Float,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(6.dp)
-    val color by animateColorAsState(energyColor(progress), tween(650), label = "relic_energy_color")
-    Row(
-        modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .semantics {
-                progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(progress, 0f..1f)
-            },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.weight(1f).height(26.dp).border(2.dp, Ink.copy(alpha = 0.62f), shape)
-                .padding(3.dp).clip(RoundedCornerShape(3.dp)),
-        ) {
-            Box(
-                Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(color),
-            )
-            if (arrivalSweep in 0f..1f) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val centre = size.width * arrivalSweep
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.82f), Color.Transparent),
-                            startX = centre - size.width * 0.18f,
-                            endX = centre + size.width * 0.18f,
-                        ),
-                    )
-                    repeat(5) { index ->
-                        val x = (centre + (index - 2) * size.width * 0.07f).coerceIn(0f, size.width)
-                        val y = size.height * (0.22f + (index % 3) * 0.27f)
-                        drawCircle(Color.White.copy(alpha = 0.72f), 1.4.dp.toPx(), Offset(x, y))
-                    }
-                }
-            }
-        }
-        Box(Modifier.width(5.dp).height(13.dp).background(Ink.copy(alpha = 0.62f), RoundedCornerShape(2.dp)))
-    }
-}
-
-private fun energyColor(progress: Float): Color {
-    val red = Color(0xFFD94B3D)
-    val yellow = Color(0xFFF2B543)
-    val green = Color(0xFF3D9A5B)
-    val value = progress.coerceIn(0f, 1f)
-    return if (value <= 0.5f) lerp(red, yellow, value * 2f) else lerp(yellow, green, (value - 0.5f) * 2f)
 }

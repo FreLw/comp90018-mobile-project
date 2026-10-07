@@ -31,6 +31,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,7 +53,6 @@ import com.comp90018.app.Muted
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
-import java.util.Locale
 
 /** Treasure lore browser. The live hunt flow belongs to Map. */
 @Composable
@@ -174,7 +174,7 @@ private fun TreasureRouteCard(
                     )
                 }
                 Text(
-                    listOfNotNull(treasure.locationName, distanceMeters?.formatDistance()).joinToString(" · "),
+                    listOfNotNull(treasure.locationName, distanceMeters?.formatTreasureDistance()).joinToString(" · "),
                     color = Muted,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -201,7 +201,7 @@ private fun TreasureRouteDetail(
     onNavigate: (() -> Unit)?,
 ) {
     val context = LocalContext.current
-    val closeEnoughToSearch = !discovered && distanceMeters != null && distanceMeters <= REVEAL_RADIUS_METERS
+    val navigationEntry = treasureNavigationEntry(discovered, distanceMeters, onNavigate != null)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 28.dp),
@@ -229,25 +229,22 @@ private fun TreasureRouteDetail(
                     Text(undiscoveredLegend(treasure), Modifier.padding(20.dp), color = Ink, style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            if (closeEnoughToSearch) {
-                item {
-                    Button(onClick = onOpenMap, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp)) {
-                        Icon(Icons.Rounded.Map, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Find on Map · ${distanceMeters.formatDistance()}", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            if (onNavigate != null) item {
-                Button(onClick = onNavigate, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp)) {
+            navigationEntry.primaryLabel?.let { label -> item {
+                Button(onClick = { onNavigate?.invoke() }, modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(18.dp)) {
                     Icon(Icons.Rounded.Navigation, null)
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        distanceMeters?.let { "Navigate · ${it.formatDistance()}" } ?: "Navigate",
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Text(label, fontWeight = FontWeight.Bold)
                 }
-            }
+            } }
+            navigationEntry.secondaryMapLabel?.let { label -> item {
+                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(18.dp)) {
+                    Icon(Icons.Rounded.Map, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(label)
+                }
+            } }
         } else {
             treasure.description.takeIf(String::isNotBlank)?.let { item { DetailSection("About the treasure", it) } }
             treasure.story.takeIf(String::isNotBlank)?.let { item { DetailSection("The story", it) } }
@@ -301,10 +298,3 @@ private fun undiscoveredLegend(treasure: MapRelic): String {
     val legend = treasure.story.ifBlank { treasure.clue.ifBlank { treasure.description } }.trim().trimEnd('.')
     return "No explorer has uncovered this treasure yet, but an old campus legend whispers that ${legend.replaceFirstChar { it.lowercase() }}."
 }
-
-private fun Double.formatDistance(): String = when {
-    this >= 1000.0 -> String.format(Locale.US, "%.2f km", this / 1000.0)
-    else -> "${kotlin.math.round(this).toInt()} m"
-}
-
-private const val REVEAL_RADIUS_METERS = 50.0

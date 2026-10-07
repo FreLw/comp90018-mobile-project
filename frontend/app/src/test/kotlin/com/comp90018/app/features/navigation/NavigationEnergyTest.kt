@@ -3,24 +3,25 @@ package com.comp90018.app.features.navigation
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NavigationEnergyTest {
     @Test
-    fun energyUsesFixedRangeAndReachesFullAtHuntDistance() {
+    fun resonanceUsesFixedRangeAndReachesFullAtEntryDistance() {
         assertEquals(0, navigationEnergyPercent(null))
         assertEquals(0, navigationEnergyPercent(300.0))
-        assertEquals(0, navigationEnergyPercent(250.0))
-        assertEquals(63, navigationEnergyPercent(100.0))
-        assertEquals(83, navigationEnergyPercent(50.0))
+        assertEquals(0, navigationEnergyPercent(150.0))
+        assertEquals(36, navigationEnergyPercent(100.0))
+        assertEquals(71, navigationEnergyPercent(50.0))
         assertEquals(100, navigationEnergyPercent(10.0))
         assertEquals(100, navigationEnergyPercent(0.0))
+        assertEquals(0f, navigationEnergyProgress(150.0), 0f)
+        assertEquals(0.5f, navigationEnergyProgress(80.0), 0f)
+        assertEquals(1f, navigationEnergyProgress(10.0), 0f)
     }
 
     @Test
-    fun invalidDistancesNeverChargeTheEnergyBar() {
+    fun invalidDistancesNeverProvideResonanceProgress() {
         assertEquals(0, navigationEnergyPercent(Double.NaN))
         assertEquals(0, navigationEnergyPercent(Double.POSITIVE_INFINITY))
         assertEquals(0, navigationEnergyPercent(-1.0))
@@ -44,11 +45,13 @@ class NavigationEnergyTest {
     }
 
     @Test
-    fun arrivalUsesHysteresisToAvoidButtonFlicker() {
-        assertFalse(navigationArrivalReached(false, 10.1))
-        assertTrue(navigationArrivalReached(false, 10.0))
-        assertTrue(navigationArrivalReached(true, 14.9))
-        assertFalse(navigationArrivalReached(true, 15.1))
-        assertFalse(navigationArrivalReached(true, null))
+    fun trailUsesSlowDefaultForMissingOrNonFiniteHeadingsOrBearings() {
+        listOf(null, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY).forEach { value ->
+            assertEquals(4_200, navigationTrailDurationMillis(90.0, value))
+            assertEquals(4_200, navigationTrailDurationMillis(value, 90.0))
+        }
+        assertEquals(4_200, navigationTrailDurationMillis(null, null))
+        assertEquals(1_500, navigationTrailDurationMillis(0.0, 0.0))
     }
+
 }
