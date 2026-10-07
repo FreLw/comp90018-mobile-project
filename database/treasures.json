@@ -1,9 +1,9 @@
 {
   "format": "comp90018.firestore.catalog.export.v6-simulated-calibration",
-  "projectId": "com90018-96a56",
+  "projectId": "mobile-melbourne",
   "databaseId": "(default)",
   "collection": "treasures",
-  "exportedAt": "2026-10-04T14:26:55.969Z",
+  "exportedAt": "2026-10-06T16:37:44.499Z",
   "count": 6,
   "operation": "read-only",
   "documents": [
@@ -33,8 +33,8 @@
         "schemaVersion": 5,
         "artworkKey": "treasure_postcard",
         "huntReadyRadiusMeters": 10,
-        "coordinateSource": "MAP-ASSISTED DEVELOPMENT ESTIMATE (2026-10-05): player standing point (-37.797149,144.961958) selected within University Plaza / Concrete Lawn using the University of Melbourne University Plaza POI, Google Maps satellite imagery, and official Constructing Change material linking the former lake to Union Lawn. Intended photo view is approximately 288 degrees magnetic toward a wide west-northwest view of the former-lake area. Not field surveyed; final GPS and heading calibration remain pending.",
-        "latitude": -37.797149,
+        "coordinateSource": "Google Maps University Plaza place marker (-37.7971046,144.9618932), rounded to 5 decimals. Used as an approximate public-square arrival point, NOT a separately labelled entrance.",
+        "latitude": -37.7971,
         "challenge": {
           "version": 1,
           "challengeId": "union-lawn-photo",
@@ -53,9 +53,15 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 288
         },
+<<<<<<< HEAD
         "longitude": 144.961958,
         "compassAlignmentToleranceDegrees": 15,
         "horizontalToleranceDegrees": 12
+=======
+        "longitude": 144.96189,
+        "horizontalToleranceDegrees": 12,
+        "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -84,8 +90,8 @@
         "schemaVersion": 5,
         "artworkKey": "treasure_rosette",
         "huntReadyRadiusMeters": 10,
-        "coordinateSource": "MAP-ASSISTED DEVELOPMENT ESTIMATE (2026-10-05): player standing point (-37.797895,144.961417) selected on the north-side approach to Wilson Hall using University of Melbourne north-entrance guidance, mapped entrance geometry, satellite/map references, and the main-entrance sculpture as the observation target. Intended observation heading is approximately 197 degrees magnetic. Not field surveyed; final GPS, sightline and heading calibration remain pending.",
-        "latitude": -37.797895,
+        "coordinateSource": "University campus map Main Entrance PAR;151;0;CG01; prior completed browser run 552ed20d-0ea6-451c-9a7a-896fc0cd4c45 returned Google/OSM share coordinates (-37.79804,144.96130). Not field surveyed.",
+        "latitude": -37.79804,
         "challenge": {
           "version": 1,
           "challengeId": "wilson-hall-observation",
@@ -104,9 +110,15 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 197
         },
+<<<<<<< HEAD
         "longitude": 144.961417,
         "compassAlignmentToleranceDegrees": 15,
         "horizontalToleranceDegrees": 12
+=======
+        "longitude": 144.9613,
+        "horizontalToleranceDegrees": 12,
+        "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -156,8 +168,13 @@
         },
         "huntReadyRadiusMeters": 10,
         "longitude": 144.96097,
+<<<<<<< HEAD
         "compassAlignmentToleranceDegrees": 15,
         "horizontalToleranceDegrees": 12
+=======
+        "horizontalToleranceDegrees": 12,
+        "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -185,9 +202,9 @@
         "lastUpdated": "2026-09-28T17:48:57.653Z",
         "schemaVersion": 5,
         "artworkKey": "treasure_atlas",
-        "latitude": -37.79868,
+        "latitude": -37.7988889,
         "huntReadyRadiusMeters": 10,
-        "coordinateSource": "MAP-ASSISTED DEVELOPMENT ESTIMATE (2026-10-05): player standing point (-37.79868,144.95990) selected on the South Lawn west-side pedestrian area using Google Maps satellite imagery and University of Melbourne material identifying the Atlantes at the southwest pedestrian entrance via Professors Walk. Atlantes map target reference is approximately (-37.79884,144.95984); intended viewing heading is approximately 185 degrees magnetic. Not field surveyed; final access, sightline, GPS and heading calibration remain pending.",
+        "coordinateSource": "ESTIMATE: west-side arrival candidate from Google South Lawn/Baillieu place anchors plus official campus plan and west-Atlas description. Coordinate (-37.79868,144.95972) was estimated for the western pedestrian approach, NOT supplied by Google as an entrance POI. Exact portal, ground level and present access remain unverified.",
         "challenge": {
           "version": 1,
           "challengeId": "south-lawn-viewing-angle",
@@ -204,11 +221,17 @@
           "photoActionRequired": false,
           "requiresSound": false,
           "soundThresholdDecibels": null,
-          "requiredHeadingDegrees": 185
+          "requiredHeadingDegrees": 88
         },
+<<<<<<< HEAD
         "longitude": 144.9599,
         "compassAlignmentToleranceDegrees": 15,
         "horizontalToleranceDegrees": 12
+=======
+        "longitude": 144.9597222,
+        "horizontalToleranceDegrees": 12,
+        "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -234,7 +257,7 @@
         "radarRadiusMeters": 100,
         "revealRadiusMeters": 50,
         "lastUpdated": "2026-09-28T17:48:57.653Z",
-        "coordinateSource": "Google Maps pin drop at System Garden (-37.7966124089,144.959126948), address label -37.796612, 144.959127. Map-based development estimate; not field surveyed.",
+        "coordinateSource": "Google Maps pin drop at System Garden (-37.7966124089,144.959126948), address label -37.796612, 144.959127.",
         "schemaVersion": 5,
         "artworkKey": "treasure_glasshouse",
         "challenge": {
@@ -256,8 +279,13 @@
           "soundThresholdDecibels": null
         },
         "huntReadyRadiusMeters": 10,
+<<<<<<< HEAD
         "latitude": -37.7966124089,
         "longitude": 144.959126948,
+=======
+        "latitude": -37.796765,
+        "longitude": 144.959095,
+>>>>>>> origin/main
         "compassAlignmentToleranceDegrees": 15,
         "horizontalToleranceDegrees": 12
       }
