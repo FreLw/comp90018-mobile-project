@@ -24,9 +24,9 @@ class RelicNavigationUiStateTest {
     fun ordinaryDistancesUseTheExistingClassifierAndProgressFormula() {
         listOf(
             300.0 to RelicResonanceStage.DORMANT,
-            250.0 to RelicResonanceStage.FAINT,
-            200.0 to RelicResonanceStage.FAINT,
-            100.0 to RelicResonanceStage.DRAWN,
+            150.0 to RelicResonanceStage.FAINT,
+            100.0 to RelicResonanceStage.FAINT,
+            80.0 to RelicResonanceStage.DRAWN,
             50.0 to RelicResonanceStage.DRAWN,
             30.0 to RelicResonanceStage.STRONG,
             15.0 to RelicResonanceStage.STRONG,

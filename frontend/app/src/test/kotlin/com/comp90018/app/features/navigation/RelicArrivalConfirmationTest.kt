@@ -115,8 +115,8 @@ class RelicArrivalConfirmationTest {
     fun stageMappingPreservesOrdinaryDistanceClassificationAndAcquiring() {
         listOf(
             300.0 to RelicResonanceStage.DORMANT,
-            250.0 to RelicResonanceStage.FAINT,
-            100.0 to RelicResonanceStage.DRAWN,
+            150.0 to RelicResonanceStage.FAINT,
+            80.0 to RelicResonanceStage.DRAWN,
             30.0 to RelicResonanceStage.STRONG,
             10.0 to RelicResonanceStage.STRONG,
         ).forEach { (distance, expected) ->

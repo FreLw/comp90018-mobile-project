@@ -212,7 +212,7 @@ fun RelicNavigationScreen(
                         distance = simulatedDistance,
                         onDistance = { distanceSimulation = distanceSimulation.withDistance(it) },
                         maximumDistance = 300f,
-                        initialDistance = 250.0,
+                        initialDistance = RelicNavigationConfig.resonanceRangeMeters,
                     )
                 }
             }

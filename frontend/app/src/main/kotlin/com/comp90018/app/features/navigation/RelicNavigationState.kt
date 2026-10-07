@@ -5,8 +5,8 @@ import kotlin.math.abs
 
 /** Navigation guides the user; hunt and Context Engine own challenge eligibility. */
 internal object RelicNavigationConfig {
-    const val resonanceRangeMeters = 250.0
-    const val faintDrawnBoundaryMeters = 100.0
+    const val resonanceRangeMeters = 150.0
+    const val faintDrawnBoundaryMeters = 80.0
     const val drawnStrongBoundaryMeters = 30.0
     const val huntArrivalEntryRadiusMeters = 10.0
     const val huntArrivalExitRadiusMeters = 15.0

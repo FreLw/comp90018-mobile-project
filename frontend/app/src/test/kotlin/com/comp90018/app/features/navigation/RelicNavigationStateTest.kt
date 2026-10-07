@@ -17,11 +17,11 @@ class RelicNavigationStateTest {
     fun boundariesBelongToTheStrongerStage() {
         val cases = listOf(
             300.0 to RelicResonanceStage.DORMANT,
-            250.001 to RelicResonanceStage.DORMANT,
-            250.0 to RelicResonanceStage.FAINT,
-            200.0 to RelicResonanceStage.FAINT,
-            100.001 to RelicResonanceStage.FAINT,
-            100.0 to RelicResonanceStage.DRAWN,
+            150.1 to RelicResonanceStage.DORMANT,
+            150.0 to RelicResonanceStage.FAINT,
+            100.0 to RelicResonanceStage.FAINT,
+            80.1 to RelicResonanceStage.FAINT,
+            80.0 to RelicResonanceStage.DRAWN,
             50.0 to RelicResonanceStage.DRAWN,
             30.001 to RelicResonanceStage.DRAWN,
             30.0 to RelicResonanceStage.STRONG,
@@ -64,8 +64,8 @@ class RelicNavigationStateTest {
 
     @Test
     fun legacyEnergyAndArrivalUseSharedNavigationThresholds() {
-        assertEquals(250.0, RelicNavigationConfig.resonanceRangeMeters, 0.0)
-        assertEquals(100.0, RelicNavigationConfig.faintDrawnBoundaryMeters, 0.0)
+        assertEquals(150.0, RelicNavigationConfig.resonanceRangeMeters, 0.0)
+        assertEquals(80.0, RelicNavigationConfig.faintDrawnBoundaryMeters, 0.0)
         assertEquals(30.0, RelicNavigationConfig.drawnStrongBoundaryMeters, 0.0)
         assertEquals(10.0, RelicNavigationConfig.huntArrivalEntryRadiusMeters, 0.0)
         assertEquals(15.0, RelicNavigationConfig.huntArrivalExitRadiusMeters, 0.0)

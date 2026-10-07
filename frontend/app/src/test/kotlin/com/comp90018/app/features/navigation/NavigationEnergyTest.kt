@@ -12,11 +12,14 @@ class NavigationEnergyTest {
     fun energyUsesFixedRangeAndReachesFullAtHuntDistance() {
         assertEquals(0, navigationEnergyPercent(null))
         assertEquals(0, navigationEnergyPercent(300.0))
-        assertEquals(0, navigationEnergyPercent(250.0))
-        assertEquals(63, navigationEnergyPercent(100.0))
-        assertEquals(83, navigationEnergyPercent(50.0))
+        assertEquals(0, navigationEnergyPercent(150.0))
+        assertEquals(36, navigationEnergyPercent(100.0))
+        assertEquals(71, navigationEnergyPercent(50.0))
         assertEquals(100, navigationEnergyPercent(10.0))
         assertEquals(100, navigationEnergyPercent(0.0))
+        assertEquals(0f, navigationEnergyProgress(150.0), 0f)
+        assertEquals(0.5f, navigationEnergyProgress(80.0), 0f)
+        assertEquals(1f, navigationEnergyProgress(10.0), 0f)
     }
 
     @Test
