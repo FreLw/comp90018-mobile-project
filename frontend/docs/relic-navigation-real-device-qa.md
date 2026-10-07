@@ -115,3 +115,12 @@ Record pass/fail and logs/screenshots for each unchecked item. A successful buil
 - [ ] Pan the map and observe stationary-device animation: no camera jitter/recentering, relic-marker flicker or Hunt overlay reconstruction. Recenter still works explicitly.
 - [ ] Repeat leave/re-enter, background/resume, target loss and permission loss: no orphan thread/glints; guidance and animation recover when available.
 - [ ] Confirm existing CONFIRMING/ARRIVED sweep and Begin Hunt behavior, without any direction-based arrival gate.
+
+## Split-panel follow-up (pending device execution)
+
+- [ ] Below the understated app bar, target panel contains only relic name, location, distance and Stop. Normal height is approximately 84 dp; long names wrap to two lines.
+- [ ] Bottom panel contains only the 64 dp Rosette, resonance label, stage/readiness and direction. Normal height is approximately 88–115 dp, with no repeated target information.
+- [ ] CONFIRMING has no Begin Hunt; confirmed arrival reveals a separate full-width Begin Hunt row after the existing transition.
+- [ ] Test a narrow phone, a long treasure/location name and increased font scale. Both panels can scroll if screen-height limits are reached; Stop and Begin Hunt remain reachable.
+- [ ] Debug controls initially sit below the measured top panels, including after font-size changes. Drag them if necessary on a short display.
+- [ ] Pan/Recenter and compare all distance stages: more of the central map is visible; Rosette strength, continuous glints and Hunt handoff remain unchanged.
