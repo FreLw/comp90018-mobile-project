@@ -33,8 +33,7 @@ import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
 import com.comp90018.app.features.map.UserLocationViewModel
 import com.comp90018.app.features.map.rememberTeamHuntLocations
-import com.comp90018.app.features.map.DEFAULT_CAMPUS_CENTRE
-import com.comp90018.app.features.map.isProbablyEmulator
+import com.comp90018.app.features.map.LocationActionPolicy
 import com.comp90018.app.features.navigation.RelicNavigationScreen
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
@@ -123,11 +122,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     val sharedHuntRoom = activeRoomHuntState.room?.takeIf { it.id == roomsState.activeRoomId }
     val huntLocationRepository = remember(firestore) { FirebaseTeamHuntLocationRepository(firestore) }
     val teammateLocations = rememberTeamHuntLocations(huntLocationRepository, sharedHuntRoom, user.uid, userLocation)
-    val treasurePageLocation = if (remember { isProbablyEmulator() }) {
-        DEFAULT_CAMPUS_CENTRE
-    } else {
-        userLocation.currentLocation ?: userLocation.lastKnownLocation
-    }
+    val treasurePageLocation = LocationActionPolicy.actionableCoordinate(userLocation)
     val hapticSession: TreasureHapticSessionViewModel = viewModel(
         key = "treasure_haptics_${user.uid}",
         factory = TreasureHapticSessionViewModel.factory(context),
