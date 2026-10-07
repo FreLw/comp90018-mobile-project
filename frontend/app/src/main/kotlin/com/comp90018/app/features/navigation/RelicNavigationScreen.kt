@@ -1,6 +1,5 @@
 package com.comp90018.app.features.navigation
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -10,19 +9,14 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,14 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.coroutineScope
@@ -275,19 +264,30 @@ fun RelicNavigationScreen(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RelicEnergyBattery(
-                        progress = energyProgress,
+                    RosetteResonanceGauge(
+                        progress = uiState.resonanceProgress,
+                        stage = uiState.resonanceStage,
                         arrivalSweep = arrivalSweep.value,
                         scale = arrivalScale.value,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.size(64.dp),
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        "${(energyProgress * 100f).toInt()}%",
-                        color = energyColor(energyProgress),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Relic Resonance", color = Ink, fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium)
+                        Text(resonanceStageLabel(uiState.resonanceStage), color = Muted,
+                            style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            when (uiState.directionHint) {
+                                NavigationDirectionHint.UNAVAILABLE -> "Finding direction…"
+                                NavigationDirectionHint.ALIGNED -> "Trail aligned"
+                                NavigationDirectionHint.TURN_LEFT -> "Turn left · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
+                                NavigationDirectionHint.TURN_RIGHT -> "Turn right · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
+                            },
+                            color = Muted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     if (uiState.canBeginHunt && arrivalAnimationComplete) {
                         Spacer(Modifier.width(10.dp))
                         Button(onClick = { onStartHunting(relic.id) }) {
@@ -295,16 +295,6 @@ fun RelicNavigationScreen(
                         }
                     }
                 }
-                Text(
-                    when (uiState.directionHint) {
-                        NavigationDirectionHint.UNAVAILABLE -> "Finding direction…"
-                        NavigationDirectionHint.ALIGNED -> "Trail aligned"
-                        NavigationDirectionHint.TURN_LEFT -> "Turn left · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
-                        NavigationDirectionHint.TURN_RIGHT -> "Turn right · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
-                    },
-                    color = Muted,
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }
@@ -341,58 +331,4 @@ private fun DraggableTestControl(content: @Composable () -> Unit) {
         }
         content()
     }
-}
-
-@Composable
-private fun RelicEnergyBattery(
-    progress: Float,
-    arrivalSweep: Float,
-    scale: Float,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(6.dp)
-    val color by animateColorAsState(energyColor(progress), tween(650), label = "relic_energy_color")
-    Row(
-        modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .semantics {
-                progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(progress, 0f..1f)
-            },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.weight(1f).height(26.dp).border(2.dp, Ink.copy(alpha = 0.62f), shape)
-                .padding(3.dp).clip(RoundedCornerShape(3.dp)),
-        ) {
-            Box(
-                Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(color),
-            )
-            if (arrivalSweep in 0f..1f) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val centre = size.width * arrivalSweep
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.82f), Color.Transparent),
-                            startX = centre - size.width * 0.18f,
-                            endX = centre + size.width * 0.18f,
-                        ),
-                    )
-                    repeat(5) { index ->
-                        val x = (centre + (index - 2) * size.width * 0.07f).coerceIn(0f, size.width)
-                        val y = size.height * (0.22f + (index % 3) * 0.27f)
-                        drawCircle(Color.White.copy(alpha = 0.72f), 1.4.dp.toPx(), Offset(x, y))
-                    }
-                }
-            }
-        }
-        Box(Modifier.width(5.dp).height(13.dp).background(Ink.copy(alpha = 0.62f), RoundedCornerShape(2.dp)))
-    }
-}
-
-private fun energyColor(progress: Float): Color {
-    val red = Color(0xFFD94B3D)
-    val yellow = Color(0xFFF2B543)
-    val green = Color(0xFF3D9A5B)
-    val value = progress.coerceIn(0f, 1f)
-    return if (value <= 0.5f) lerp(red, yellow, value * 2f) else lerp(yellow, green, (value - 0.5f) * 2f)
 }
