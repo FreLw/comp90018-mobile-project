@@ -37,6 +37,7 @@ internal fun RosetteResonanceGauge(
     arrivalSweep: Float,
     scale: Float,
     modifier: Modifier = Modifier,
+    stateDescription: String = resonanceStageLabel(stage),
 ) {
     val safeProgress = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 0f
     val displayedProgress by animateFloatAsState(safeProgress, tween(650), label = "rosette_resonance")
@@ -62,8 +63,10 @@ internal fun RosetteResonanceGauge(
     Canvas(
         modifier.graphicsLayer { scaleX = scale; scaleY = scale }.semantics {
             contentDescription = "Relic resonance"
-            stateDescription = resonanceStageLabel(stage)
-            progressBarRangeInfo = ProgressBarRangeInfo(safeProgress, 0f..1f)
+            this.stateDescription = stateDescription
+            if (stage != RelicResonanceStage.ACQUIRING) {
+                progressBarRangeInfo = ProgressBarRangeInfo(safeProgress, 0f..1f)
+            }
         },
     ) {
         val radius = size.minDimension * 0.45f
@@ -75,7 +78,7 @@ internal fun RosetteResonanceGauge(
         drawCircle(BrandSoft, radius, centre)
         drawCircle(Ink, radius, centre, style = Stroke(1.5.dp.toPx()))
         drawCircle(RelicGold.copy(alpha = 0.65f), radius * 0.87f, centre, style = Stroke(0.7.dp.toPx()))
-        drawArc(
+        if (stage != RelicResonanceStage.ACQUIRING) drawArc(
             color = RelicGold.copy(alpha = emphasis), startAngle = -90f,
             sweepAngle = displayedProgress * 360f, useCenter = false,
             topLeft = centre - Offset(radius * 0.76f, radius * 0.76f),

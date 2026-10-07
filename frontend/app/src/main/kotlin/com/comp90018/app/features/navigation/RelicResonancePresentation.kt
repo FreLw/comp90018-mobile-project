@@ -9,7 +9,13 @@ internal fun relicArrivalPresentation(
     state: RelicNavigationUiState,
     animationComplete: Boolean,
 ): RelicArrivalPresentation = RelicArrivalPresentation(
-    stateDescription = resonanceStageLabel(state.resonanceStage),
+    stateDescription = when (state.locationReadiness) {
+        NavigationLocationReadiness.READY -> resonanceStageLabel(state.resonanceStage)
+        NavigationLocationReadiness.ACQUIRING -> "Seeking your position…"
+        NavigationLocationReadiness.ACCESS_REQUIRED -> "Location access is required"
+        NavigationLocationReadiness.IMPROVING_SIGNAL -> "Improving location signal…"
+        NavigationLocationReadiness.UNAVAILABLE -> "Location signal unavailable"
+    },
     showBeginHunt = state.canBeginHunt && animationComplete,
 )
 

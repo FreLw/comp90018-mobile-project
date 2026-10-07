@@ -42,6 +42,7 @@ internal data class RelicNavigationUiState(
     val arrivalConfirmed: Boolean = false,
     val canBeginHunt: Boolean = false,
     val deviceHeadingDegrees: Double? = null,
+    val locationReadiness: NavigationLocationReadiness = NavigationLocationReadiness.ACQUIRING,
 )
 
 /**
@@ -67,12 +68,16 @@ internal fun deriveRelicNavigationUiState(
     confirmation: RelicArrivalConfirmationState,
     targetBearingDegrees: Double? = null,
     deviceHeadingDegrees: Double? = null,
+    locationReadiness: NavigationLocationReadiness? = null,
 ): RelicNavigationUiState {
     val stage = confirmedRelicResonanceStage(sample, confirmation)
     val distance = sample.distanceMeters?.takeIf {
         sample.hasActionableLocation && it.isFinite() && it >= 0.0
     }
     val arrived = stage == RelicResonanceStage.ARRIVED
+    val readiness = if (distance != null) locationReadiness ?: NavigationLocationReadiness.READY
+        else locationReadiness?.takeUnless { it == NavigationLocationReadiness.READY }
+            ?: NavigationLocationReadiness.ACQUIRING
     val bearing = targetBearingDegrees?.takeIf { distance != null && it.isFinite() }
     val heading = deviceHeadingDegrees?.takeIf { it.isFinite() }
     // Both inputs use true north. Negative error means left; exactly opposite means -180.
@@ -95,5 +100,6 @@ internal fun deriveRelicNavigationUiState(
         arrivalConfirmed = arrived,
         canBeginHunt = arrived,
         deviceHeadingDegrees = heading,
+        locationReadiness = readiness,
     )
 }

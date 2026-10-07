@@ -116,6 +116,7 @@ fun RelicNavigationScreen(
         confirmation = updatedConfirmation,
         targetBearingDegrees = navigationLocation.targetBearingDegrees,
         deviceHeadingDegrees = deviceHeading,
+        locationReadiness = navigationLocationReadiness(userLocation, isSimulating),
     )
     LaunchedEffect(relic.id, isSimulating, arrivalSample) {
         arrivalConfirmation = updatedConfirmation
@@ -176,7 +177,7 @@ fun RelicNavigationScreen(
             allowRotateGestures = false,
             allowTiltGestures = false,
             recenterRequestKey = recenterRequestKey,
-            navigationTrailTarget = relic.coordinate,
+            navigationTrailTarget = relic.coordinate.takeIf { navigationGuidingThreadAvailable(uiState) },
             navigationTrailStrength = energyProgress,
             navigationTrailPhase = trailPhase,
             onRelicSelected = {},
@@ -268,6 +269,7 @@ fun RelicNavigationScreen(
                     RosetteResonanceGauge(
                         progress = uiState.resonanceProgress,
                         stage = uiState.resonanceStage,
+                        stateDescription = arrivalPresentation.stateDescription,
                         arrivalSweep = arrivalSweep.value,
                         scale = arrivalScale.value,
                         modifier = Modifier.size(64.dp),
