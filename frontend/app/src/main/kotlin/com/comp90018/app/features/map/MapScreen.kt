@@ -311,7 +311,6 @@ fun MapScreen(
         selectedRelic = null
     }
     val deviceHeading = rememberDeviceHeading()
-    val deviceMotion = rememberDeviceMotion()
     val runningInEmulator = remember { isProbablyEmulator() }
     val huntCandidates = remember(resolvedTreasures, foundRelicIds, teamHuntActive) {
         if (teamHuntActive) resolvedTreasures else resolvedTreasures.filterNot { it.id in foundRelicIds }
@@ -498,7 +497,6 @@ fun MapScreen(
             relic = relic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
-            motion = deviceMotion,
             soundEffectsEnabled = soundEffectsEnabled,
             debugSimulationEnabled = debugSimulationEnabled,
             // Passing the compass only opens the physical task. Completion and persistence
@@ -1350,9 +1348,17 @@ private fun GoogleMapView(
                     val title = "$name (${if (isHost) "Host" else "Teammate"})"
                     val marker = teammateMarkers[teammate.uid] ?: map.addMarker(
                         MarkerOptions().position(position).title(title).snippet("Online · Shared hunt location")
-                            .icon(BitmapDescriptorFactory.defaultMarker(
-                                if (isHost) BitmapDescriptorFactory.HUE_ORANGE else BitmapDescriptorFactory.HUE_AZURE,
-                            )).zIndex(CURRENT_LOCATION_Z_INDEX + 1f),
+                            .icon(if (isHost) {
+                                BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                            } else {
+                                currentLocationIcon(
+                                    context,
+                                    dotColor = android.graphics.Color.rgb(52, 152, 219),
+                                    showHeading = false,
+                                )
+                            })
+                            .anchor(0.5f, if (isHost) 1f else 0.72f)
+                            .zIndex(CURRENT_LOCATION_Z_INDEX + 1f),
                     )?.also { teammateMarkers[teammate.uid] = it; it.tag = "teammate:${teammate.uid}" }
                     marker?.position = position
                     marker?.title = title
@@ -1567,7 +1573,6 @@ internal fun TreasureCompassGate(
     relic: MapRelic,
     locationOutput: LocationOutput,
     deviceHeading: Float,
-    motion: DeviceMotionSample,
     soundEffectsEnabled: Boolean,
     debugSimulationEnabled: Boolean = false,
     onContinue: () -> Unit,
@@ -1586,9 +1591,6 @@ internal fun TreasureCompassGate(
     var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG && debugSimulationEnabled) }
     var testDistance by remember(relic.id) { mutableStateOf((locationOutput.distanceToTargetMeters ?: 9.0).toFloat().coerceIn(0f, 30f)) }
     var testHeading by remember(relic.id) { mutableStateOf(deviceHeading) }
-    var testPitch by remember(relic.id) { mutableStateOf(motion.pitchDegrees) }
-    var testRoll by remember(relic.id) { mutableStateOf(motion.rollDegrees) }
-    val effectiveMotion = if (BuildConfig.DEBUG && simulateSensors) DeviceMotionSample(0f, maxOf(abs(testPitch), abs(testRoll)), testPitch, testRoll) else motion
     val distance = if (BuildConfig.DEBUG && simulateSensors) testDistance.toDouble() else locationOutput.distanceToTargetMeters
     val targetBearing = locationOutput.targetBearingDegrees
         ?: if (BuildConfig.DEBUG && simulateSensors) 0.0 else null
@@ -1597,11 +1599,10 @@ internal fun TreasureCompassGate(
     val locationReady = (BuildConfig.DEBUG && simulateSensors) ||
         locationOutput.validity == com.comp90018.app.sensors.SensorValidity.VALID
     val readiness = if (locationReady) {
-        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees, relic.compassGateConfig)
-    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= relic.compassGateConfig.horizontalToleranceDegrees)
+        evaluateHuntReadiness(distance, turnDegrees, relic.compassGateConfig)
+    } else HuntReadiness(false, false)
     val nearTreasure = readiness.nearTreasure
     val facingTreasure = readiness.facingTreasure
-    val phoneHorizontal = readiness.phoneHorizontal
     val allReady = readiness.allReady
     fun continueToChallenge() {
         if (!allReady || leaving) return
@@ -1615,7 +1616,6 @@ internal fun TreasureCompassGate(
 
     val proximityGlow = distance?.let { (((relic.compassGateConfig.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / (180.0 - relic.compassGateConfig.compassAlignmentToleranceDegrees).coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val levelGlow = (((relic.compassGateConfig.horizontalToleranceDegrees + 33.0) - effectiveMotion.tiltDegrees) / 33.0).toFloat().coerceIn(0f, 1f)
     val stars = oracleStarCount(distance, relic.compassGateConfig.huntReadyRadiusMeters)
     val tone = remember { runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 55) }.getOrNull() }
     DisposableEffect(tone) { onDispose { tone?.release() } }
@@ -1644,7 +1644,6 @@ internal fun TreasureCompassGate(
         !nearTreasure -> "The signal faded. Move back within ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}."
         !facingTreasure && requireNotNull(turnDegrees) > 0 -> "Turn right ${abs(turnDegrees).formatDegrees()} toward the treasure."
         !facingTreasure -> "Turn left ${abs(requireNotNull(turnDegrees)).formatDegrees()} toward the treasure."
-        !phoneHorizontal -> "Lower the phone until it is flat and level."
         else -> "Hold it there — locking onto the treasure…"
     }
 
@@ -1673,8 +1672,6 @@ internal fun TreasureCompassGate(
             turnDegrees = turnDegrees?.toFloat() ?: 0f,
             signalAvailable = turnDegrees != null,
             distanceMeters = distance,
-            pitchDegrees = effectiveMotion.pitchDegrees,
-            rollDegrees = effectiveMotion.rollDegrees,
             signalLocked = signalLocked,
             modifier = Modifier.fillMaxWidth().height(285.dp).graphicsLayer {
                 alpha = compassEntrance.value
@@ -1702,7 +1699,6 @@ internal fun TreasureCompassGate(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OracleLamp("The Trail", "Draw nearer", "${distance.formatDistance()} / ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}", nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
                     OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / ${relic.compassGateConfig.compassAlignmentToleranceDegrees.formatDegrees()}" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
-                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / ${relic.compassGateConfig.horizontalToleranceDegrees.formatDegrees()}", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
                 }
                 AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1722,8 +1718,6 @@ internal fun TreasureCompassGate(
                     if (simulateSensors) {
                         SensorTestSlider("Distance · GPS", testDistance, 0f..30f, "m", if (nearTreasure) Color(0xFFB58A42) else Color(0xFF8D8984)) { testDistance = it }
                         SensorTestSlider("Heading · rotation", testHeading, 0f..360f, "°", if (facingTreasure) Color(0xFFA44736) else Color(0xFF8D8984)) { testHeading = it }
-                        SensorTestSlider("Pitch · accelerometer", testPitch, -45f..45f, "°", if (phoneHorizontal) Color(0xFF507052) else Color(0xFF8D8984)) { testPitch = it }
-                        SensorTestSlider("Roll · accelerometer", testRoll, -45f..45f, "°", if (phoneHorizontal) Color(0xFF507052) else Color(0xFF8D8984)) { testRoll = it }
                     }
                 }
             }
@@ -1745,14 +1739,10 @@ private fun DivineCompassVisual(
     turnDegrees: Float,
     signalAvailable: Boolean,
     distanceMeters: Double?,
-    pitchDegrees: Float,
-    rollDegrees: Float,
     signalLocked: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val animatedTurn by animateFloatAsState(turnDegrees, tween(350), label = "treasure_compass_turn")
-    val animatedPitch by animateFloatAsState(pitchDegrees.coerceIn(-30f, 30f), tween(220), label = "treasure_compass_pitch")
-    val animatedRoll by animateFloatAsState(rollDegrees.coerceIn(-30f, 30f), tween(220), label = "treasure_compass_roll")
     val orbit = rememberInfiniteTransition(label = "oracle_orbit")
     val orbitDegrees by orbit.animateFloat(0f, 360f, infiniteRepeatable(tween(16000, easing = LinearEasing)), label = "orbit_degrees")
     val shimmer by orbit.animateFloat(0.25f, 0.9f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "oracle_shimmer")
@@ -1762,7 +1752,6 @@ private fun DivineCompassVisual(
     val gold = if (readiness.nearTreasure) Color(0xFFB58A42) else grey
     val rust = if (readiness.facingTreasure) Color(0xFFA44736) else grey
     val compassInk = if (readiness.facingTreasure) plum else Color(0xFF777570)
-    val levelColor = if (readiness.phoneHorizontal) Color(0xFF507052) else grey
     val starCount = oracleStarCount(distanceMeters, config.huntReadyRadiusMeters)
     val starFlash = remember { androidx.compose.animation.core.Animatable(0f) }
     var lastStarCount by remember { mutableIntStateOf(starCount) }
@@ -1776,7 +1765,6 @@ private fun DivineCompassVisual(
         } else lastStarCount = starCount
     }
     val distanceProgress = distanceMeters?.let { (((config.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val levelDegrees = maxOf(abs(pitchDegrees), abs(rollDegrees))
     Box(modifier.padding(4.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().padding(bottom = 42.dp)) {
             val centre = Offset(size.width / 2, size.height / 2)
@@ -1857,26 +1845,8 @@ private fun DivineCompassVisual(
             drawCircle(gold, radius * 0.095f, centre)
             drawCircle(plum, radius * 0.045f, centre)
         }
-        // A separate inset instrument keeps the tilt gauge clear of the needle and star trail.
-        Column(Modifier.align(Alignment.TopEnd).background(parchment, CircleShape).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Canvas(Modifier.size(76.dp)) {
-                val c = Offset(size.width / 2f, size.height / 2f)
-                val r = size.minDimension * 0.43f
-                drawCircle(compassInk, r, c)
-                drawCircle(levelColor, r * 0.91f, c, style = Stroke(2.dp.toPx()))
-                drawCircle(parchment, r * 0.78f, c)
-                drawCircle(levelColor, r * 0.36f, c, style = Stroke(1.dp.toPx()))
-                drawLine(levelColor.copy(alpha = 0.5f), c - Offset(r * 0.65f, 0f), c + Offset(r * 0.65f, 0f), 1.dp.toPx())
-                drawLine(levelColor.copy(alpha = 0.5f), c - Offset(0f, r * 0.65f), c + Offset(0f, r * 0.65f), 1.dp.toPx())
-                val bubble = c + Offset(animatedRoll / 30f, animatedPitch / 30f) * (r * 0.45f)
-                drawCircle(levelColor, r * 0.19f, bubble)
-                drawCircle(parchment.copy(alpha = 0.8f), r * 0.055f, bubble - Offset(2.dp.toPx(), 2.dp.toPx()))
-            }
-            Text("LIBELLA", color = levelColor, fontFamily = GothicTreasureFontFamily, fontSize = 11.sp)
-        }
         Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (signalLocked) "✦ SIGNAL AWAKENED ✦" else "${distanceMeters.formatDistance()} · $starCount / 10 stars", color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp)
-            Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (readiness.phoneHorizontal) Color(0xFF507052) else rust, fontSize = 10.sp)
         }
     }
 }
@@ -2974,7 +2944,11 @@ private fun questMarkerIcon(
     return BitmapDescriptorFactory.fromBitmap(bitmap).also { treasureMarkerIcons.put(key, it) }
 }
 
-private fun currentLocationIcon(context: Context): BitmapDescriptor {
+private fun currentLocationIcon(
+    context: Context,
+    dotColor: Int = android.graphics.Color.rgb(217, 84, 53),
+    showHeading: Boolean = true,
+): BitmapDescriptor {
     val density = context.resources.displayMetrics.density
     val size = (68 * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -3001,7 +2975,7 @@ private fun currentLocationIcon(context: Context): BitmapDescriptor {
         style = Paint.Style.FILL
     }
     val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.rgb(217, 84, 53)
+        color = dotColor
         style = Paint.Style.FILL
     }
     val viewCone = Path().apply {
@@ -3010,7 +2984,7 @@ private fun currentLocationIcon(context: Context): BitmapDescriptor {
         lineTo(size * 0.92f, size * 0.04f)
         close()
     }
-    canvas.drawPath(viewCone, viewPaint)
+    if (showHeading) canvas.drawPath(viewCone, viewPaint)
     canvas.drawCircle(center, dotY, size * 0.14f, haloPaint)
     canvas.drawCircle(center, dotY, size * 0.095f, dotPaint)
     return BitmapDescriptorFactory.fromBitmap(bitmap)

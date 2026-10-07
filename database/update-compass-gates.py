@@ -21,7 +21,6 @@ decode = helpers["decode"]
 DEFAULTS = {
     "huntReadyRadiusMeters": 10,
     "compassAlignmentToleranceDegrees": 15,
-    "horizontalToleranceDegrees": 12,
 }
 
 

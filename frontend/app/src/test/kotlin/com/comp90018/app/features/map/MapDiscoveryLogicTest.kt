@@ -47,21 +47,19 @@ class MapDiscoveryLogicTest {
     }
 
     @Test
-    fun treasureLockRequiresDistanceDirectionAndLevelPhone() {
-        assertTrue(evaluateHuntReadiness(10.0, 15.0, 12f).allReady)
-        assertFalse(evaluateHuntReadiness(10.01, 0.0, 0f).allReady)
-        assertFalse(evaluateHuntReadiness(5.0, 15.01, 0f).allReady)
-        assertFalse(evaluateHuntReadiness(5.0, 0.0, 12.01f).allReady)
-        assertFalse(evaluateHuntReadiness(null, null, 0f).allReady)
+    fun treasureLockRequiresDistanceAndDirection() {
+        assertTrue(evaluateHuntReadiness(10.0, 15.0).allReady)
+        assertFalse(evaluateHuntReadiness(10.01, 0.0).allReady)
+        assertFalse(evaluateHuntReadiness(5.0, 15.01).allReady)
+        assertFalse(evaluateHuntReadiness(null, null).allReady)
     }
     @Test
-    fun compassGateUsesConfiguredBoundariesForAllThreeLights() {
-        val config = CompassGateConfig(25.0, 30.0, 20.0)
-        assertTrue(evaluateHuntReadiness(25.0, -30.0, 20f, config).allReady)
-        assertFalse(evaluateHuntReadiness(25.01, 0.0, 0f, config).nearTreasure)
-        assertFalse(evaluateHuntReadiness(0.0, -30.01, 0f, config).facingTreasure)
-        assertFalse(evaluateHuntReadiness(0.0, 0.0, 20.01f, config).phoneHorizontal)
-        assertFalse(evaluateHuntReadiness(null, null, 0f, config).allReady)
+    fun compassGateUsesConfiguredDistanceAndDirectionBoundaries() {
+        val config = CompassGateConfig(25.0, 30.0)
+        assertTrue(evaluateHuntReadiness(25.0, -30.0, config).allReady)
+        assertFalse(evaluateHuntReadiness(25.01, 0.0, config).nearTreasure)
+        assertFalse(evaluateHuntReadiness(0.0, -30.01, config).facingTreasure)
+        assertFalse(evaluateHuntReadiness(null, null, config).allReady)
     }
 
     @Test

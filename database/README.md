@@ -28,15 +28,14 @@ See [challenge-config-changes.md](challenge-config-changes.md) for the Chinese c
 
 ## Compass lamp thresholds
 
-Each `treasures/{treasureId}` document contains three numeric fields editable in the Firebase Console:
+Each `treasures/{treasureId}` document uses two numeric fields editable in the Firebase Console:
 
 | Field | Default | Meaning | Valid range |
 | --- | --- | --- | --- |
 | `huntReadyRadiusMeters` | 10 | Maximum distance for The Trail lamp, in metres | Greater than 0 |
 | `compassAlignmentToleranceDegrees` | 15 | Maximum heading error for The Bearing lamp, in degrees | 0–180 |
-| `horizontalToleranceDegrees` | 12 | Maximum phone tilt for The Balance lamp, in degrees | 0–90 |
 
-The Android app observes these fields live, including an open compass screen. Missing, nonnumeric, or invalid values fall back independently to the defaults. These fields control the compass gate; the subsequent physical task still uses its own `challenge` rules.
+The Android app observes these fields live, including an open compass screen. Missing, nonnumeric, or invalid values fall back independently to the defaults. Legacy `horizontalToleranceDegrees` values are ignored by the compass page. These two fields control the compass gate; the subsequent physical task still uses its own `challenge` rules.
 
 Initialize missing fields using the existing Firebase CLI login:
 
