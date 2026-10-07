@@ -11,19 +11,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -31,14 +26,11 @@ import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +41,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,7 +51,6 @@ import kotlinx.coroutines.launch
 import com.comp90018.app.BuildConfig
 import com.comp90018.app.Brand
 import com.comp90018.app.Ink
-import com.comp90018.app.Muted
 import com.comp90018.app.features.map.DistanceSimulationControl
 import com.comp90018.app.features.map.GoogleMapView
 import com.comp90018.app.features.map.LocationActionPolicy
@@ -66,8 +59,6 @@ import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.HeadingSimulationControl
 import com.comp90018.app.sensors.location.LocationConfig
 import com.comp90018.app.sensors.location.LocationOutput
-import kotlin.math.roundToInt
-import kotlin.math.abs
 
 /** Standalone target-focused map. It does not own or mutate the existing hunt state machine. */
 @Composable
@@ -151,7 +142,7 @@ fun RelicNavigationScreen(
         label = "relic_resonance_progress",
     )
     val trailAnimation = rememberInfiniteTransition(label = "relic_guiding_thread")
-    val trailPhaseRaw by trailAnimation.animateFloat(
+    val trailPhase = trailAnimation.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -166,10 +157,13 @@ fun RelicNavigationScreen(
         ),
         label = "relic_guiding_thread_phase",
     )
-    val trailPhase by remember { derivedStateOf { (trailPhaseRaw * 24).roundToInt() / 24f } }
     val mapPresentationHeading = uiState.deviceHeadingDegrees?.toFloat() ?: 0f
+    var topPanelsHeightPixels by remember { mutableIntStateOf(0) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val maximumCardHeight = maxHeight * 0.65f
+        val topPanelsHeight = with(LocalDensity.current) { topPanelsHeightPixels.toDp() }
+        val maximumTargetHeight = maxHeight * 0.4f
+        val maximumResonanceHeight = minOf(maxHeight * 0.5f,
+            (maxHeight - topPanelsHeight - 24.dp).coerceAtLeast(48.dp))
         GoogleMapView(
             relics = listOf(relic),
             selectedRelic = relic,
@@ -186,7 +180,7 @@ fun RelicNavigationScreen(
             navigationOnlyUpdates = true,
             navigationTrailTarget = relic.coordinate.takeIf { navigationGuidingThreadAvailable(uiState) },
             navigationTrailStrength = resonanceProgress,
-            navigationTrailPhase = trailPhase,
+            navigationTrailPhaseState = trailPhase,
             onRelicSelected = {},
             modifier = Modifier.fillMaxSize(),
         )
@@ -204,7 +198,7 @@ fun RelicNavigationScreen(
 
         if (BuildConfig.DEBUG) {
             Column(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 132.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = topPanelsHeight + 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.End,
             ) {
@@ -225,92 +219,50 @@ fun RelicNavigationScreen(
             }
         }
 
-        Surface(
-            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            shadowElevation = 4.dp,
+        Column(
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                .onSizeChanged { topPanelsHeightPixels = it.height },
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                shadowElevation = 1.dp,
             ) {
-                IconButton(onClick = onStopNavigation) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Stop navigation", tint = Ink)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onStopNavigation) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Stop navigation", tint = Ink)
+                    }
+                    Text(
+                        "Relic Resonance",
+                        modifier = Modifier.weight(1f),
+                        color = Ink,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
                 }
-                Text(
-                    "Relic Resonance",
-                    modifier = Modifier.weight(1f),
-                    color = Ink,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge,
-                )
             }
+            RelicNavigationTargetPanel(
+                name = relic.name,
+                locationName = relic.locationName,
+                distanceMeters = uiState.distanceMeters,
+                onStopNavigation = onStopNavigation,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp)
+                    .heightIn(max = maximumTargetHeight),
+            )
         }
 
-        Surface(
+        RelicNavigationResonancePanel(
+            state = uiState,
+            presentation = arrivalPresentation,
+            arrivalSweep = arrivalSweep.value,
+            arrivalScale = arrivalScale.value,
+            onBeginHunt = { onStartHunting(relic.id) },
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp)
-                .heightIn(max = maximumCardHeight),
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-            shadowElevation = 10.dp,
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(11.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            navigationDistanceLabel(uiState.distanceMeters),
-                            color = Ink,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    OutlinedButton(onClick = onStopNavigation) {
-                        Text("Stop")
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RosetteResonanceGauge(
-                        progress = uiState.resonanceProgress,
-                        stage = uiState.resonanceStage,
-                        stateDescription = arrivalPresentation.stateDescription,
-                        arrivalSweep = arrivalSweep.value,
-                        scale = arrivalScale.value,
-                        modifier = Modifier.size(64.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Relic Resonance", color = Ink, fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.bodyMedium)
-                        Text(arrivalPresentation.stateDescription, color = Muted,
-                            style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            when (uiState.directionHint) {
-                                NavigationDirectionHint.UNAVAILABLE -> "Finding direction…"
-                                NavigationDirectionHint.ALIGNED -> "Trail aligned"
-                                NavigationDirectionHint.TURN_LEFT -> "Turn left · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
-                                NavigationDirectionHint.TURN_RIGHT -> "Turn right · ${abs(requireNotNull(uiState.headingErrorDegrees)).roundToInt()}°"
-                            },
-                            color = Muted,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                if (arrivalPresentation.showBeginHunt) {
-                    Button(
-                        onClick = { onStartHunting(relic.id) },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    ) {
-                        Text("Begin Hunt")
-                    }
-                }
-            }
-        }
+                .heightIn(max = maximumResonanceHeight),
+        )
     }
 }
 

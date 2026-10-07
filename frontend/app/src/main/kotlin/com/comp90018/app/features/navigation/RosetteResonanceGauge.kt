@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import com.comp90018.app.Brand
 import com.comp90018.app.BrandSoft
 import com.comp90018.app.Ink
-import com.comp90018.app.Muted
 import com.comp90018.app.RelicGold
 import kotlin.math.cos
 import kotlin.math.sin
@@ -51,15 +50,7 @@ internal fun RosetteResonanceGauge(
         )
         pulse
     } else 1f
-    val emphasis = when (stage) {
-        RelicResonanceStage.ACQUIRING -> 0.18f
-        RelicResonanceStage.DORMANT -> 0.3f
-        RelicResonanceStage.FAINT -> 0.45f
-        RelicResonanceStage.DRAWN -> 0.65f
-        RelicResonanceStage.STRONG -> 0.85f
-        RelicResonanceStage.CONFIRMING -> breath
-        RelicResonanceStage.ARRIVED -> 1f
-    }
+    val activation = rosetteActivation(displayedProgress, stage)
     Canvas(
         modifier.graphicsLayer { scaleX = scale; scaleY = scale }.semantics {
             contentDescription = "Relic resonance"
@@ -77,12 +68,13 @@ internal fun RosetteResonanceGauge(
         )
         drawCircle(BrandSoft, radius, centre)
         drawCircle(Ink, radius, centre, style = Stroke(1.5.dp.toPx()))
-        drawCircle(RelicGold.copy(alpha = 0.65f), radius * 0.87f, centre, style = Stroke(0.7.dp.toPx()))
+        drawCircle(Brand.copy(alpha = 0.25f), radius * 0.87f, centre, style = Stroke(0.6.dp.toPx()))
+        drawCircle(Brand.copy(alpha = 0.2f), radius * 0.76f, centre, style = Stroke(1.dp.toPx()))
         if (stage != RelicResonanceStage.ACQUIRING) drawArc(
-            color = RelicGold.copy(alpha = emphasis), startAngle = -90f,
+            color = RelicGold.copy(alpha = activation.arcAlpha * breath), startAngle = -90f,
             sweepAngle = displayedProgress * 360f, useCenter = false,
             topLeft = centre - Offset(radius * 0.76f, radius * 0.76f),
-            size = Size(radius * 1.52f, radius * 1.52f), style = Stroke(2.dp.toPx()),
+            size = Size(radius * 1.52f, radius * 1.52f), style = Stroke(3.dp.toPx()),
         )
         repeat(8) { index ->
             val angle = index * Math.PI / 4.0 - Math.PI / 2.0
@@ -97,11 +89,14 @@ internal fun RosetteResonanceGauge(
                 lineTo(right.x, right.y)
                 close()
             }
-            drawPath(petal, RelicGold.copy(alpha = emphasis * 0.3f))
-            drawPath(petal, if (stage == RelicResonanceStage.ACQUIRING) Muted else Brand,
-                style = Stroke(0.7.dp.toPx()))
+            val active = index < activation.activePetals
+            drawPath(petal, if (active) RelicGold.copy(alpha = activation.arcAlpha * breath)
+                else Brand.copy(alpha = 0.06f))
+            drawPath(petal, if (active) RelicGold else Brand.copy(alpha = 0.25f),
+                style = Stroke(if (active) 0.8.dp.toPx() else 0.5.dp.toPx()))
         }
-        drawCircle(RelicGold.copy(alpha = emphasis), radius * 0.09f, centre)
+        drawCircle(if (activation.activePetals > 0) RelicGold.copy(alpha = activation.arcAlpha * breath)
+            else Brand.copy(alpha = 0.25f), radius * 0.09f, centre)
         if (stage == RelicResonanceStage.ARRIVED) {
             val resolve = arrivalSweep.coerceIn(0f, 1f)
             drawArc(RelicGold, -90f, resolve * 360f, false,
