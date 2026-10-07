@@ -8,9 +8,9 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-internal const val NAVIGATION_ENERGY_RANGE_METERS = 250.0
-internal const val NAVIGATION_ARRIVAL_METERS = 10.0
-internal const val NAVIGATION_ARRIVAL_RESET_METERS = 15.0
+internal const val NAVIGATION_ENERGY_RANGE_METERS = RelicNavigationConfig.resonanceRangeMeters
+internal const val NAVIGATION_ARRIVAL_METERS = RelicNavigationConfig.huntArrivalEntryRadiusMeters
+internal const val NAVIGATION_ARRIVAL_RESET_METERS = RelicNavigationConfig.huntArrivalExitRadiusMeters
 
 internal fun navigationArrivalReached(previouslyReached: Boolean, distanceMeters: Double?): Boolean = when {
     distanceMeters == null || !distanceMeters.isFinite() || distanceMeters < 0.0 -> false
