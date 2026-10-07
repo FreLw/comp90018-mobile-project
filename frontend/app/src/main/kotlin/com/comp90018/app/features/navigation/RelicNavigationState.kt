@@ -37,6 +37,7 @@ internal data class RelicNavigationUiState(
     val headingErrorDegrees: Double? = null,
     val arrivalConfirmed: Boolean = false,
     val canBeginHunt: Boolean = false,
+    val deviceHeadingDegrees: Double? = null,
 )
 
 /**
@@ -61,6 +62,7 @@ internal fun deriveRelicNavigationUiState(
     sample: RelicArrivalSample,
     confirmation: RelicArrivalConfirmationState,
     targetBearingDegrees: Double? = null,
+    deviceHeadingDegrees: Double? = null,
 ): RelicNavigationUiState {
     val stage = confirmedRelicResonanceStage(sample, confirmation)
     val distance = sample.distanceMeters?.takeIf {
@@ -77,5 +79,6 @@ internal fun deriveRelicNavigationUiState(
         headingErrorDegrees = null,
         arrivalConfirmed = arrived,
         canBeginHunt = arrived,
+        deviceHeadingDegrees = deviceHeadingDegrees?.takeIf { it.isFinite() },
     )
 }

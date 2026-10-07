@@ -52,12 +52,16 @@ internal fun navigationTestCoordinate(target: GeoCoordinate, distanceMeters: Dou
     return GeoCoordinate(Math.toDegrees(destinationLatitude), Math.toDegrees(destinationLongitude))
 }
 
-internal fun navigationHeadingError(targetBearingDegrees: Double?, deviceHeadingDegrees: Double): Double? =
-    targetBearingDegrees?.let { abs(((it - deviceHeadingDegrees + 540.0) % 360.0) - 180.0) }
+internal fun navigationHeadingError(targetBearingDegrees: Double?, deviceHeadingDegrees: Double?): Double? {
+    if (targetBearingDegrees == null || !targetBearingDegrees.isFinite() ||
+        deviceHeadingDegrees == null || !deviceHeadingDegrees.isFinite()
+    ) return null
+    return abs(((targetBearingDegrees - deviceHeadingDegrees + 540.0) % 360.0) - 180.0)
+}
 
 internal fun navigationTrailDurationMillis(
     targetBearingDegrees: Double?,
-    deviceHeadingDegrees: Double,
+    deviceHeadingDegrees: Double?,
 ): Int {
     val error = navigationHeadingError(targetBearingDegrees, deviceHeadingDegrees) ?: return 4_200
     val alignment = 1.0 - (error / 180.0).coerceIn(0.0, 1.0)

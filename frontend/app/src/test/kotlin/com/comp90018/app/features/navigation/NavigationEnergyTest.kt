@@ -44,6 +44,16 @@ class NavigationEnergyTest {
     }
 
     @Test
+    fun trailUsesSlowDefaultForMissingOrNonFiniteHeadingsOrBearings() {
+        listOf(null, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY).forEach { value ->
+            assertEquals(4_200, navigationTrailDurationMillis(90.0, value))
+            assertEquals(4_200, navigationTrailDurationMillis(value, 90.0))
+        }
+        assertEquals(4_200, navigationTrailDurationMillis(null, null))
+        assertEquals(1_500, navigationTrailDurationMillis(0.0, 0.0))
+    }
+
+    @Test
     fun arrivalUsesHysteresisToAvoidButtonFlicker() {
         assertFalse(navigationArrivalReached(false, 10.1))
         assertTrue(navigationArrivalReached(false, 10.0))

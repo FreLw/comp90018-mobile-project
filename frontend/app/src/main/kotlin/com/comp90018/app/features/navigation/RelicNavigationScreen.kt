@@ -71,7 +71,6 @@ import com.comp90018.app.features.map.LocationActionPolicy
 import com.comp90018.app.features.map.MapPerspective
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.HeadingSimulationControl
-import com.comp90018.app.features.map.rememberDeviceHeading
 import com.comp90018.app.sensors.location.LocationConfig
 import com.comp90018.app.sensors.location.LocationOutput
 import kotlin.math.roundToInt
@@ -84,13 +83,16 @@ fun RelicNavigationScreen(
     onStopNavigation: () -> Unit,
     onStartHunting: (String) -> Unit,
 ) {
-    val deviceHeading = rememberDeviceHeading()
+    val orientationOutput = rememberNavigationOrientationOutput()
     var recenterRequestKey by remember { mutableIntStateOf(0) }
     var distanceSimulation by remember(relic.id) { mutableStateOf(RelicNavigationSimulation()) }
     val simulatedDistance = distanceSimulation.distanceMeters.takeIf { BuildConfig.DEBUG }
     val isSimulating = simulatedDistance != null
     var simulatedHeading by remember(relic.id) { androidx.compose.runtime.mutableStateOf<Double?>(null) }
-    val effectiveHeading = simulatedHeading?.toFloat() ?: deviceHeading
+    val deviceHeading = navigationDeviceHeading(
+        orientation = orientationOutput,
+        simulatedHeadingDegrees = simulatedHeading.takeIf { BuildConfig.DEBUG },
+    )
     val simulatedCoordinate = simulatedDistance?.let { navigationTestCoordinate(relic.coordinate, it) }
     val navigationLocation = LocationActionPolicy.targetOutput(
         location = userLocation,
@@ -119,6 +121,7 @@ fun RelicNavigationScreen(
         sample = arrivalSample,
         confirmation = updatedConfirmation,
         targetBearingDegrees = navigationLocation.targetBearingDegrees,
+        deviceHeadingDegrees = deviceHeading,
     )
     LaunchedEffect(relic.id, isSimulating, arrivalSample) {
         arrivalConfirmation = updatedConfirmation
@@ -154,7 +157,7 @@ fun RelicNavigationScreen(
             animation = tween(
                 durationMillis = navigationTrailDurationMillis(
                     uiState.targetBearingDegrees,
-                    effectiveHeading.toDouble(),
+                    uiState.deviceHeadingDegrees,
                 ),
                 easing = LinearEasing,
             ),
@@ -163,12 +166,13 @@ fun RelicNavigationScreen(
         label = "relic_energy_trail_phase",
     )
     val trailPhase by remember { derivedStateOf { (trailPhaseRaw * 24).roundToInt() / 24f } }
+    val mapPresentationHeading = uiState.deviceHeadingDegrees?.toFloat() ?: 0f
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
             relics = listOf(relic),
             selectedRelic = relic,
             locationOutput = navigationLocation,
-            deviceHeading = effectiveHeading,
+            deviceHeading = mapPresentationHeading,
             activeHuntTreasureId = relic.id,
             focusSelectedRelic = false,
             perspective = MapPerspective.HUNT,
