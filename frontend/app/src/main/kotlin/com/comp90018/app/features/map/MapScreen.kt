@@ -754,42 +754,6 @@ fun MapScreen(
             }
         }
 
-        activeHuntTreasureId?.let { huntId ->
-            resolvedTreasures.firstOrNull { it.id == huntId }?.let { relic ->
-                Card(
-                    // The hunt marker can sit directly beneath the user's location marker.  Make
-                    // the persistent banner an equivalent, unambiguous way to open the target.
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 14.dp)
-                        .clickable {
-                            if (teamHuntCanClaim) detailRelic = relic else selectedRelic = relic
-                        },
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
-                    shape = RoundedCornerShape(20.dp),
-                ) {
-                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.LocationOn, null, tint = Brand)
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            when {
-                                teamHuntAlreadyClaimed -> "Treasure claimed. Waiting for the other explorers."
-                                teamHuntAllCompleted -> "All explorers are ready — dig the treasure!"
-                                currentUserId in activeHuntCompletedMemberIds -> "Waiting for your teammate — you can help them."
-                                else -> "Go and hunt for the treasure: ${relic.name}\nTap here to open the hunt"
-                            },
-                            color = Ink, fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    if (teamHuntCanClaim) {
-                        Button(onClick = { detailRelic = relic }, modifier = Modifier.padding(horizontal = 14.dp)) {
-                            Text("Claim treasure")
-                        }
-                    }
-                }
-            }
-        }
-
         if (BuildConfig.DEBUG) {
             DebugChallengeLauncher(
                 relics = debugTasks,
