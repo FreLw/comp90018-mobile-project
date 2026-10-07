@@ -38,7 +38,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -151,7 +150,7 @@ fun RelicNavigationScreen(
         label = "relic_resonance_progress",
     )
     val trailAnimation = rememberInfiniteTransition(label = "relic_guiding_thread")
-    val trailPhaseRaw by trailAnimation.animateFloat(
+    val trailPhase = trailAnimation.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -166,7 +165,6 @@ fun RelicNavigationScreen(
         ),
         label = "relic_guiding_thread_phase",
     )
-    val trailPhase by remember { derivedStateOf { (trailPhaseRaw * 24).roundToInt() / 24f } }
     val mapPresentationHeading = uiState.deviceHeadingDegrees?.toFloat() ?: 0f
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val maximumCardHeight = maxHeight * 0.65f
@@ -186,7 +184,7 @@ fun RelicNavigationScreen(
             navigationOnlyUpdates = true,
             navigationTrailTarget = relic.coordinate.takeIf { navigationGuidingThreadAvailable(uiState) },
             navigationTrailStrength = resonanceProgress,
-            navigationTrailPhase = trailPhase,
+            navigationTrailPhaseState = trailPhase,
             onRelicSelected = {},
             modifier = Modifier.fillMaxSize(),
         )

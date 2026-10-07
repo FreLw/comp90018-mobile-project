@@ -2,6 +2,7 @@ package com.comp90018.app.features.map
 
 import com.comp90018.app.data.rooms.TeamHuntLocation
 import com.comp90018.app.features.navigation.NavigationMapUpdateGate
+import com.comp90018.app.features.navigation.guidingThreadStyle
 
 import android.Manifest
 import android.app.Activity
@@ -99,6 +100,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -106,6 +108,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.State
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
@@ -1251,6 +1256,7 @@ internal fun GoogleMapView(
     navigationTrailTarget: GeoCoordinate? = null,
     navigationTrailStrength: Float = 0f,
     navigationTrailPhase: Float = 0f,
+    navigationTrailPhaseState: State<Float>? = null,
     onRelicSelected: (MapRelic) -> Unit,
     onFragmentSelected: (TeamHuntFragment) -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -1268,7 +1274,13 @@ internal fun GoogleMapView(
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
     val teammateMarkers = remember { mutableMapOf<String, Marker>() }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
-    var navigationTrail by remember { mutableStateOf(GuidingThreadOverlay()) }
+    val navigationTrail = remember { GuidingThreadRenderState() }
+    var navigationMap by remember { mutableStateOf<GoogleMap?>(null) }
+    var navigationMapRevision by remember { mutableIntStateOf(0) }
+    val threadInputs by rememberUpdatedState(GuidingThreadFrame(
+        locationOutput.currentLocation ?: locationOutput.lastKnownLocation,
+        navigationTrailTarget, navigationTrailStrength, navigationTrailPhase,
+    ))
     var mapStyleConfigured by remember { mutableStateOf(false) }
     var cameraPerspective by remember { mutableStateOf(perspective) }
     var cameraMovedByUser by remember { mutableStateOf(false) }
@@ -1284,10 +1296,25 @@ internal fun GoogleMapView(
     DisposableEffect(mapView) {
         onDispose {
             navigationUpdates.dispose()
-            navigationTrail.remove()
+            navigationTrail.overlay.remove()
         }
     }
     MapLifecycle(mapView)
+
+    LaunchedEffect(navigationMap, navigationOnlyUpdates, navigationTrailPhaseState) {
+        val map = navigationMap ?: return@LaunchedEffect
+        if (!navigationOnlyUpdates) return@LaunchedEffect
+        // Observe the animation State directly: no AndroidView update or getMapAsync per tick.
+        snapshotFlow {
+            threadInputs.copy(phase = navigationTrailPhaseState?.value ?: threadInputs.phase) to navigationMapRevision
+        }.collect { (frame, _) ->
+            if (!navigationUpdates.disposed) {
+                navigationTrail.overlay = updateNavigationTrail(
+                    map, frame.location, frame.target, frame.strength, frame.phase, navigationTrail.overlay,
+                )
+            }
+        }
+    }
 
     AndroidView(
         factory = { mapView },
@@ -1303,16 +1330,9 @@ internal fun GoogleMapView(
             )
             view.getMapAsync { map ->
                 if (navigationUpdates.disposed) return@getMapAsync
+                if (navigationOnlyUpdates) navigationMap = map
                 // Only standalone Navigation opts in; ordinary Map/Hunt keeps its update path.
                 if (navigationOnlyUpdates && !navigationUpdates.shouldUpdateScene(sceneInputs)) {
-                    navigationTrail = updateNavigationTrail(
-                        map = map,
-                        currentLocation = locationOutput.currentLocation ?: locationOutput.lastKnownLocation,
-                        target = navigationTrailTarget,
-                        strength = navigationTrailStrength,
-                        phase = navigationTrailPhase,
-                        previous = navigationTrail,
-                    )
                     return@getMapAsync
                 }
                 if (!mapStyleConfigured) {
@@ -1363,7 +1383,8 @@ internal fun GoogleMapView(
                     map.clear()
                     teammateMarkers.clear()
                     currentLocationMarker = null
-                    navigationTrail = GuidingThreadOverlay()
+                    navigationTrail.overlay = GuidingThreadOverlay()
+                    if (navigationOnlyUpdates) navigationMapRevision += 1
                     renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, activeHuntTreasureId, markerPulse, discoveredTreasureIds)
                     renderHuntFragments(context, map, huntFragments, foundFragmentIds)
                     renderedMapKey = mapKey
@@ -1400,13 +1421,13 @@ internal fun GoogleMapView(
                     headingDegrees = deviceHeading,
                     stale = isStaleDisplay,
                 )
-                navigationTrail = updateNavigationTrail(
+                if (!navigationOnlyUpdates) navigationTrail.overlay = updateNavigationTrail(
                     map = map,
                     currentLocation = displayLocation,
                     target = navigationTrailTarget,
                     strength = navigationTrailStrength,
                     phase = navigationTrailPhase,
-                    previous = navigationTrail,
+                    previous = navigationTrail.overlay,
                 )
                 val visibleTeammateIds = teammateLocations.map { it.uid }.toSet()
                 teammateMarkers.keys.filterNot { it in visibleTeammateIds }.forEach { uid ->
@@ -1479,13 +1500,15 @@ internal fun GoogleMapView(
     )
 }
 
+private class GuidingThreadRenderState {
+    var overlay = GuidingThreadOverlay()
+}
+
 private data class GuidingThreadOverlay(
     val base: Polyline? = null,
     val active: Polyline? = null,
     val glints: List<Polygon> = emptyList(),
-    val currentLocation: GeoCoordinate? = null,
-    val target: GeoCoordinate? = null,
-    val strength: Float = 0f,
+    val frame: GuidingThreadFrame? = null,
 ) {
     fun remove() {
         base?.remove()
@@ -1511,19 +1534,24 @@ private fun updateNavigationTrail(
     val start = currentLocation.toLatLng()
     val end = target.toLatLng()
     val resonance = if (strength.isFinite()) strength.coerceIn(0f, 1f) else 0f
+    val frame = GuidingThreadFrame(currentLocation, target, resonance, phase)
+    val updates = guidingThreadUpdates(previous.frame, frame)
+    val style = guidingThreadStyle(resonance)
     val base = previous.base ?: map.addPolyline(
         PolylineOptions().add(start, end).geodesic(true).zIndex(1f),
     )
     val active = previous.active ?: map.addPolyline(
         PolylineOptions().add(start, end).geodesic(true).zIndex(1.1f),
     )
-    if (previous.currentLocation != currentLocation || previous.target != target || previous.strength != resonance) {
+    if (updates.geometry) {
         base.points = listOf(start, end)
-        base.width = 3.5f
-        base.color = android.graphics.Color.argb(140, 122, 75, 42)
         active.points = listOf(start, end)
-        active.width = 1.6f + resonance * 0.7f
-        active.color = android.graphics.Color.argb((60 + resonance * 150).toInt(), 183, 121, 31)
+    }
+    if (updates.style) {
+        base.width = 2f
+        base.color = android.graphics.Color.argb(100, 122, 75, 42)
+        active.width = style.lineWidthPixels
+        active.color = android.graphics.Color.argb((style.lineAlpha * 255).toInt(), 183, 121, 31)
     }
 
     val glints = if (previous.glints.size == GUIDING_THREAD_GLINT_COUNT) previous.glints else {
@@ -1536,12 +1564,16 @@ private fun updateNavigationTrail(
                 .clickable(false).zIndex(2f))
         }
     }
-    glints.forEachIndexed { index, glint ->
-        val centre = guidingThreadGlintCentre(target, currentLocation, phase, index)
-        glint.points = guidingThreadGlintVertices(centre, 0.75 + resonance * 0.45).map { it.toLatLng() }
-        glint.fillColor = android.graphics.Color.argb((150 + resonance * 70).toInt(), 183, 121, 31)
+    if (updates.style) glints.forEach { glint ->
+        glint.fillColor = android.graphics.Color.argb((style.glintAlpha * 255).toInt(), 183, 121, 31)
+        glint.strokeColor = android.graphics.Color.argb((style.glintAlpha * 200).toInt(), 52, 35, 25)
+        glint.isVisible = resonance > 0f
     }
-    return GuidingThreadOverlay(base, active, glints, currentLocation, target, resonance)
+    if (updates.animation) glints.forEachIndexed { index, glint ->
+        val centre = guidingThreadGlintCentre(target, currentLocation, phase, index)
+        glint.points = guidingThreadGlintVertices(centre, style.glintRadiusMeters).map { it.toLatLng() }
+    }
+    return GuidingThreadOverlay(base, active, glints, frame)
 }
 
 @Composable

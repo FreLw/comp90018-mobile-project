@@ -105,3 +105,13 @@ Check displayed semantic labels with reliable position data; GPS drift may requi
 - [ ] Normal Map camera, teammate markers, fragments and team-room hunt triggering behave as before.
 
 Record pass/fail and logs/screenshots for each unchecked item. A successful build is not a completed device QA run.
+
+## Visual-feedback follow-up (pending device execution)
+
+- [ ] Compare 120, 80, 32 and 17 m at the same map position/zoom: Rosette arcs are about 21%, 50%, 84% and 95%, with 2/5/6/7 active gold petals respectively.
+- [ ] Check 150/80/30/10 m: the dormant instrument/thread is quiet; increasing resonance visibly strengthens the gold arc/line and diamonds.
+- [ ] Hold simulated distance and heading constant for at least 10 seconds: all three diamonds continuously travel from relic to explorer without requiring a slider change, tap or GPS update.
+- [ ] At 17 m, turn away: gold remains strong while glints slow down. At 120 m, align: gold remains faint while glints move faster.
+- [ ] Pan the map and observe stationary-device animation: no camera jitter/recentering, relic-marker flicker or Hunt overlay reconstruction. Recenter still works explicitly.
+- [ ] Repeat leave/re-enter, background/resume, target loss and permission loss: no orphan thread/glints; guidance and animation recover when available.
+- [ ] Confirm existing CONFIRMING/ARRIVED sweep and Begin Hunt behavior, without any direction-based arrival gate.
