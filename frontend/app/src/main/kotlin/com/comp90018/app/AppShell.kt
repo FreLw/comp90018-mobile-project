@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.rooms.FirebaseTeamRoomRepository
+import com.comp90018.app.data.rooms.FirebaseTeamHuntLocationRepository
 import com.comp90018.app.data.social.FirebaseSocialRepository
 import com.comp90018.app.data.treasure.FirebaseTreasureCollectionRepository
 import com.comp90018.app.data.treasure.FirebaseTreasureRepository
@@ -31,6 +32,7 @@ import com.comp90018.app.features.friends.FriendsScreen
 import com.comp90018.app.features.friends.UnreadMessagesViewModel
 import com.comp90018.app.features.map.MapScreen
 import com.comp90018.app.features.map.UserLocationViewModel
+import com.comp90018.app.features.map.rememberTeamHuntLocations
 import com.comp90018.app.features.map.DEFAULT_CAMPUS_CENTRE
 import com.comp90018.app.features.map.isProbablyEmulator
 import com.comp90018.app.features.profile.ProfileScreen
@@ -115,6 +117,9 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         factory = UserLocationViewModel.factory(context, preciseLocationEnabled),
     )
     val userLocation by userLocationViewModel.output.collectAsStateWithLifecycle()
+    val sharedHuntRoom = activeRoomHuntState.room?.takeIf { it.id == roomsState.activeRoomId }
+    val huntLocationRepository = remember(firestore) { FirebaseTeamHuntLocationRepository(firestore) }
+    val teammateLocations = rememberTeamHuntLocations(huntLocationRepository, sharedHuntRoom, user.uid, userLocation)
     val treasurePageLocation = if (remember { isProbablyEmulator() }) {
         DEFAULT_CAMPUS_CENTRE
     } else {
@@ -208,6 +213,8 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     activeHuntFoundFragmentIds = activeRoomHuntState.room?.foundFragmentIds.orEmpty(),
                     activeHuntClaimedMemberIds = activeRoomHuntState.room?.taskClaimedMemberIds.orEmpty(),
                     currentUserId = user.uid,
+                    teammateLocations = teammateLocations,
+                    huntMemberNames = activeRoomHuntState.members.associate { it.uid to it.name },
                     onCompleteActiveHuntTask = { complete ->
                         activeRoomHuntViewModel?.completeHuntTaskWithConfirmation(complete)
                             ?: complete("No active team hunt")

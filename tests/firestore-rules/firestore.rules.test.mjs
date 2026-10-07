@@ -16,6 +16,8 @@ import {
   setDoc,
   updateDoc,
   writeBatch,
+  Timestamp,
+  deleteDoc,
 } from "firebase/firestore";
 
 const PROJECT_ID = "demo-lost-treasures";
@@ -40,6 +42,89 @@ after(async () => {
 const authenticatedDb = (uid) =>
   testEnvironment.authenticatedContext(uid, { email: `${uid}@example.com` }).firestore();
 const unauthenticatedDb = () => testEnvironment.unauthenticatedContext().firestore();
+
+describe("shared team hunt locations", () => {
+  const roomId = "location-hunt";
+  const sessionId = "hunt-session";
+  const path = (uid) => `teamRooms/${roomId}/locations/${uid}`;
+  const position = (changes = {}) => ({
+    sessionId, latitude: -37.798, longitude: 144.96,
+    observedAt: Timestamp.now(), updatedAt: serverTimestamp(), ...changes,
+  });
+  async function huntingRoom(changes = {}) {
+    await seed(`teamRooms/${roomId}`, {
+      creatorId: "alice", memberIds: ["alice", "bob"],
+      taskStatus: "hunting", huntSessionId: sessionId, ...changes,
+    });
+  }
+  test("both explorers publish and read only the current hunt session", async () => {
+    await huntingRoom();
+    for (const uid of ["alice", "bob"]) {
+      const db = authenticatedDb(uid);
+      await assertSucceeds(setDoc(doc(db, path(uid)), position()));
+      await assertSucceeds(updateDoc(doc(db, path(uid)), position({ latitude: -37.799 })));
+    }
+    for (const uid of ["alice", "bob"]) {
+      const db = authenticatedDb(uid);
+      await assertSucceeds(getDoc(doc(db, path(uid === "alice" ? "bob" : "alice"))));
+      await assertSucceeds(getDocs(query(collection(db, `teamRooms/${roomId}/locations`), where("sessionId", "==", sessionId))));
+      await assertFails(getDocs(collection(db, `teamRooms/${roomId}/locations`)));
+    }
+  });
+  test("outsiders and signed-out clients cannot read or publish positions", async () => {
+    await huntingRoom();
+    await seed(path("alice"), position());
+    for (const db of [authenticatedDb("carol"), unauthenticatedDb()]) {
+      await assertFails(getDoc(doc(db, path("alice"))));
+      await assertFails(getDocs(query(collection(db, `teamRooms/${roomId}/locations`), where("sessionId", "==", sessionId))));
+      await assertFails(setDoc(doc(db, path("carol")), position()));
+    }
+  });
+  test("even the host cannot overwrite or delete a teammate's position", async () => {
+    await huntingRoom();
+    await seed(path("bob"), position());
+    const alice = authenticatedDb("alice");
+    await assertFails(setDoc(doc(alice, path("bob")), position()));
+    await assertFails(deleteDoc(doc(alice, path("bob"))));
+  });
+  test("no position reads or writes before Start Hunt, after termination, or alone", async () => {
+    await seed(path("alice"), position());
+    const alice = authenticatedDb("alice");
+    for (const changes of [
+      { taskStatus: "assigned" }, { taskStatus: "unassigned" },
+      { memberIds: ["alice"] }, { huntSessionId: "" },
+    ]) {
+      await huntingRoom(changes);
+      await assertFails(getDoc(doc(alice, path("alice"))));
+      await assertFails(setDoc(doc(alice, path("alice")), position()));
+    }
+  });
+  test("old hunt sessions are inaccessible and cannot be republished", async () => {
+    await huntingRoom({ huntSessionId: "new-session" });
+    await seed(path("bob"), position());
+    const alice = authenticatedDb("alice");
+    await assertFails(getDoc(doc(alice, path("bob"))));
+    await assertFails(setDoc(doc(alice, path("alice")), position()));
+  });
+  test("rejects invalid coordinates, stale queued fixes, and forged heartbeat timestamps", async () => {
+    await huntingRoom();
+    const alice = authenticatedDb("alice");
+    for (const changes of [
+      { latitude: 91 }, { longitude: -181 }, { latitude: "-37.798" },
+      { observedAt: Timestamp.fromMillis(Date.now() - 60_000) },
+      { observedAt: Timestamp.fromMillis(Date.now() + 60_000) },
+      { updatedAt: Timestamp.fromMillis(0) }, { unrelated: true },
+    ]) await assertFails(setDoc(doc(alice, path("alice")), position(changes)));
+  });
+  test("removed members cannot read or publish, but can delete their own remaining position", async () => {
+    await huntingRoom({ memberIds: ["alice", "carol"] });
+    await seed(path("bob"), position());
+    const bob = authenticatedDb("bob");
+    await assertFails(getDoc(doc(bob, path("bob"))));
+    await assertFails(setDoc(doc(bob, path("bob")), position()));
+    await assertSucceeds(deleteDoc(doc(bob, path("bob"))));
+  });
+});
 
 async function seed(path, data) {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
