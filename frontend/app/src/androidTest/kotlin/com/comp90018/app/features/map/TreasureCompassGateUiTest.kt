@@ -23,17 +23,16 @@ class TreasureCompassGateUiTest {
     private val relic = MapRelic("wilson_hall_rosette", "Stone Rosette", "Wilson Hall",
         coordinate = GeoCoordinate(-37.798, 144.96))
 
-    @Test fun allThreeChecksAreRequiredBeforeOpeningTheTask() {
+    @Test fun distanceAndDirectionAreRequiredBeforeOpeningTheTask() {
         var location by mutableStateOf(LocationOutput(
             distanceToTargetMeters = 10.01, targetBearingDegrees = 0.0, validity = SensorValidity.VALID))
         var heading by mutableStateOf(0f)
-        var tilt by mutableStateOf(0f)
         var enteredTask by mutableStateOf(false)
         var transitions = 0
         rule.setContent {
             MaterialTheme {
                 if (enteredTask) Text("Task challenge")
-                else TreasureCompassGate(relic, location, heading, DeviceMotionSample(0f, tilt),
+                else TreasureCompassGate(relic, location, heading,
                     soundEffectsEnabled = false,
                     onContinue = { transitions++; enteredTask = true }, onBack = {})
             }
@@ -41,9 +40,10 @@ class TreasureCompassGateUiTest {
         rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
         rule.runOnIdle { location = location.copy(distanceToTargetMeters = 5.0); heading = 15.01f }
         rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
-        rule.runOnIdle { heading = 0f; tilt = 12.01f }
-        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
-        rule.runOnIdle { assertEquals(0, transitions); tilt = 12f }
+        rule.onNodeWithText("The Balance").assertDoesNotExist()
+        rule.onNodeWithText("LIBELLA").assertDoesNotExist()
+        rule.onNodeWithText("LEVEL", substring = true).assertDoesNotExist()
+        rule.runOnIdle { assertEquals(0, transitions); heading = 0f }
         rule.waitUntil(5_000) {
             rule.onAllNodesWithText("Hunt", substring = true).fetchSemanticsNodes().size == 1
         }
@@ -61,7 +61,7 @@ class TreasureCompassGateUiTest {
                 TreasureCompassGate(relic,
                     LocationOutput(distanceToTargetMeters = 5.0, targetBearingDegrees = 0.0,
                         validity = SensorValidity.UNKNOWN),
-                    0f, DeviceMotionSample(0f, 0f), soundEffectsEnabled = false,
+                    0f, soundEffectsEnabled = false,
                     onContinue = { transitions++ }, onBack = { backCount++ })
             }
         }

@@ -133,6 +133,5 @@ internal fun parseCompassGateConfig(fields: Map<String, Any>): CompassGateConfig
     return CompassGateConfig(
         huntReadyRadiusMeters = validNumber("huntReadyRadiusMeters", defaults.huntReadyRadiusMeters) { it > 0.0 },
         compassAlignmentToleranceDegrees = validNumber("compassAlignmentToleranceDegrees", defaults.compassAlignmentToleranceDegrees) { it in 0.0..180.0 },
-        horizontalToleranceDegrees = validNumber("horizontalToleranceDegrees", defaults.horizontalToleranceDegrees) { it in 0.0..90.0 },
     )
 }

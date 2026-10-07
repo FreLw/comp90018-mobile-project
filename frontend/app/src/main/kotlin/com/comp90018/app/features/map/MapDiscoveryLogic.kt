@@ -52,25 +52,22 @@ internal fun signedBearingDifference(
     deviceHeadingDegrees: Double,
 ): Double = ((targetBearingDegrees - deviceHeadingDegrees + 540.0) % 360.0) - 180.0
 
-/** The three independent sensor conditions required before the task challenge opens. */
+/** The distance and direction conditions required before the task challenge opens. */
 internal data class HuntReadiness(
     val nearTreasure: Boolean,
     val facingTreasure: Boolean,
-    val phoneHorizontal: Boolean,
 ) {
-    val allReady: Boolean = nearTreasure && facingTreasure && phoneHorizontal
+    val allReady: Boolean = nearTreasure && facingTreasure
 }
 
 internal fun evaluateHuntReadiness(
     distanceMeters: Double?,
     signedTurnDegrees: Double?,
-    tiltDegrees: Float,
     config: CompassGateConfig = CompassGateConfig(),
 ): HuntReadiness = HuntReadiness(
     nearTreasure = distanceMeters != null && distanceMeters <= config.huntReadyRadiusMeters,
     facingTreasure = signedTurnDegrees != null &&
         abs(signedTurnDegrees) <= config.compassAlignmentToleranceDegrees,
-    phoneHorizontal = tiltDegrees <= config.horizontalToleranceDegrees,
 )
 
 internal val DEFAULT_CAMPUS_CENTRE = GeoCoordinate(-37.7986, 144.9602)
