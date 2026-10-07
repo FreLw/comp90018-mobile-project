@@ -166,11 +166,17 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.Circle
+import com.google.android.gms.maps.model.CircleOptions
+import com.google.android.gms.maps.model.Dash
+import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.android.gms.maps.model.Polyline
+import com.google.android.gms.maps.model.PolylineOptions
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
@@ -179,7 +185,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-private enum class MapPerspective { GOD, HUNT }
+internal enum class MapPerspective { GOD, HUNT }
 
 /** Dedicated map feature boundary; location rendering belongs here. */
 @Composable
@@ -212,6 +218,8 @@ fun MapScreen(
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     requestedTreasureId: String? = null,
     onTreasureRequestConsumed: () -> Unit = {},
+    requestedHuntTreasureId: String? = null,
+    onHuntRequestConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
@@ -293,6 +301,12 @@ fun MapScreen(
             HuntEntry.MEMBER_QUIZ -> memberQuizRelic = relic
             HuntEntry.COMPASS -> compassRelic = relic
         }
+    }
+    LaunchedEffect(requestedHuntTreasureId, treasures) {
+        val requestedId = requestedHuntTreasureId ?: return@LaunchedEffect
+        val requestedRelic = treasures.firstOrNull { it.id == requestedId } ?: return@LaunchedEffect
+        onHuntRequestConsumed()
+        openHunt(requestedRelic)
     }
     val mapActivity = LocalActivity.current
     DisposableEffect(hapticController) {
@@ -1212,7 +1226,7 @@ private fun SouthLawnClaimWaitingScreen(
 }
 
 @Composable
-private fun GoogleMapView(
+internal fun GoogleMapView(
     relics: List<MapRelic>,
     selectedRelic: MapRelic?,
     locationOutput: LocationOutput,
@@ -1229,6 +1243,14 @@ private fun GoogleMapView(
     foundFragmentIds: Set<String> = emptySet(),
     focusSelectedRelic: Boolean = true,
     perspective: MapPerspective = MapPerspective.GOD,
+    allowCameraGestures: Boolean = perspective == MapPerspective.GOD,
+    allowZoomGestures: Boolean = true,
+    allowRotateGestures: Boolean = allowCameraGestures,
+    allowTiltGestures: Boolean = true,
+    recenterRequestKey: Int = 0,
+    navigationTrailTarget: GeoCoordinate? = null,
+    navigationTrailStrength: Float = 0f,
+    navigationTrailPhase: Float = 0f,
     onRelicSelected: (MapRelic) -> Unit,
     onFragmentSelected: (TeamHuntFragment) -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -1246,8 +1268,12 @@ private fun GoogleMapView(
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
     val teammateMarkers = remember { mutableMapOf<String, Marker>() }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
+    var navigationTrail by remember { mutableStateOf<Polyline?>(null) }
+    var navigationTrailDots by remember { mutableStateOf<List<Circle>>(emptyList()) }
     var mapStyleConfigured by remember { mutableStateOf(false) }
     var cameraPerspective by remember { mutableStateOf(perspective) }
+    var cameraMovedByUser by remember { mutableStateOf(false) }
+    var handledRecenterRequestKey by remember { mutableIntStateOf(recenterRequestKey) }
     val flip = remember(flippingRelicId) { Animatable(if (flippingRelicId == null) 1f else 0f) }
     LaunchedEffect(flippingRelicId, renderedRelicMarkers) {
         if (flippingRelicId != null && renderedRelicMarkers.containsKey(flippingRelicId)) {
@@ -1270,8 +1296,10 @@ private fun GoogleMapView(
                 }
                 map.uiSettings.isZoomControlsEnabled = false
                 map.uiSettings.isCompassEnabled = perspective == MapPerspective.GOD
-                map.uiSettings.isScrollGesturesEnabled = perspective == MapPerspective.GOD
-                map.uiSettings.isRotateGesturesEnabled = perspective == MapPerspective.GOD
+                map.uiSettings.isScrollGesturesEnabled = allowCameraGestures
+                map.uiSettings.isRotateGesturesEnabled = allowRotateGestures
+                map.uiSettings.isZoomGesturesEnabled = allowZoomGestures
+                map.uiSettings.isTiltGesturesEnabled = allowTiltGestures
                 map.isBuildingsEnabled = true
                 map.setOnMarkerClickListener { marker ->
                     relics.firstOrNull { it.id == marker.tag }?.let {
@@ -1283,6 +1311,11 @@ private fun GoogleMapView(
                     } ?: false
                 }
                 map.setOnMapClickListener { onMapClick() }
+                map.setOnCameraMoveStartedListener { reason ->
+                    if (allowCameraGestures && reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                        cameraMovedByUser = true
+                    }
+                }
                 // Google Maps draws its blue location layer above overlapping treasure markers,
                 // which made an arrived explorer unable to tap their active hunt target. Our
                 // own marker is rendered below whenever we have a usable reading, so avoid the
@@ -1296,11 +1329,14 @@ private fun GoogleMapView(
                 val fragmentSignature = huntFragments.joinToString("|") { fragment ->
                     "${fragment.id}:${fragment.coordinate.latitude}:${fragment.coordinate.longitude}:${fragment.id in foundFragmentIds}"
                 }
-                val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature|$fragmentSignature"
+                val trailTargetKey = navigationTrailTarget?.let { "${it.latitude}:${it.longitude}" }.orEmpty()
+                val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature|$fragmentSignature|$trailTargetKey"
                 if (renderedMapKey != mapKey) {
                     map.clear()
                     teammateMarkers.clear()
                     currentLocationMarker = null
+                    navigationTrail = null
+                    navigationTrailDots = emptyList()
                     renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, activeHuntTreasureId, markerPulse, discoveredTreasureIds)
                     renderHuntFragments(context, map, huntFragments, foundFragmentIds)
                     renderedMapKey = mapKey
@@ -1337,6 +1373,17 @@ private fun GoogleMapView(
                     headingDegrees = deviceHeading,
                     stale = isStaleDisplay,
                 )
+                val trailResult = updateNavigationTrail(
+                    map = map,
+                    currentLocation = displayLocation,
+                    target = navigationTrailTarget,
+                    strength = navigationTrailStrength,
+                    phase = navigationTrailPhase,
+                    polyline = navigationTrail,
+                    dots = navigationTrailDots,
+                )
+                navigationTrail = trailResult.first
+                navigationTrailDots = trailResult.second
                 val visibleTeammateIds = teammateLocations.map { it.uid }.toSet()
                 teammateMarkers.keys.filterNot { it in visibleTeammateIds }.forEach { uid ->
                     teammateMarkers.remove(uid)?.remove()
@@ -1366,8 +1413,13 @@ private fun GoogleMapView(
                 if (cameraPerspective != perspective) {
                     cameraPerspective = perspective
                     cameraInitialised = false
+                    cameraMovedByUser = false
                 }
-                if (perspective == MapPerspective.HUNT && displayLocation != null) {
+                if (handledRecenterRequestKey != recenterRequestKey) {
+                    handledRecenterRequestKey = recenterRequestKey
+                    cameraMovedByUser = false
+                }
+                if (perspective == MapPerspective.HUNT && displayLocation != null && !cameraMovedByUser) {
                     moveCameraToHuntView(map, displayLocation, deviceHeading)
                     cameraInitialised = true
                 } else if (!cameraInitialised) {
@@ -1402,6 +1454,71 @@ private fun GoogleMapView(
         },
     )
 }
+
+private fun updateNavigationTrail(
+    map: GoogleMap,
+    currentLocation: GeoCoordinate?,
+    target: GeoCoordinate?,
+    strength: Float,
+    phase: Float,
+    polyline: Polyline?,
+    dots: List<Circle>,
+): Pair<Polyline?, List<Circle>> {
+    if (currentLocation == null || target == null) {
+        polyline?.remove()
+        dots.forEach(Circle::remove)
+        return null to emptyList()
+    }
+
+    val start = currentLocation.toLatLng()
+    val end = target.toLatLng()
+    val signalStrength = strength.coerceIn(0f, 1f)
+    val lineColor = android.graphics.Color.argb(
+        (95 + signalStrength * 90).toInt(),
+        181,
+        128,
+        45,
+    )
+    val line = polyline ?: map.addPolyline(
+        PolylineOptions().add(start, end).geodesic(true).zIndex(1f),
+    )
+    line.points = listOf(start, end)
+    line.width = 4f + signalStrength * 3f
+    line.color = lineColor
+    line.pattern = listOf(
+        Dash(14f + signalStrength * 18f),
+        Gap(24f - signalStrength * 15f),
+    )
+
+    val trailDots = if (dots.size == NAVIGATION_TRAIL_DOT_COUNT) dots else {
+        dots.forEach(Circle::remove)
+        List(NAVIGATION_TRAIL_DOT_COUNT) {
+            map.addCircle(
+                CircleOptions().center(start).radius(2.0).strokeWidth(0f).zIndex(2f),
+            )
+        }
+    }
+    trailDots.forEachIndexed { index, dot ->
+        val fraction = ((phase.coerceIn(0f, 1f) + index.toFloat() / NAVIGATION_TRAIL_DOT_COUNT) % 1f).toDouble()
+        // The relic emits energy toward the explorer, so particles travel target to user.
+        dot.center = interpolateTrailPoint(end, start, fraction)
+        dot.radius = 1.7 + signalStrength * 1.2
+        dot.fillColor = android.graphics.Color.argb(
+            (130 + signalStrength * 100).toInt(),
+            255,
+            206,
+            92,
+        )
+    }
+    return line to trailDots
+}
+
+private fun interpolateTrailPoint(start: LatLng, end: LatLng, fraction: Double): LatLng = LatLng(
+    start.latitude + (end.latitude - start.latitude) * fraction,
+    start.longitude + (end.longitude - start.longitude) * fraction,
+)
+
+private const val NAVIGATION_TRAIL_DOT_COUNT = 4
 
 @Composable
 private fun FindTreasurePrompt(
@@ -1465,14 +1582,50 @@ private fun PerspectiveOption(label: String, selected: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun DistanceSimulationControl(distance: Double?, onDistance: (Double?) -> Unit, modifier: Modifier = Modifier) {
+internal fun DistanceSimulationControl(
+    distance: Double?,
+    onDistance: (Double?) -> Unit,
+    modifier: Modifier = Modifier,
+    maximumDistance: Float = 120f,
+    initialDistance: Double = 100.0,
+) {
     Surface(modifier.width(240.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFFFFF4DE), shadowElevation = 4.dp) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Test distance: ${distance?.let { String.format(Locale.US, "%.1f m", it) } ?: "GPS"}", Modifier.weight(1f), color = Ink, fontSize = 12.sp)
-                Switch(checked = distance != null, onCheckedChange = { onDistance(if (it) 100.0 else null) })
+                Switch(checked = distance != null, onCheckedChange = { onDistance(if (it) initialDistance else null) })
             }
-            Slider(value = (distance ?: 100.0).toFloat(), onValueChange = { onDistance(it.toDouble()) }, valueRange = 0f..120f)
+            Slider(
+                value = (distance ?: initialDistance).toFloat(),
+                onValueChange = { onDistance(it.toDouble()) },
+                valueRange = 0f..maximumDistance,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun HeadingSimulationControl(
+    headingDegrees: Double?,
+    onHeading: (Double?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier.width(240.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFFFFF4DE), shadowElevation = 4.dp) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Test heading: ${headingDegrees?.let { String.format(Locale.US, "%.0f°", it) } ?: "sensor"}",
+                    Modifier.weight(1f),
+                    color = Ink,
+                    fontSize = 12.sp,
+                )
+                Switch(checked = headingDegrees != null, onCheckedChange = { onHeading(if (it) 0.0 else null) })
+            }
+            Slider(
+                value = (headingDegrees ?: 0.0).toFloat(),
+                onValueChange = { onHeading(it.toDouble()) },
+                valueRange = 0f..360f,
+            )
         }
     }
 }
@@ -2670,7 +2823,7 @@ private fun DetailTextRow(title: String, subtitle: String) {
 }
 
 @Composable
-private fun rememberDeviceHeading(): Float {
+internal fun rememberDeviceHeading(): Float {
     val context = LocalContext.current
     var heading by remember { mutableStateOf(0f) }
     DisposableEffect(context) {

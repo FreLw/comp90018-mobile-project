@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,6 +64,7 @@ fun TreasureScreen(
     discoveredTreasureIds: Set<String>,
     currentLocation: GeoCoordinate?,
     onOpenMap: (String) -> Unit,
+    onNavigate: ((String) -> Unit)? = null,
 ) {
     var selectedTreasure by remember { mutableStateOf<MapRelic?>(null) }
 
@@ -74,6 +76,7 @@ fun TreasureScreen(
             distanceMeters = distance,
             onBack = { selectedTreasure = null },
             onOpenMap = { onOpenMap(treasure.id) },
+            onNavigate = onNavigate?.let { navigate -> { navigate(treasure.id) } },
         )
         return
     }
@@ -195,6 +198,7 @@ private fun TreasureRouteDetail(
     distanceMeters: Double?,
     onBack: () -> Unit,
     onOpenMap: () -> Unit,
+    onNavigate: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val closeEnoughToSearch = !discovered && distanceMeters != null && distanceMeters <= REVEAL_RADIUS_METERS
@@ -232,6 +236,16 @@ private fun TreasureRouteDetail(
                         Spacer(Modifier.width(8.dp))
                         Text("Find on Map · ${distanceMeters.formatDistance()}", fontWeight = FontWeight.Bold)
                     }
+                }
+            }
+            if (onNavigate != null) item {
+                Button(onClick = onNavigate, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp)) {
+                    Icon(Icons.Rounded.Navigation, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        distanceMeters?.let { "Navigate · ${it.formatDistance()}" } ?: "Navigate",
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         } else {

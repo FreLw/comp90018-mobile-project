@@ -35,6 +35,7 @@ import com.comp90018.app.features.map.UserLocationViewModel
 import com.comp90018.app.features.map.rememberTeamHuntLocations
 import com.comp90018.app.features.map.DEFAULT_CAMPUS_CENTRE
 import com.comp90018.app.features.map.isProbablyEmulator
+import com.comp90018.app.features.navigation.RelicNavigationScreen
 import com.comp90018.app.features.profile.ProfileScreen
 import com.comp90018.app.features.rooms.RoomsScreen
 import com.comp90018.app.features.rooms.RoomsViewModel
@@ -55,6 +56,8 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     var destination by remember { mutableStateOf(AppDestination.Friends) }
     var activeHuntTreasureId by remember { mutableStateOf<String?>(null) }
     var requestedMapTreasureId by remember { mutableStateOf<String?>(null) }
+    var navigationTreasureId by remember { mutableStateOf<String?>(null) }
+    var requestedHuntTreasureId by remember { mutableStateOf<String?>(null) }
     val profileRepository = remember(firestore) { FirebaseProfileRepository(firestore) }
     val appShellViewModel: AppShellViewModel = viewModel(
         key = "app_shell_${user.uid}",
@@ -148,21 +151,42 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            AppBottomNavigation(
-                selected = destination,
-                unreadFriendMessages = if (notificationsEnabled) unreadFriendMessages else 0,
-                unreadRoomMessages = if (notificationsEnabled) unreadRoomMessages else 0,
-                soundEffectsEnabled = settings?.soundEffects ?: true,
-                hapticsEnabled = settings?.haptics ?: true,
-            ) { destination = it }
+            if (navigationTreasureId == null) {
+                AppBottomNavigation(
+                    selected = destination,
+                    unreadFriendMessages = if (notificationsEnabled) unreadFriendMessages else 0,
+                    unreadRoomMessages = if (notificationsEnabled) unreadRoomMessages else 0,
+                    soundEffectsEnabled = settings?.soundEffects ?: true,
+                    hapticsEnabled = settings?.haptics ?: true,
+                ) { destination = it }
+            }
         },
         snackbarHost = { SensorErrorHost() },
     ) { padding ->
         val contentModifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .then(if (destination == AppDestination.Map) Modifier else Modifier.padding(horizontal = 20.dp))
+            .then(
+                if (destination == AppDestination.Map || navigationTreasureId != null) Modifier
+                else Modifier.padding(horizontal = 20.dp),
+            )
         Box(contentModifier) {
+            val navigationTreasure = navigationTreasureId?.let { id ->
+                treasureCatalogState.treasures.firstOrNull { it.id == id }
+            }
+            if (navigationTreasure != null) {
+                RelicNavigationScreen(
+                    relic = navigationTreasure,
+                    userLocation = userLocation,
+                    onStopNavigation = { navigationTreasureId = null },
+                    onStartHunting = { treasureId ->
+                        navigationTreasureId = null
+                        requestedHuntTreasureId = treasureId
+                        destination = AppDestination.Map
+                    },
+                )
+                return@Box
+            }
             when (destination) {
                 AppDestination.Treasure -> TreasureScreen(
                     treasures = treasureCatalogState.treasures,
@@ -171,6 +195,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     onRetry = treasureCatalogViewModel::retry,
                     discoveredTreasureIds = treasureCollectionState.discoveredIds,
                     currentLocation = treasurePageLocation,
+                    onNavigate = { treasureId -> navigationTreasureId = treasureId },
                     onOpenMap = { treasureId ->
                         requestedMapTreasureId = treasureId
                         destination = AppDestination.Map
@@ -227,6 +252,8 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     },
                     requestedTreasureId = requestedMapTreasureId,
                     onTreasureRequestConsumed = { requestedMapTreasureId = null },
+                    requestedHuntTreasureId = requestedHuntTreasureId,
+                    onHuntRequestConsumed = { requestedHuntTreasureId = null },
                 )
                 AppDestination.Friends -> FriendsScreen(user, firestore, appState.profile, onOpenOwnProfile = { destination = AppDestination.Profile })
                 AppDestination.Profile -> ProfileScreen(
