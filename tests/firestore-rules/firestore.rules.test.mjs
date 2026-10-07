@@ -6,12 +6,18 @@ import {
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  collection,
+  query,
+  where,
+  getDocs,
   doc,
   getDoc,
   serverTimestamp,
   setDoc,
   updateDoc,
   writeBatch,
+  Timestamp,
+  deleteDoc,
 } from "firebase/firestore";
 
 const PROJECT_ID = "demo-lost-treasures";
@@ -36,6 +42,89 @@ after(async () => {
 const authenticatedDb = (uid) =>
   testEnvironment.authenticatedContext(uid, { email: `${uid}@example.com` }).firestore();
 const unauthenticatedDb = () => testEnvironment.unauthenticatedContext().firestore();
+
+describe("shared team hunt locations", () => {
+  const roomId = "location-hunt";
+  const sessionId = "hunt-session";
+  const path = (uid) => `teamRooms/${roomId}/locations/${uid}`;
+  const position = (changes = {}) => ({
+    sessionId, latitude: -37.798, longitude: 144.96,
+    observedAt: Timestamp.now(), updatedAt: serverTimestamp(), ...changes,
+  });
+  async function huntingRoom(changes = {}) {
+    await seed(`teamRooms/${roomId}`, {
+      creatorId: "alice", memberIds: ["alice", "bob"],
+      taskStatus: "hunting", huntSessionId: sessionId, ...changes,
+    });
+  }
+  test("both explorers publish and read only the current hunt session", async () => {
+    await huntingRoom();
+    for (const uid of ["alice", "bob"]) {
+      const db = authenticatedDb(uid);
+      await assertSucceeds(setDoc(doc(db, path(uid)), position()));
+      await assertSucceeds(updateDoc(doc(db, path(uid)), position({ latitude: -37.799 })));
+    }
+    for (const uid of ["alice", "bob"]) {
+      const db = authenticatedDb(uid);
+      await assertSucceeds(getDoc(doc(db, path(uid === "alice" ? "bob" : "alice"))));
+      await assertSucceeds(getDocs(query(collection(db, `teamRooms/${roomId}/locations`), where("sessionId", "==", sessionId))));
+      await assertFails(getDocs(collection(db, `teamRooms/${roomId}/locations`)));
+    }
+  });
+  test("outsiders and signed-out clients cannot read or publish positions", async () => {
+    await huntingRoom();
+    await seed(path("alice"), position());
+    for (const db of [authenticatedDb("carol"), unauthenticatedDb()]) {
+      await assertFails(getDoc(doc(db, path("alice"))));
+      await assertFails(getDocs(query(collection(db, `teamRooms/${roomId}/locations`), where("sessionId", "==", sessionId))));
+      await assertFails(setDoc(doc(db, path("carol")), position()));
+    }
+  });
+  test("even the host cannot overwrite or delete a teammate's position", async () => {
+    await huntingRoom();
+    await seed(path("bob"), position());
+    const alice = authenticatedDb("alice");
+    await assertFails(setDoc(doc(alice, path("bob")), position()));
+    await assertFails(deleteDoc(doc(alice, path("bob"))));
+  });
+  test("no position reads or writes before Start Hunt, after termination, or alone", async () => {
+    await seed(path("alice"), position());
+    const alice = authenticatedDb("alice");
+    for (const changes of [
+      { taskStatus: "assigned" }, { taskStatus: "unassigned" },
+      { memberIds: ["alice"] }, { huntSessionId: "" },
+    ]) {
+      await huntingRoom(changes);
+      await assertFails(getDoc(doc(alice, path("alice"))));
+      await assertFails(setDoc(doc(alice, path("alice")), position()));
+    }
+  });
+  test("old hunt sessions are inaccessible and cannot be republished", async () => {
+    await huntingRoom({ huntSessionId: "new-session" });
+    await seed(path("bob"), position());
+    const alice = authenticatedDb("alice");
+    await assertFails(getDoc(doc(alice, path("bob"))));
+    await assertFails(setDoc(doc(alice, path("alice")), position()));
+  });
+  test("rejects invalid coordinates, stale queued fixes, and forged heartbeat timestamps", async () => {
+    await huntingRoom();
+    const alice = authenticatedDb("alice");
+    for (const changes of [
+      { latitude: 91 }, { longitude: -181 }, { latitude: "-37.798" },
+      { observedAt: Timestamp.fromMillis(Date.now() - 60_000) },
+      { observedAt: Timestamp.fromMillis(Date.now() + 60_000) },
+      { updatedAt: Timestamp.fromMillis(0) }, { unrelated: true },
+    ]) await assertFails(setDoc(doc(alice, path("alice")), position(changes)));
+  });
+  test("removed members cannot read or publish, but can delete their own remaining position", async () => {
+    await huntingRoom({ memberIds: ["alice", "carol"] });
+    await seed(path("bob"), position());
+    const bob = authenticatedDb("bob");
+    await assertFails(getDoc(doc(bob, path("bob"))));
+    await assertFails(setDoc(doc(bob, path("bob")), position()));
+    await assertSucceeds(deleteDoc(doc(bob, path("bob"))));
+  });
+});
 
 async function seed(path, data) {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
@@ -216,5 +305,110 @@ describe("team-room messages", () => {
         { ...message, senderId: "mallory", senderName: "Mallory" },
       ),
     );
+  });
+});
+
+
+describe("room plaza and owner removal", () => {
+  const room = (idOnly) => ({
+    creatorId: "alice", name: "Explorers", maxMembers: 4, description: "Campus hunt", idOnly,
+    memberIds: ["alice", "bob", "carol"], taskId: "relic-one", taskTitle: "Relic One",
+    taskStatus: "hunting", taskCompletedMemberIds: ["bob"], taskClaimedMemberIds: ["bob"],
+    foundFragmentIds: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  test("the plaza query can list public rooms but cannot list private or all rooms", async () => {
+    await seed("teamRooms/public", room(false));
+    await seed("teamRooms/private", room(true));
+    const db = authenticatedDb("carol");
+    await assertSucceeds(getDocs(query(collection(db, "teamRooms"), where("idOnly", "==", false))));
+    await assertFails(getDocs(collection(db, "teamRooms")));
+    await assertFails(getDocs(query(collection(db, "teamRooms"), where("idOnly", "==", true))));
+    await assertSucceeds(getDoc(doc(db, "teamRooms/private")));
+  });
+  test("only owners can remove members and progress with an atomic membership deletion", async () => {
+    await seed("teamRooms/removal", room(false));
+    await seed("teamMemberships/bob", { roomId: "removal", unreadCount: 0, createdAt: serverTimestamp() });
+    const changes = { memberIds: ["alice", "carol"], taskCompletedMemberIds: [], taskClaimedMemberIds: [], updatedAt: serverTimestamp() };
+    await assertFails(updateDoc(doc(authenticatedDb("alice"), "teamRooms/removal"), changes));
+    for (const uid of ["carol", "alice"]) {
+      const db = authenticatedDb(uid);
+      const batch = writeBatch(db);
+      batch.update(doc(db, "teamRooms/removal"), changes);
+      batch.delete(doc(db, "teamMemberships/bob"));
+      if (uid === "carol") await assertFails(batch.commit());
+      else {
+        await assertSucceeds(getDoc(doc(db, "teamMemberships/bob")));
+        await assertSucceeds(batch.commit());
+      }
+    }
+    await assertFails(getDoc(doc(authenticatedDb("bob"), "teamRooms/removal/messages/any")));
+  });
+  test("only the owner can change the join mode and it must be boolean", async () => {
+    await seed("teamRooms/settings", room(true));
+    await assertFails(updateDoc(doc(authenticatedDb("bob"), "teamRooms/settings"), { idOnly: false, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(authenticatedDb("alice"), "teamRooms/settings"), { idOnly: "public", updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(authenticatedDb("alice"), "teamRooms/settings"), { idOnly: false, updatedAt: serverTimestamp() }));
+  });
+});
+
+
+describe("room join modes", () => {
+  test("room creation atomically saves membership for both join modes", async () => {
+    for (const idOnly of [true, false]) {
+      const uid = `creator-${idOnly}`;
+      const roomId = `created-${idOnly}`;
+      const db = authenticatedDb(uid);
+      const batch = writeBatch(db);
+      batch.set(doc(db, `teamRooms/${roomId}`), {
+        creatorId: uid, name: "Explorers", description: "Campus hunt", maxMembers: 4, idOnly,
+        memberIds: [uid], taskId: "", taskTitle: "", taskStatus: "unassigned",
+        taskCompletedMemberIds: [], foundFragmentIds: [], taskClaimedMemberIds: [],
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, `teamMemberships/${uid}`), {
+        roomId, createdAt: serverTimestamp(), unreadCount: 0,
+      });
+      await assertSucceeds(batch.commit());
+      const membership = await getDoc(doc(db, `teamMemberships/${uid}`));
+      if (membership.data().roomId !== roomId) throw new Error("Created room membership is missing");
+    }
+  });
+
+  test("room creation rejects invalid join modes and impersonated owners", async () => {
+    const db = authenticatedDb("alice");
+    for (const [roomId, creatorId, idOnly] of [
+      ["invalid-mode", "alice", "private"], ["impersonated-owner", "bob", true],
+    ]) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, `teamRooms/${roomId}`), {
+        creatorId, name: "Explorers", description: "", maxMembers: 4, idOnly,
+        memberIds: [creatorId], taskId: "", taskTitle: "", taskStatus: "unassigned",
+        taskCompletedMemberIds: [], foundFragmentIds: [], taskClaimedMemberIds: [],
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, "teamMemberships/alice"), {
+        roomId, createdAt: serverTimestamp(), unreadCount: 0,
+      });
+      await assertFails(batch.commit());
+    }
+  });
+
+  test("public and ID-only rooms both allow direct joining, but full rooms reject it", async () => {
+    for (const [roomId, idOnly, memberIds] of [
+      ["public", false, ["alice"]], ["private", true, ["alice"]], ["full", false, ["alice", "bob"]],
+    ]) {
+      await seed(`teamRooms/${roomId}`, {
+        creatorId: "alice", name: "Room", description: "", maxMembers: 2, idOnly, memberIds,
+        taskId: "", taskTitle: "", taskStatus: "unassigned", taskCompletedMemberIds: [],
+        taskClaimedMemberIds: [], foundFragmentIds: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+      const uid = `joining-${roomId}`;
+      const db = authenticatedDb(uid);
+      const batch = writeBatch(db);
+      batch.update(doc(db, `teamRooms/${roomId}`), { memberIds: [...memberIds, uid], updatedAt: serverTimestamp() });
+      batch.set(doc(db, `teamMemberships/${uid}`), { roomId, unreadCount: 0, createdAt: serverTimestamp() });
+      if (roomId === "full") await assertFails(batch.commit());
+      else await assertSucceeds(batch.commit());
+    }
   });
 });

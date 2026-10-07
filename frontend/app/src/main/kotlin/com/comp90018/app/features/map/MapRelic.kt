@@ -28,6 +28,7 @@ data class MapRelic(
     val sortOrder: Int = Int.MAX_VALUE,
     val challengeConfig: RelicChallengeConfig? = null,
     val historicalImageResId: Int? = null,
+    val compassGateConfig: CompassGateConfig = CompassGateConfig(),
 ) {
     val treasureTypeLabel: String
         get() = treasureType

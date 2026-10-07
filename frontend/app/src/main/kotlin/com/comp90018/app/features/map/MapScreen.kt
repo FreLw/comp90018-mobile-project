@@ -1,5 +1,7 @@
 package com.comp90018.app.features.map
 
+import com.comp90018.app.data.rooms.TeamHuntLocation
+
 import android.Manifest
 import android.app.Activity
 import android.content.Context
@@ -28,6 +30,8 @@ import android.os.Bundle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -207,6 +211,8 @@ fun MapScreen(
     activeHuntFoundFragmentIds: List<String> = emptyList(),
     activeHuntClaimedMemberIds: List<String> = emptyList(),
     currentUserId: String = "",
+    teammateLocations: List<TeamHuntLocation> = emptyList(),
+    huntMemberNames: Map<String, String> = emptyMap(),
     onCompleteActiveHuntTask: ((String?) -> Unit) -> Unit = { complete -> complete("No active team hunt") },
     onFindActiveHuntFragment: (String) -> Unit = {},
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
@@ -238,6 +244,8 @@ fun MapScreen(
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
     var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var treasureSheetExpanded by remember(selectedRelic?.id) { mutableStateOf(false) }
+    BackHandler(enabled = selectedRelic != null && treasureSheetExpanded) { treasureSheetExpanded = false }
     var detailRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var compassRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
@@ -278,6 +286,9 @@ fun MapScreen(
             .apply()
     }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
+    var debugTaskRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var debugTaskSession by remember { mutableIntStateOf(0) }
+    val debugTasks = remember { debugChallengeRelics() }
     val revealCoordinator = remember(activeHuntSessionId) { PostChallengeRevealCoordinator() }
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
@@ -314,7 +325,6 @@ fun MapScreen(
         selectedRelic = null
     }
     val deviceHeading = rememberDeviceHeading()
-    val deviceMotion = rememberDeviceMotion()
     val runningInEmulator = remember { isProbablyEmulator() }
     val huntCandidates = remember(resolvedTreasures, foundRelicIds, teamHuntActive) {
         if (teamHuntActive) resolvedTreasures else resolvedTreasures.filterNot { it.id in foundRelicIds }
@@ -451,6 +461,9 @@ fun MapScreen(
     // remains stable as a room starts or ends a hunt.
     if (isSouthLawnFragmentHunt) {
         SouthLawnFragmentHuntScreen(
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = activeHuntOwnerId,
             fragments = SouthLawnFragments,
             foundFragmentIds = activeHuntFoundFragmentIds,
             userLocation = userLocation,
@@ -464,6 +477,9 @@ fun MapScreen(
         currentUserId in activeHuntClaimedMemberIds
     ) {
         SouthLawnClaimWaitingScreen(
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = activeHuntOwnerId,
             userLocation = userLocation,
             deviceHeading = deviceHeading,
         )
@@ -495,7 +511,6 @@ fun MapScreen(
             relic = relic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
-            motion = deviceMotion,
             soundEffectsEnabled = soundEffectsEnabled,
             debugSimulationEnabled = debugSimulationEnabled,
             // Passing the compass only opens the physical task. Completion and persistence
@@ -539,6 +554,23 @@ fun MapScreen(
         return
     }
 
+    if (BuildConfig.DEBUG) debugTaskRelic?.let { relic ->
+        BackHandler { debugTaskRelic = null }
+        TreasureChallengeRoute(
+            config = requireNotNull(relic.validatedChallengeConfig()),
+            treasureId = relic.id,
+            radarRadiusMeters = relic.radarRadiusMeters,
+            preciseLocationEnabled = true,
+            debugSimulationEnabled = true,
+            challengeSessionId = "debug-task-$debugTaskSession",
+            // UI previews complete locally, without changing collection or Room progress.
+            onChallengeCompleted = { complete -> complete(null) },
+            onDiscoverySaved = {},
+            onBack = { debugTaskRelic = null },
+        )
+        return
+    }
+
     challengeRelic?.let { relic ->
         relic.validatedChallengeConfig()?.let { config ->
             TreasureChallengeRoute(
@@ -546,7 +578,7 @@ fun MapScreen(
                 treasureId = relic.id,
                 radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                // Only the explicit debug launcher enables simulation; normal hunts use sensors.
+                // The debug launcher starts simulation immediately; each task also has a Test panel toggle.
                 debugSimulationEnabled = debugSimulationEnabled,
                 challengeSessionId = activeHuntSessionId.orEmpty(),
                 onChallengeCompleted = { onComplete ->
@@ -680,6 +712,9 @@ fun MapScreen(
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
             relics = visibleRelics,
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = activeHuntOwnerId,
             selectedRelic = selectedRelic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
@@ -744,48 +779,12 @@ fun MapScreen(
             }
         }
 
-        activeHuntTreasureId?.let { huntId ->
-            resolvedTreasures.firstOrNull { it.id == huntId }?.let { relic ->
-                Card(
-                    // The hunt marker can sit directly beneath the user's location marker.  Make
-                    // the persistent banner an equivalent, unambiguous way to open the target.
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 14.dp)
-                        .clickable {
-                            if (teamHuntCanClaim) detailRelic = relic else selectedRelic = relic
-                        },
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
-                    shape = RoundedCornerShape(20.dp),
-                ) {
-                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.LocationOn, null, tint = Brand)
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            when {
-                                teamHuntAlreadyClaimed -> "Treasure claimed. Waiting for the other explorers."
-                                teamHuntAllCompleted -> "All explorers are ready — dig the treasure!"
-                                currentUserId in activeHuntCompletedMemberIds -> "Waiting for your teammate — you can help them."
-                                else -> "Go and hunt for the treasure: ${relic.name}\nTap here to open the hunt"
-                            },
-                            color = Ink, fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    if (teamHuntCanClaim) {
-                        Button(onClick = { detailRelic = relic }, modifier = Modifier.padding(horizontal = 14.dp)) {
-                            Text("Claim treasure")
-                        }
-                    }
-                }
-            }
-        }
-
-        if (BuildConfig.DEBUG && selectedRelic == null && (!teamHuntActive ||
-                (teamHuntIsOwner && teamHuntTaskPendingForCurrentUser))) {
+        if (BuildConfig.DEBUG) {
             DebugChallengeLauncher(
-                relics = resolvedTreasures,
+                relics = debugTasks,
                 onLaunch = { relic ->
-                    openHunt(relic, simulateChallenge = true)
+                    debugTaskSession += 1
+                    debugTaskRelic = relic
                 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
@@ -812,7 +811,7 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 18.dp),
+                .padding(top = 18.dp),
             transitionSpec = {
                 (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { it } + fadeOut())
             },
@@ -820,24 +819,32 @@ fun MapScreen(
         ) { relic ->
             if (relic != null) {
                 ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(26.dp),
+                    modifier = Modifier.fillMaxWidth().animateContentSize(),
+                    shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = Color.White.copy(alpha = 0.97f)),
                 ) {
                     TreasurePeekHeader(
                         relic = relic,
                         distance = locationOutput.distanceToTargetMeters.formatDistance(),
                         isFound = relic.id in foundRelicIds,
-                        expanded = false,
-                        onChevron = { detailRelic = relic },
+                        expanded = treasureSheetExpanded,
+                        onChevron = { treasureSheetExpanded = !treasureSheetExpanded },
                         actionLabel = when {
                             teamHuntCanClaim -> "Claim treasure"
+                            !teamHuntActive && relic.id in foundRelicIds -> null
                             teamHuntActive && !teamHuntTaskPendingForCurrentUser -> null
                             locationOutput.distanceToTargetMeters?.let { it <= HUNT_READY_RADIUS_METERS } == true -> "Start Hunting"
                             else -> null
                         },
                         onAction = { openHunt(relic) },
                     )
+                    if (treasureSheetExpanded) {
+                        TreasureInformationPanel(
+                            relic = relic,
+                            isFound = relic.id in foundRelicIds,
+                            modifier = Modifier.fillMaxWidth().height(300.dp),
+                        )
+                    }
                 }
             }
         }
@@ -1073,28 +1080,20 @@ private fun MemberHuntQuiz(
     }
 }
 
-private val DEBUG_SENSOR_CHALLENGES = setOf(
-    RelicChallengeType.UNION_LAWN_PHOTO,
-    RelicChallengeType.WILSON_HALL_OBSERVATION,
-    RelicChallengeType.OLD_QUAD_EXCAVATION,
-    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE,
-    // Use System Garden for the local test flow; unlike Grainger Museum, it never requests audio.
-    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
-)
-
 @Composable
 private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) -> Unit, modifier: Modifier = Modifier) {
-    val challenges = relics.filter { it.challengeConfig?.type in DEBUG_SENSOR_CHALLENGES }
-    if (challenges.isEmpty()) return
+    if (relics.isEmpty()) return
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
-        Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
-            IconButton(onClick = { expanded = true }) {
-                Icon(Icons.Rounded.Star, "Open debug tasks", tint = Brand)
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
+            TextButton(onClick = { expanded = true }) {
+                Icon(Icons.Rounded.Star, "Open debug tasks", tint = Brand, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("task", color = Brand, fontWeight = FontWeight.SemiBold)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            challenges.forEach { relic ->
+            relics.forEach { relic ->
                 DropdownMenuItem(text = { Text(relic.locationName) }, onClick = { expanded = false; onLaunch(relic) })
             }
         }
@@ -1109,6 +1108,9 @@ internal fun saveRelicDiscovery(
 
 @Composable
 private fun SouthLawnFragmentHuntScreen(
+    teammateLocations: List<TeamHuntLocation>,
+    huntMemberNames: Map<String, String>,
+    huntOwnerId: String?,
     fragments: List<TeamHuntFragment>,
     foundFragmentIds: List<String>,
     userLocation: LocationOutput,
@@ -1136,6 +1138,9 @@ private fun SouthLawnFragmentHuntScreen(
             locationOutput = userLocation,
             deviceHeading = deviceHeading,
             huntFragments = fragments,
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = huntOwnerId,
             foundFragmentIds = foundFragmentIds.toSet(),
             focusSelectedRelic = false,
             onRelicSelected = {},
@@ -1188,6 +1193,9 @@ private fun SouthLawnFragmentHuntScreen(
 /** Shown after this explorer has claimed the reconstructed Atlas, until their teammate does too. */
 @Composable
 private fun SouthLawnClaimWaitingScreen(
+    teammateLocations: List<TeamHuntLocation>,
+    huntMemberNames: Map<String, String>,
+    huntOwnerId: String?,
     userLocation: LocationOutput,
     deviceHeading: Float,
 ) {
@@ -1198,6 +1206,9 @@ private fun SouthLawnClaimWaitingScreen(
             locationOutput = userLocation,
             deviceHeading = deviceHeading,
             focusSelectedRelic = false,
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = huntOwnerId,
             onRelicSelected = {},
             modifier = Modifier.fillMaxSize(),
         )
@@ -1226,13 +1237,16 @@ internal fun GoogleMapView(
     flippingRelicId: String? = null,
     onFlipFinished: () -> Unit = {},
     huntFragments: List<TeamHuntFragment> = emptyList(),
+    teammateLocations: List<TeamHuntLocation> = emptyList(),
+    huntMemberNames: Map<String, String> = emptyMap(),
+    huntOwnerId: String? = null,
     foundFragmentIds: Set<String> = emptySet(),
     focusSelectedRelic: Boolean = true,
     perspective: MapPerspective = MapPerspective.GOD,
     allowCameraGestures: Boolean = perspective == MapPerspective.GOD,
-    allowZoomGestures: Boolean = allowCameraGestures,
+    allowZoomGestures: Boolean = true,
     allowRotateGestures: Boolean = allowCameraGestures,
-    allowTiltGestures: Boolean = allowCameraGestures,
+    allowTiltGestures: Boolean = true,
     recenterRequestKey: Int = 0,
     navigationTrailTarget: GeoCoordinate? = null,
     navigationTrailStrength: Float = 0f,
@@ -1252,6 +1266,7 @@ internal fun GoogleMapView(
     var cameraRelicSignature by remember { mutableStateOf("") }
     var currentLocationMarker by remember { mutableStateOf<Marker?>(null) }
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
+    val teammateMarkers = remember { mutableMapOf<String, Marker>() }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
     var navigationTrail by remember { mutableStateOf<Polyline?>(null) }
     var navigationTrailDots by remember { mutableStateOf<List<Circle>>(emptyList()) }
@@ -1318,6 +1333,7 @@ internal fun GoogleMapView(
                 val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature|$fragmentSignature|$trailTargetKey"
                 if (renderedMapKey != mapKey) {
                     map.clear()
+                    teammateMarkers.clear()
                     currentLocationMarker = null
                     navigationTrail = null
                     navigationTrailDots = emptyList()
@@ -1368,6 +1384,32 @@ internal fun GoogleMapView(
                 )
                 navigationTrail = trailResult.first
                 navigationTrailDots = trailResult.second
+                val visibleTeammateIds = teammateLocations.map { it.uid }.toSet()
+                teammateMarkers.keys.filterNot { it in visibleTeammateIds }.forEach { uid ->
+                    teammateMarkers.remove(uid)?.remove()
+                }
+                teammateLocations.forEach { teammate ->
+                    val position = LatLng(teammate.coordinate.latitude, teammate.coordinate.longitude)
+                    val isHost = teammate.uid == huntOwnerId
+                    val name = huntMemberNames[teammate.uid]?.takeIf { it.isNotBlank() } ?: "Teammate"
+                    val title = "$name (${if (isHost) "Host" else "Teammate"})"
+                    val marker = teammateMarkers[teammate.uid] ?: map.addMarker(
+                        MarkerOptions().position(position).title(title).snippet("Online · Shared hunt location")
+                            .icon(if (isHost) {
+                                BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                            } else {
+                                currentLocationIcon(
+                                    context,
+                                    dotColor = android.graphics.Color.rgb(52, 152, 219),
+                                    showHeading = false,
+                                )
+                            })
+                            .anchor(0.5f, if (isHost) 1f else 0.72f)
+                            .zIndex(CURRENT_LOCATION_Z_INDEX + 1f),
+                    )?.also { teammateMarkers[teammate.uid] = it; it.tag = "teammate:${teammate.uid}" }
+                    marker?.position = position
+                    marker?.title = title
+                }
                 if (cameraPerspective != perspective) {
                     cameraPerspective = perspective
                     cameraInitialised = false
@@ -1684,7 +1726,6 @@ internal fun TreasureCompassGate(
     relic: MapRelic,
     locationOutput: LocationOutput,
     deviceHeading: Float,
-    motion: DeviceMotionSample,
     soundEffectsEnabled: Boolean,
     debugSimulationEnabled: Boolean = false,
     onContinue: () -> Unit,
@@ -1703,9 +1744,6 @@ internal fun TreasureCompassGate(
     var simulateSensors by remember(relic.id) { mutableStateOf(BuildConfig.DEBUG && debugSimulationEnabled) }
     var testDistance by remember(relic.id) { mutableStateOf((locationOutput.distanceToTargetMeters ?: 9.0).toFloat().coerceIn(0f, 30f)) }
     var testHeading by remember(relic.id) { mutableStateOf(deviceHeading) }
-    var testPitch by remember(relic.id) { mutableStateOf(motion.pitchDegrees) }
-    var testRoll by remember(relic.id) { mutableStateOf(motion.rollDegrees) }
-    val effectiveMotion = if (BuildConfig.DEBUG && simulateSensors) DeviceMotionSample(0f, maxOf(abs(testPitch), abs(testRoll)), testPitch, testRoll) else motion
     val distance = if (BuildConfig.DEBUG && simulateSensors) testDistance.toDouble() else locationOutput.distanceToTargetMeters
     val targetBearing = locationOutput.targetBearingDegrees
         ?: if (BuildConfig.DEBUG && simulateSensors) 0.0 else null
@@ -1714,11 +1752,10 @@ internal fun TreasureCompassGate(
     val locationReady = (BuildConfig.DEBUG && simulateSensors) ||
         locationOutput.validity == com.comp90018.app.sensors.SensorValidity.VALID
     val readiness = if (locationReady) {
-        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees)
-    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= HORIZONTAL_TOLERANCE_DEGREES)
+        evaluateHuntReadiness(distance, turnDegrees, relic.compassGateConfig)
+    } else HuntReadiness(false, false)
     val nearTreasure = readiness.nearTreasure
     val facingTreasure = readiness.facingTreasure
-    val phoneHorizontal = readiness.phoneHorizontal
     val allReady = readiness.allReady
     fun continueToChallenge() {
         if (!allReady || leaving) return
@@ -1730,10 +1767,9 @@ internal fun TreasureCompassGate(
         }
     }
 
-    val proximityGlow = distance?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / 165.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val levelGlow = ((45f - effectiveMotion.tiltDegrees) / 33f).coerceIn(0f, 1f)
-    val stars = oracleStarCount(distance)
+    val proximityGlow = distance?.let { (((relic.compassGateConfig.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / (180.0 - relic.compassGateConfig.compassAlignmentToleranceDegrees).coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val stars = oracleStarCount(distance, relic.compassGateConfig.huntReadyRadiusMeters)
     val tone = remember { runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 55) }.getOrNull() }
     DisposableEffect(tone) { onDispose { tone?.release() } }
     var previousStars by remember(relic.id) { mutableIntStateOf(stars) }
@@ -1758,10 +1794,9 @@ internal fun TreasureCompassGate(
     val instruction = when {
         signalLocked -> "Treasure signal locked — the hidden trial has awakened."
         !locationReady || distance == null || targetBearing == null -> "Waiting for a reliable location signal…"
-        !nearTreasure -> "The signal faded. Move back within 10 m."
+        !nearTreasure -> "The signal faded. Move back within ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}."
         !facingTreasure && requireNotNull(turnDegrees) > 0 -> "Turn right ${abs(turnDegrees).formatDegrees()} toward the treasure."
         !facingTreasure -> "Turn left ${abs(requireNotNull(turnDegrees)).formatDegrees()} toward the treasure."
-        !phoneHorizontal -> "Lower the phone until it is flat and level."
         else -> "Hold it there — locking onto the treasure…"
     }
 
@@ -1786,11 +1821,10 @@ internal fun TreasureCompassGate(
         }
         DivineCompassVisual(
             readiness = readiness,
+            config = relic.compassGateConfig,
             turnDegrees = turnDegrees?.toFloat() ?: 0f,
             signalAvailable = turnDegrees != null,
             distanceMeters = distance,
-            pitchDegrees = effectiveMotion.pitchDegrees,
-            rollDegrees = effectiveMotion.rollDegrees,
             signalLocked = signalLocked,
             modifier = Modifier.fillMaxWidth().height(285.dp).graphicsLayer {
                 alpha = compassEntrance.value
@@ -1816,9 +1850,8 @@ internal fun TreasureCompassGate(
             ) {
                 Text(instruction, modifier = Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OracleLamp("The Trail", "Draw nearer", distance.formatDistance(), nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
-                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / 15°" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
-                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / 12°", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
+                    OracleLamp("The Trail", "Draw nearer", "${distance.formatDistance()} / ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}", nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
+                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / ${relic.compassGateConfig.compassAlignmentToleranceDegrees.formatDegrees()}" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
                 }
                 AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1838,8 +1871,6 @@ internal fun TreasureCompassGate(
                     if (simulateSensors) {
                         SensorTestSlider("Distance · GPS", testDistance, 0f..30f, "m", if (nearTreasure) Color(0xFFB58A42) else Color(0xFF8D8984)) { testDistance = it }
                         SensorTestSlider("Heading · rotation", testHeading, 0f..360f, "°", if (facingTreasure) Color(0xFFA44736) else Color(0xFF8D8984)) { testHeading = it }
-                        SensorTestSlider("Pitch · accelerometer", testPitch, -45f..45f, "°", if (phoneHorizontal) Color(0xFF507052) else Color(0xFF8D8984)) { testPitch = it }
-                        SensorTestSlider("Roll · accelerometer", testRoll, -45f..45f, "°", if (phoneHorizontal) Color(0xFF507052) else Color(0xFF8D8984)) { testRoll = it }
                     }
                 }
             }
@@ -1857,17 +1888,14 @@ private fun SensorTestSlider(label: String, value: Float, range: ClosedFloatingP
 @Composable
 private fun DivineCompassVisual(
     readiness: HuntReadiness,
+    config: CompassGateConfig,
     turnDegrees: Float,
     signalAvailable: Boolean,
     distanceMeters: Double?,
-    pitchDegrees: Float,
-    rollDegrees: Float,
     signalLocked: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val animatedTurn by animateFloatAsState(turnDegrees, tween(350), label = "treasure_compass_turn")
-    val animatedPitch by animateFloatAsState(pitchDegrees.coerceIn(-30f, 30f), tween(220), label = "treasure_compass_pitch")
-    val animatedRoll by animateFloatAsState(rollDegrees.coerceIn(-30f, 30f), tween(220), label = "treasure_compass_roll")
     val orbit = rememberInfiniteTransition(label = "oracle_orbit")
     val orbitDegrees by orbit.animateFloat(0f, 360f, infiniteRepeatable(tween(16000, easing = LinearEasing)), label = "orbit_degrees")
     val shimmer by orbit.animateFloat(0.25f, 0.9f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "oracle_shimmer")
@@ -1877,8 +1905,7 @@ private fun DivineCompassVisual(
     val gold = if (readiness.nearTreasure) Color(0xFFB58A42) else grey
     val rust = if (readiness.facingTreasure) Color(0xFFA44736) else grey
     val compassInk = if (readiness.facingTreasure) plum else Color(0xFF777570)
-    val levelColor = if (readiness.phoneHorizontal) Color(0xFF507052) else grey
-    val starCount = oracleStarCount(distanceMeters)
+    val starCount = oracleStarCount(distanceMeters, config.huntReadyRadiusMeters)
     val starFlash = remember { androidx.compose.animation.core.Animatable(0f) }
     var lastStarCount by remember { mutableIntStateOf(starCount) }
     var flashingStars by remember { mutableStateOf(0 until 0) }
@@ -1890,8 +1917,7 @@ private fun DivineCompassVisual(
             starFlash.animateTo(0f, tween(700))
         } else lastStarCount = starCount
     }
-    val distanceProgress = distanceMeters?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val levelDegrees = maxOf(abs(pitchDegrees), abs(rollDegrees))
+    val distanceProgress = distanceMeters?.let { (((config.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     Box(modifier.padding(4.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().padding(bottom = 42.dp)) {
             val centre = Offset(size.width / 2, size.height / 2)
@@ -1972,32 +1998,14 @@ private fun DivineCompassVisual(
             drawCircle(gold, radius * 0.095f, centre)
             drawCircle(plum, radius * 0.045f, centre)
         }
-        // A separate inset instrument keeps the tilt gauge clear of the needle and star trail.
-        Column(Modifier.align(Alignment.TopEnd).background(parchment, CircleShape).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Canvas(Modifier.size(76.dp)) {
-                val c = Offset(size.width / 2f, size.height / 2f)
-                val r = size.minDimension * 0.43f
-                drawCircle(compassInk, r, c)
-                drawCircle(levelColor, r * 0.91f, c, style = Stroke(2.dp.toPx()))
-                drawCircle(parchment, r * 0.78f, c)
-                drawCircle(levelColor, r * 0.36f, c, style = Stroke(1.dp.toPx()))
-                drawLine(levelColor.copy(alpha = 0.5f), c - Offset(r * 0.65f, 0f), c + Offset(r * 0.65f, 0f), 1.dp.toPx())
-                drawLine(levelColor.copy(alpha = 0.5f), c - Offset(0f, r * 0.65f), c + Offset(0f, r * 0.65f), 1.dp.toPx())
-                val bubble = c + Offset(animatedRoll / 30f, animatedPitch / 30f) * (r * 0.45f)
-                drawCircle(levelColor, r * 0.19f, bubble)
-                drawCircle(parchment.copy(alpha = 0.8f), r * 0.055f, bubble - Offset(2.dp.toPx(), 2.dp.toPx()))
-            }
-            Text("LIBELLA", color = levelColor, fontFamily = GothicTreasureFontFamily, fontSize = 11.sp)
-        }
         Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (signalLocked) "✦ SIGNAL AWAKENED ✦" else "${distanceMeters.formatDistance()} · $starCount / 10 stars", color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp)
-            Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (levelDegrees <= HORIZONTAL_TOLERANCE_DEGREES) Color(0xFF507052) else rust, fontSize = 10.sp)
         }
     }
 }
 
-internal fun oracleStarCount(distanceMeters: Double?): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
-    kotlin.math.floor(((30.0 - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
+internal fun oracleStarCount(distanceMeters: Double?, huntReadyRadiusMeters: Double = 10.0): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
+    kotlin.math.floor((((huntReadyRadiusMeters + 20.0) - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
 } ?: 0
 
 @Composable
@@ -2240,7 +2248,7 @@ private fun TreasurePeekHeader(
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
-                    relic.name,
+                    if (isFound) relic.name else "Undiscovered treasure",
                     color = Ink,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge,
@@ -2291,9 +2299,9 @@ private fun TreasureInformationPanel(
                     colors = CardDefaults.cardColors(containerColor = BrandSoft),
                 ) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("Known legend", color = Brand, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Adventure awaits!", color = Brand, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            relic.story.ifBlank { relic.clue.ifBlank { relic.description } },
+                            "Keep exploring and find this treasure to uncover its story. You’re getting closer!",
                             color = Ink,
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -2805,137 +2813,6 @@ private fun TreasureFoundPanel(relic: MapRelic, onViewStory: () -> Unit) {
 }
 
 @Composable
-internal fun TreasureStoryPanel(
-    relic: MapRelic,
-    collecting: Boolean,
-    collectionError: String?,
-    onPutInBackpack: (() -> Unit)?,
-    onBackToReveal: (() -> Unit)? = null,
-    onReturnToMap: (() -> Unit)? = null,
-    headerArtworkVisible: Boolean = true,
-    onHeaderArtworkBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-) {
-    val context = LocalContext.current
-    LazyColumn(
-        Modifier.fillMaxSize().background(Color(0xFFF8F0E4)),
-        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TreasureArtwork(relic, discovered = true, modifier = Modifier.size(82.dp)
-                    .onGloballyPositioned { onHeaderArtworkBounds(it.boundsInRoot()) }
-                    .graphicsLayer { alpha = if (headerArtworkVisible) 1f else 0f })
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                    Text(relic.locationName, color = Muted)
-                }
-            }
-        }
-        if (onBackToReveal != null) {
-            item {
-                OutlinedButton(onClick = onBackToReveal, modifier = Modifier.fillMaxWidth()) {
-                    Text("Back to reveal")
-                }
-            }
-        }
-        if (relic.description.isNotBlank()) {
-            item {
-                Text(relic.description, color = Ink, style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-        if (relic.story.isNotBlank()) {
-            item {
-                Card(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = BrandSoft),
-                ) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("The story", color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text(relic.story, color = Ink, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-        if (relic.historicalImageUrl.isNotBlank() || com.comp90018.app.features.treasure.historicalArtworkResource(relic) != null) {
-            item {
-                Card(
-                    Modifier.fillMaxWidth().height(220.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = BrandSoft),
-                ) {
-                    com.comp90018.app.features.treasure.HistoricalTreasureImage(
-                        relic = relic,
-                        modifier = Modifier.fillMaxSize().padding(10.dp),
-                    )
-                }
-            }
-        }
-        relic.historicalImageCredit.takeIf { it.isNotBlank() }?.let { credit ->
-            item { DetailTextRow("Image credit", credit) }
-        }
-        relic.sourceTitle.takeIf { it.isNotBlank() }?.let { source ->
-            item { DetailTextRow("Source", source) }
-        }
-        relic.sourceUrl.takeIf { it.startsWith("https://") }?.let { sourceUrl ->
-            item {
-                OutlinedButton(
-                    onClick = {
-                        runCatching {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl)))
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                ) {
-                    Text("Open historical source")
-                }
-            }
-        }
-        item { DetailTextRow("Found at", relic.locationName) }
-        relic.buildingStory.takeIf { it.isNotBlank() }?.let { buildingStory ->
-            item { DetailTextRow("About the landmark", buildingStory) }
-        }
-        if (onPutInBackpack != null) item {
-            Button(
-                onClick = onPutInBackpack,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp),
-                enabled = !collecting,
-            ) {
-                if (collecting) {
-                    CircularProgressIndicator(Modifier.size(23.dp), strokeWidth = 3.dp, color = Color.White)
-                } else {
-                    Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(28.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(if (collecting) "Saving…" else "Put in backpack", fontWeight = FontWeight.Bold)
-            }
-        }
-        if (onPutInBackpack == null) item {
-            Text("Already in your collection", color = Brand, fontWeight = FontWeight.Bold)
-            onReturnToMap?.let { returnToMap ->
-                Button(onClick = returnToMap, modifier = Modifier.fillMaxWidth()) {
-                    Text("Return to map")
-                }
-            }
-        }
-        collectionError?.let { message ->
-            item {
-                Text(
-                    message,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun DetailTextRow(title: String, subtitle: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 15.dp)) {
         Text(title, color = Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
@@ -3220,7 +3097,11 @@ private fun questMarkerIcon(
     return BitmapDescriptorFactory.fromBitmap(bitmap).also { treasureMarkerIcons.put(key, it) }
 }
 
-private fun currentLocationIcon(context: Context): BitmapDescriptor {
+private fun currentLocationIcon(
+    context: Context,
+    dotColor: Int = android.graphics.Color.rgb(217, 84, 53),
+    showHeading: Boolean = true,
+): BitmapDescriptor {
     val density = context.resources.displayMetrics.density
     val size = (68 * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -3247,7 +3128,7 @@ private fun currentLocationIcon(context: Context): BitmapDescriptor {
         style = Paint.Style.FILL
     }
     val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.rgb(217, 84, 53)
+        color = dotColor
         style = Paint.Style.FILL
     }
     val viewCone = Path().apply {
@@ -3256,7 +3137,7 @@ private fun currentLocationIcon(context: Context): BitmapDescriptor {
         lineTo(size * 0.92f, size * 0.04f)
         close()
     }
-    canvas.drawPath(viewCone, viewPaint)
+    if (showHeading) canvas.drawPath(viewCone, viewPaint)
     canvas.drawCircle(center, dotY, size * 0.14f, haloPaint)
     canvas.drawCircle(center, dotY, size * 0.095f, dotPaint)
     return BitmapDescriptorFactory.fromBitmap(bitmap)
@@ -3374,6 +3255,9 @@ private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val HUNT_CAMERA_LEAD_METERS = 80.0
 private const val HUNT_CAMERA_ZOOM = 18.5f
 private const val HUNT_CAMERA_TILT = 45f
+
+private fun Double.formatGateDistance(): String =
+    "${java.math.BigDecimal.valueOf(this).stripTrailingZeros().toPlainString()} m"
 
 private fun Double?.formatDistance(): String = when {
     this == null -> "unknown"

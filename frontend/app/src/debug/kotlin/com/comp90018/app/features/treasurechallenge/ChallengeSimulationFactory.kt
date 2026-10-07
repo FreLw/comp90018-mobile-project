@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -105,6 +109,7 @@ data class DebugContextControls(
     val stable: Boolean = true,
     val rotationStill: Boolean = true,
     val soundDetected: Boolean = false,
+    val soundDecibels: Double? = null,
 ) {
     fun snapshot(config: RelicChallengeConfig, timestampNanos: Long): DeviceContextSnapshot {
         val coordinate = GeoCoordinate(
@@ -152,7 +157,7 @@ data class DebugContextControls(
                 ),
             ),
             sound = SoundLevelOutput(
-                decibels = if (soundDetected) {
+                decibels = soundDecibels ?: if (soundDetected) {
                     (config.soundThresholdDecibels ?: -30.0) + 5.0
                 } else {
                     (config.soundThresholdDecibels ?: -30.0) - 20.0
@@ -224,40 +229,59 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
                 delay(250L)
             }
         }
-        Card(Modifier.fillMaxWidth()) {
+        var showSensorControls by remember { mutableStateOf(false) }
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+            containerColor = Color(0xE6203C30), contentColor = Color(0xFFFFE6B1))) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text("DEBUG · Fake sensor context")
-                debugScenarios(config).forEach { scenario ->
-                    OutlinedButton(onClick = {
-                        controls = scenario.controls
-                        // This remains a real evaluator completion, then uses the normal save/reveal flow.
-                        if (!config.photoActionRequired && scenario.label.startsWith("All valid")) {
-                            onCompleteWithDebugSnapshot(
-                                scenario.controls.snapshot(config, SystemClock.elapsedRealtimeNanos()),
-                            )
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        Text(scenario.label)
+                val scenarios = remember(config) { debugScenarios(config) }
+                var selectedPreset by remember { mutableStateOf(0f) }
+                if (scenarios.isNotEmpty()) {
+                    Text("Task preset · ${scenarios.firstOrNull { it.controls == controls }?.label ?: "Manual sensors"}",
+                        style = MaterialTheme.typography.labelSmall)
+                    Slider(colors = debugSliderColors(), value = selectedPreset, valueRange = 0f..(scenarios.size - 1).coerceAtLeast(1).toFloat(),
+                        steps = (scenarios.size - 2).coerceAtLeast(0),
+                        onValueChange = { value ->
+                            selectedPreset = value
+                            val scenario = scenarios[value.toInt().coerceIn(scenarios.indices)]
+                            controls = scenario.controls
+                        })
+                }
+                if (config.requiredHeadingDegrees != null) {
+                    NumberControl("Heading", controls.headingDegrees, 0f..359f) { controls = controls.copy(headingDegrees = it) }
+                }
+                if (config.type == RelicChallengeType.OLD_QUAD_EXCAVATION) {
+                    NumberControl("Tilt", controls.rollDegrees, -90f..90f) {
+                        controls = controls.copy(rollDegrees = it, horizontal = kotlin.math.abs(it) <= 10.0)
                     }
                 }
-                Toggle("Location valid", controls.locationValid) { controls = controls.copy(locationValid = it) }
-                NumberControl("Distance", controls.distanceMeters, 0f..200f) { controls = controls.copy(distanceMeters = it) }
-                NumberControl("GPS accuracy", controls.accuracyMeters, 0f..100f) { controls = controls.copy(accuracyMeters = it) }
-                NumberControl("Heading", controls.headingDegrees, 0f..359f) { controls = controls.copy(headingDegrees = it) }
-                NumberControl("Pitch", controls.pitchDegrees, -90f..90f) { controls = controls.copy(pitchDegrees = it) }
-                NumberControl("Roll", controls.rollDegrees, -90f..90f) { controls = controls.copy(rollDegrees = it) }
-                Toggle("Horizontal", controls.horizontal) { controls = controls.copy(horizontal = it) }
-                Toggle("Stationary", controls.stationary) { controls = controls.copy(stationary = it) }
-                Toggle("Stable", controls.stable) { controls = controls.copy(stable = it) }
-                Toggle("Gyroscope still", controls.rotationStill) { controls = controls.copy(rotationStill = it) }
                 if (config.requiresSound) {
-                    Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it) }
+                    NumberControl("Sound dB", controls.soundDecibels ?: (config.soundThresholdDecibels ?: -30.0) - 20,
+                        -80f..0f) { controls = controls.copy(soundDecibels = it) }
                 }
-                if (config.photoActionRequired) {
-                    Text("Use the CameraX panel to capture a real photo after sensor simulation is ready.")
+                TextButton(onClick = { showSensorControls = !showSensorControls }) {
+                    Text(if (showSensorControls) "Hide sensor controls" else "Adjust sensors",
+                        style = MaterialTheme.typography.labelMedium)
+                }
+                if (showSensorControls) {
+                    Toggle("Location valid", controls.locationValid) { controls = controls.copy(locationValid = it) }
+                    NumberControl("Distance", controls.distanceMeters, 0f..200f) { controls = controls.copy(distanceMeters = it) }
+                    NumberControl("GPS accuracy", controls.accuracyMeters, 0f..100f) { controls = controls.copy(accuracyMeters = it) }
+                    NumberControl("Heading", controls.headingDegrees, 0f..359f) { controls = controls.copy(headingDegrees = it) }
+                    NumberControl("Pitch", controls.pitchDegrees, -90f..90f) { controls = controls.copy(pitchDegrees = it) }
+                    NumberControl("Roll", controls.rollDegrees, -90f..90f) { controls = controls.copy(rollDegrees = it) }
+                    Toggle("Horizontal", controls.horizontal) { controls = controls.copy(horizontal = it) }
+                    Toggle("Stationary", controls.stationary) { controls = controls.copy(stationary = it) }
+                    Toggle("Stable", controls.stable) { controls = controls.copy(stable = it) }
+                    Toggle("Gyroscope still", controls.rotationStill) { controls = controls.copy(rotationStill = it) }
+                    if (config.requiresSound) {
+                        Toggle("Noise detected", controls.soundDetected) { controls = controls.copy(soundDetected = it, soundDecibels = null) }
+                    }
+                    if (config.photoActionRequired) {
+                        Text("Use the camera below when ready.", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -266,16 +290,26 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
 
 @Composable
 private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label)
-        Switch(checked = checked, onCheckedChange = onChange)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("$label: ${if (checked) "ON" else "OFF"}", style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.weight(1f))
+        Slider(colors = debugSliderColors(), value = if (checked) 1f else 0f, onValueChange = { onChange(it >= .5f) },
+            modifier = Modifier.weight(1f), valueRange = 0f..1f)
     }
 }
 
 @Composable
 private fun NumberControl(label: String, value: Double, range: ClosedFloatingPointRange<Float>, onChange: (Double) -> Unit) {
-    Text("$label: ${value.toInt()}")
-    Slider(value = value.toFloat().coerceIn(range.start, range.endInclusive),
-        onValueChange = { onChange(it.toDouble()) }, valueRange = range)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("$label: ${value.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+        Slider(colors = debugSliderColors(), value = value.toFloat().coerceIn(range.start, range.endInclusive),
+            onValueChange = { onChange(it.toDouble()) }, valueRange = range, modifier = Modifier.weight(2f))
+    }
 }
+
+@Composable
+private fun debugSliderColors() = SliderDefaults.colors(
+    thumbColor = Color(0xFFE8B75B), activeTrackColor = Color(0xFFE8B75B),
+    inactiveTrackColor = Color(0xFF507052), activeTickColor = Color(0xFF203C30),
+    inactiveTickColor = Color(0xFFE8B75B),
+)

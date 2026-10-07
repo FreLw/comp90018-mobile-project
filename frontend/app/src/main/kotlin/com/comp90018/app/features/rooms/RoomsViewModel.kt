@@ -2,6 +2,7 @@ package com.comp90018.app.features.rooms
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.comp90018.app.data.rooms.TeamRoom
 import com.comp90018.app.data.rooms.TeamRoomRepository
 import com.comp90018.app.data.social.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,6 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class RoomsUiState(
+    val publicRooms: List<TeamRoom> = emptyList(),
+    val browsingLoading: Boolean = false,
+    val browsingError: String? = null,
     val activeRoomId: String? = null,
     val membershipError: String? = null,
     val roomIdInput: String = "",
@@ -34,6 +38,24 @@ class RoomsViewModel(
         )
     }
 
+    private var browsingSubscription: Subscription? = null
+    fun startBrowsing() {
+        if (browsingSubscription != null) return
+        mutableUiState.value = mutableUiState.value.copy(browsingLoading = true)
+        browsingSubscription = repository.observePublicRooms { rooms, error ->
+            mutableUiState.value = mutableUiState.value.copy(publicRooms = rooms, browsingLoading = false, browsingError = error)
+        }
+    }
+    fun stopBrowsing() { browsingSubscription?.cancel(); browsingSubscription = null }
+    fun joinPublicRoom(room: TeamRoom) {
+        if (mutableUiState.value.working) return
+        mutableUiState.value = mutableUiState.value.copy(working = true, actionError = null)
+        repository.joinPublicRoom(room.id, userId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(working = false, actionError = error,
+                activeRoomId = if (error == null) room.id else mutableUiState.value.activeRoomId)
+        }
+    }
+
     fun updateRoomId(roomId: String) {
         mutableUiState.value = mutableUiState.value.copy(roomIdInput = roomId, actionError = null, membershipError = null)
     }
@@ -46,10 +68,10 @@ class RoomsViewModel(
         mutableUiState.value = mutableUiState.value.copy(actionError = null, membershipError = null, working = false)
     }
 
-    fun createRoom(name: String, maxMembers: Int, description: String) {
+    fun createRoom(name: String, maxMembers: Int, description: String, idOnly: Boolean = true) {
         if (mutableUiState.value.working) return
         mutableUiState.value = mutableUiState.value.copy(working = true, actionError = null)
-        repository.createRoom(userId, name, maxMembers, description) { roomId, error ->
+        repository.createRoom(userId, name, maxMembers, description, idOnly) { roomId, error ->
             mutableUiState.value = mutableUiState.value.copy(
                 activeRoomId = roomId ?: mutableUiState.value.activeRoomId,
                 working = false,
@@ -73,6 +95,7 @@ class RoomsViewModel(
 
     override fun onCleared() {
         membershipSubscription.cancel()
+        stopBrowsing()
     }
 
     companion object {

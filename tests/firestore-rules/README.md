@@ -12,7 +12,8 @@ npm run test:emulator
 ```
 
 The suite verifies profile ownership, catalogue read/write access, treasure
-collection ownership and catalogue references, and team-room message access.
+collection ownership and catalogue references, team-room message access, and
+shared hunt location access, ownership, session isolation, and timestamp validation.
 Expected permission-denied log entries are produced by negative assertions and
 do not indicate test failures.
 

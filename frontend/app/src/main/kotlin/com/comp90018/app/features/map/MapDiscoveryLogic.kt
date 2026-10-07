@@ -52,32 +52,28 @@ internal fun signedBearingDifference(
     deviceHeadingDegrees: Double,
 ): Double = ((targetBearingDegrees - deviceHeadingDegrees + 540.0) % 360.0) - 180.0
 
-/** The three independent sensor conditions required before the task challenge opens. */
+/** The distance and direction conditions required before the task challenge opens. */
 internal data class HuntReadiness(
     val nearTreasure: Boolean,
     val facingTreasure: Boolean,
-    val phoneHorizontal: Boolean,
 ) {
-    val allReady: Boolean = nearTreasure && facingTreasure && phoneHorizontal
+    val allReady: Boolean = nearTreasure && facingTreasure
 }
 
 internal fun evaluateHuntReadiness(
     distanceMeters: Double?,
     signedTurnDegrees: Double?,
-    tiltDegrees: Float,
+    config: CompassGateConfig = CompassGateConfig(),
 ): HuntReadiness = HuntReadiness(
-    nearTreasure = distanceMeters != null && distanceMeters <= HUNT_READY_RADIUS_METERS,
+    nearTreasure = distanceMeters != null && distanceMeters <= config.huntReadyRadiusMeters,
     facingTreasure = signedTurnDegrees != null &&
-        abs(signedTurnDegrees) <= COMPASS_ALIGNMENT_TOLERANCE_DEGREES,
-    phoneHorizontal = tiltDegrees <= HORIZONTAL_TOLERANCE_DEGREES,
+        abs(signedTurnDegrees) <= config.compassAlignmentToleranceDegrees,
 )
 
 internal val DEFAULT_CAMPUS_CENTRE = GeoCoordinate(-37.7986, 144.9602)
 internal const val RADAR_SCAN_RADIUS_METERS = 100.0
 internal const val REVEAL_RADIUS_METERS = 50.0
 internal const val HUNT_READY_RADIUS_METERS = 10.0
-internal const val COMPASS_ALIGNMENT_TOLERANCE_DEGREES = 15.0
-internal const val HORIZONTAL_TOLERANCE_DEGREES = 12f
 
 /** Overview shows the catalogue; proximity mode keeps recovered and returning relics visible. */
 internal fun visibleMapRelics(

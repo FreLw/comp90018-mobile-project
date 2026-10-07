@@ -87,12 +87,22 @@ class TeamRoomChatViewModel(
         }
     }
 
-    fun updateSettings(name: String, maxMembers: Int, description: String, onSaved: () -> Unit) {
+    fun updateSettings(name: String, maxMembers: Int, description: String, idOnly: Boolean = true, onSaved: () -> Unit) {
         if (mutableUiState.value.updatingTask) return
         mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
-        repository.updateSettings(roomId, userId, name, maxMembers, description) { error ->
+        repository.updateSettings(roomId, userId, name, maxMembers, description, idOnly) { error ->
             mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
             if (error == null) onSaved()
+        }
+    }
+
+    fun removeMember(memberId: String, onRemoved: () -> Unit) {
+        val state = mutableUiState.value
+        if (state.updatingTask || state.room?.creatorId != userId || memberId == userId) return
+        mutableUiState.value = state.copy(updatingTask = true, error = null)
+        repository.removeMember(roomId, userId, memberId) { error ->
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+            if (error == null) onRemoved()
         }
     }
 
