@@ -53,9 +53,15 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 288
         },
+<<<<<<< HEAD
+        "longitude": 144.961958,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
+=======
         "longitude": 144.96189,
         "horizontalToleranceDegrees": 12,
         "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -104,9 +110,15 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 197
         },
+<<<<<<< HEAD
+        "longitude": 144.961417,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
+=======
         "longitude": 144.9613,
         "horizontalToleranceDegrees": 12,
         "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -156,8 +168,13 @@
         },
         "huntReadyRadiusMeters": 10,
         "longitude": 144.96097,
+<<<<<<< HEAD
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
+=======
         "horizontalToleranceDegrees": 12,
         "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -206,9 +223,15 @@
           "soundThresholdDecibels": null,
           "requiredHeadingDegrees": 88
         },
+<<<<<<< HEAD
+        "longitude": 144.9599,
+        "compassAlignmentToleranceDegrees": 15,
+        "horizontalToleranceDegrees": 12
+=======
         "longitude": 144.9597222,
         "horizontalToleranceDegrees": 12,
         "compassAlignmentToleranceDegrees": 15
+>>>>>>> origin/main
       }
     },
     {
@@ -256,8 +279,13 @@
           "soundThresholdDecibels": null
         },
         "huntReadyRadiusMeters": 10,
+<<<<<<< HEAD
+        "latitude": -37.7966124089,
+        "longitude": 144.959126948,
+=======
         "latitude": -37.796765,
         "longitude": 144.959095,
+>>>>>>> origin/main
         "compassAlignmentToleranceDegrees": 15,
         "horizontalToleranceDegrees": 12
       }

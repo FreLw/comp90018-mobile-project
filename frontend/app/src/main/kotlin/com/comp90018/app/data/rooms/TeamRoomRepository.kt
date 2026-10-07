@@ -7,6 +7,15 @@ import android.net.Uri
 /** Data boundary for team-room membership and entry operations. */
 /** Feature-facing boundary for room membership, room chat, and cooperative hunts. */
 interface TeamRoomRepository {
+    fun observePublicRooms(onChange: (List<TeamRoom>, String?) -> Unit): Subscription {
+        onChange(emptyList(), null)
+        return Subscription {}
+    }
+    fun createRoom(userId: String, name: String, maxMembers: Int, description: String, idOnly: Boolean, onComplete: (String?, String?) -> Unit) = createRoom(userId, name, maxMembers, description, onComplete)
+    fun updateSettings(roomId: String, userId: String, name: String, maxMembers: Int, description: String, idOnly: Boolean, onComplete: (String?) -> Unit) = updateSettings(roomId, userId, name, maxMembers, description, onComplete)
+    fun removeMember(roomId: String, ownerId: String, memberId: String, onComplete: (String?) -> Unit) { onComplete("Member removal unavailable") }
+    fun joinPublicRoom(roomId: String, userId: String, onComplete: (String?) -> Unit) = joinRoom(roomId, userId, onComplete)
+
     fun observeMembership(userId: String, onChange: (String?, String?) -> Unit): Subscription
     fun observeUnreadMessages(userId: String, onChange: (Int, String?) -> Unit): Subscription
     fun createRoom(userId: String, name: String, maxMembers: Int, description: String, onComplete: (String?, String?) -> Unit)

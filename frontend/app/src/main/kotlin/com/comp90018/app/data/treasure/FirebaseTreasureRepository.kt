@@ -5,6 +5,7 @@ import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules
 import com.comp90018.app.contextengine.challenge.CalibrationStatus
 import com.comp90018.app.data.social.Subscription
+import com.comp90018.app.features.map.CompassGateConfig
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.google.firebase.firestore.DocumentSnapshot
@@ -71,6 +72,7 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
         radarRadiusMeters = number("radarRadiusMeters")?.takeIf { it.isFinite() && it >= insideRadiusMeters } ?: 100.0,
         nearbyRadiusMeters = number("nearbyRadiusMeters") ?: 60.0,
         sortOrder = number("sortOrder")?.toInt() ?: Int.MAX_VALUE,
+        compassGateConfig = parseCompassGateConfig(data.orEmpty()),
         challengeConfig = parseChallengeConfig(get("challenge") as? Map<*, *>, coordinate, insideRadiusMeters),
     )
 }
@@ -121,4 +123,16 @@ private fun Exception.toTreasureMessage(): String = when {
     this is FirebaseFirestoreException && code == FirebaseFirestoreException.Code.PERMISSION_DENIED ->
         "Treasure access is not enabled in Firestore Rules yet."
     else -> localizedMessage ?: "Unable to load treasures from Firebase."
+}
+
+/** Missing or invalid fields retain the previous defaults independently. */
+internal fun parseCompassGateConfig(fields: Map<String, Any>): CompassGateConfig {
+    val defaults = CompassGateConfig()
+    fun validNumber(name: String, fallback: Double, valid: (Double) -> Boolean): Double =
+        (fields[name] as? Number)?.toDouble()?.takeIf { it.isFinite() && valid(it) } ?: fallback
+    return CompassGateConfig(
+        huntReadyRadiusMeters = validNumber("huntReadyRadiusMeters", defaults.huntReadyRadiusMeters) { it > 0.0 },
+        compassAlignmentToleranceDegrees = validNumber("compassAlignmentToleranceDegrees", defaults.compassAlignmentToleranceDegrees) { it in 0.0..180.0 },
+        horizontalToleranceDegrees = validNumber("horizontalToleranceDegrees", defaults.horizontalToleranceDegrees) { it in 0.0..90.0 },
+    )
 }

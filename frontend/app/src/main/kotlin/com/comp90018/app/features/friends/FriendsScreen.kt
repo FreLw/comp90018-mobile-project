@@ -62,7 +62,7 @@ fun FriendsScreen(user: FirebaseUser, firestore: FirebaseFirestore, profile: Use
                 currentUsername = profile?.username.orEmpty(),
                 currentAvatarUrl = profile?.avatarUrl.orEmpty(),
                 onBack = viewModel::closeChat,
-                onViewFriend = if (chatTarget.friend.isStarterContact) null else ({ viewingProfile = true }),
+                onViewFriend = { viewingProfile = true },
             )
         }
         return

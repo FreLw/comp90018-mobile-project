@@ -53,6 +53,7 @@ object FirebaseTeamRoomService {
         maxMembers: Int,
         description: String,
         onComplete: (String?, String?) -> Unit,
+        idOnly: Boolean = true,
     ) {
         if (name.trim().isBlank() || name.trim().length > 80 || maxMembers !in 2..4 || description.length > 500) return onComplete(null, "Enter a room name (up to 80 characters), capacity of 2–4, and description up to 500 characters")
         val membership = firestore.collection("teamMemberships").document(userId)
@@ -69,6 +70,7 @@ object FirebaseTeamRoomService {
                     set(room, mapOf(
                         "creatorId" to userId,
                         "name" to name.trim(),
+                        "idOnly" to idOnly,
                         "maxMembers" to maxMembers,
                         "description" to description.trim(),
                         "memberIds" to listOf(userId),
@@ -93,7 +95,7 @@ object FirebaseTeamRoomService {
         }
     }
 
-    fun joinRoom(firestore: FirebaseFirestore, roomId: String, userId: String, onComplete: (String?) -> Unit) {
+    fun joinRoom(firestore: FirebaseFirestore, roomId: String, userId: String, onComplete: (String?) -> Unit, publicEntry: Boolean = false) {
         val cleanRoomId = roomId.trim()
         if (cleanRoomId.isBlank()) return onComplete("Enter a room ID")
         val membership = firestore.collection("teamMemberships").document(userId)
@@ -102,14 +104,48 @@ object FirebaseTeamRoomService {
             if (transaction.get(membership).exists()) throw IllegalStateException("You are already in a treasure room")
             val roomSnapshot = transaction.get(room)
             if (!roomSnapshot.exists()) throw IllegalStateException("Room not found")
+            if (publicEntry && roomSnapshot.getBoolean("idOnly") != false) throw IllegalStateException("This room now requires a room ID")
             val members = roomSnapshot.get("memberIds") as? List<*> ?: emptyList<String>()
-            if (members.size >= (roomSnapshot.getLong("maxMembers") ?: 4L)) throw IllegalStateException("This room is full")
+            if (members.size >= (roomSnapshot.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong())) throw IllegalStateException("This room is full")
             transaction.update(room, mapOf(
                 "memberIds" to FieldValue.arrayUnion(userId),
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
             transaction.set(membership, mapOf("roomId" to cleanRoomId, "createdAt" to FieldValue.serverTimestamp(), "unreadCount" to 0))
         }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to join room") }
+    }
+
+    fun observePublicRooms(firestore: FirebaseFirestore, onChange: (List<TeamRoom>, String?) -> Unit): ListenerRegistration =
+        firestore.collection("teamRooms").whereEqualTo("idOnly", false).addSnapshotListener { snapshot, error ->
+            if (error != null) onChange(emptyList(), error.localizedMessage ?: "Unable to browse rooms")
+            else onChange(snapshot?.documents.orEmpty().map { doc ->
+                TeamRoom(id = doc.id, creatorId = doc.getString("creatorId").orEmpty(),
+                    memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+                    taskId = doc.getString("taskId").orEmpty(), taskTitle = doc.getString("taskTitle").orEmpty(),
+                    taskStatus = doc.getString("taskStatus").orEmpty(), name = doc.getString("name").orEmpty(),
+                    maxMembers = (doc.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong()).toInt().coerceIn(2, 4),
+                    description = doc.getString("description").orEmpty(), idOnly = false)
+            }.sortedBy { it.name.lowercase() }, null)
+        }
+
+    fun removeMember(firestore: FirebaseFirestore, roomId: String, ownerId: String, memberId: String, onComplete: (String?) -> Unit) {
+        val room = firestore.collection("teamRooms").document(roomId)
+        val membership = firestore.collection("teamMemberships").document(memberId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(room)
+            val memberSnapshot = transaction.get(membership)
+            if (snapshot.getString("creatorId") != ownerId) throw IllegalStateException("Only the room owner can remove members")
+            if (memberId == ownerId) throw IllegalStateException("The owner cannot be removed")
+            val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            if (memberId !in members || memberSnapshot.getString("roomId") != roomId) throw IllegalStateException("This explorer is no longer in the room")
+            transaction.update(room, mapOf(
+                "memberIds" to members.filterNot { it == memberId },
+                "taskCompletedMemberIds" to ((snapshot.get("taskCompletedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty().filterNot { it == memberId }),
+                "taskClaimedMemberIds" to ((snapshot.get("taskClaimedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty().filterNot { it == memberId }),
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+            transaction.delete(membership)
+        }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to remove member") }
     }
 
     fun observeRoom(
@@ -128,8 +164,9 @@ object FirebaseTeamRoomService {
                 onChange(TeamRoom(
                     id = snapshot.id,
                     name = snapshot.getString("name").orEmpty().trim(),
-                    maxMembers = (snapshot.getLong("maxMembers") ?: 4L).toInt().coerceIn(2, 4),
+                    maxMembers = (snapshot.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong()).toInt().coerceIn(2, 4),
                     description = snapshot.getString("description").orEmpty(),
+                    idOnly = snapshot.getBoolean("idOnly") ?: true,
                     creatorId = snapshot.getString("creatorId").orEmpty(),
                     memberIds = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     taskId = snapshot.getString("taskId").orEmpty(),
@@ -417,7 +454,7 @@ object FirebaseTeamRoomService {
         }
     }
 
-    fun updateSettings(firestore: FirebaseFirestore, roomId: String, userId: String, name: String, maxMembers: Int, description: String, onComplete: (String?) -> Unit) {
+    fun updateSettings(firestore: FirebaseFirestore, roomId: String, userId: String, name: String, maxMembers: Int, description: String, onComplete: (String?) -> Unit, idOnly: Boolean = true) {
         if (name.trim().isBlank() || name.trim().length > 80 || maxMembers !in 2..4 || description.length > 500) return onComplete("Check the room name, capacity, and description")
         val room = firestore.collection("teamRooms").document(roomId)
         firestore.runTransaction { transaction ->
@@ -425,7 +462,7 @@ object FirebaseTeamRoomService {
             if (snapshot.getString("creatorId") != userId) throw IllegalStateException("Only the room owner can edit settings")
             val members = snapshot.get("memberIds") as? List<*> ?: emptyList<String>()
             if (maxMembers < members.size) throw IllegalStateException("Capacity cannot be lower than the current member count")
-            transaction.update(room, mapOf("name" to name.trim(), "maxMembers" to maxMembers, "description" to description.trim(), "updatedAt" to FieldValue.serverTimestamp()))
+            transaction.update(room, mapOf("name" to name.trim(), "idOnly" to idOnly, "maxMembers" to maxMembers, "description" to description.trim(), "updatedAt" to FieldValue.serverTimestamp()))
         }.addOnCompleteListener { task -> onComplete(if (task.isSuccessful) null else task.exception?.localizedMessage ?: "Unable to save settings") }
     }
 

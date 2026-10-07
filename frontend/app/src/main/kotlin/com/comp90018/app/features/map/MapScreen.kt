@@ -28,6 +28,8 @@ import android.os.Bundle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -230,6 +232,8 @@ fun MapScreen(
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
     var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    var treasureSheetExpanded by remember(selectedRelic?.id) { mutableStateOf(false) }
+    BackHandler(enabled = selectedRelic != null && treasureSheetExpanded) { treasureSheetExpanded = false }
     var detailRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var challengeRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var compassRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
@@ -270,6 +274,9 @@ fun MapScreen(
             .apply()
     }
     var debugSimulationEnabled by remember { mutableStateOf(false) }
+    var debugTaskRelic by remember { mutableStateOf<MapRelic?>(null) }
+    var debugTaskSession by remember { mutableIntStateOf(0) }
+    val debugTasks = remember { debugChallengeRelics() }
     val revealCoordinator = remember(activeHuntSessionId) { PostChallengeRevealCoordinator() }
     var revealedIds by remember(currentUserId) { mutableStateOf(emptySet<String>()) }
     var returningRelicId by remember { mutableStateOf<String?>(null) }
@@ -525,6 +532,23 @@ fun MapScreen(
         return
     }
 
+    if (BuildConfig.DEBUG) debugTaskRelic?.let { relic ->
+        BackHandler { debugTaskRelic = null }
+        TreasureChallengeRoute(
+            config = requireNotNull(relic.validatedChallengeConfig()),
+            treasureId = relic.id,
+            radarRadiusMeters = relic.radarRadiusMeters,
+            preciseLocationEnabled = true,
+            debugSimulationEnabled = true,
+            challengeSessionId = "debug-task-$debugTaskSession",
+            // UI previews complete locally, without changing collection or Room progress.
+            onChallengeCompleted = { complete -> complete(null) },
+            onDiscoverySaved = {},
+            onBack = { debugTaskRelic = null },
+        )
+        return
+    }
+
     challengeRelic?.let { relic ->
         relic.validatedChallengeConfig()?.let { config ->
             TreasureChallengeRoute(
@@ -532,7 +556,7 @@ fun MapScreen(
                 treasureId = relic.id,
                 radarRadiusMeters = relic.radarRadiusMeters,
                 preciseLocationEnabled = preciseLocationEnabled,
-                // Only the explicit debug launcher enables simulation; normal hunts use sensors.
+                // The debug launcher starts simulation immediately; each task also has a Test panel toggle.
                 debugSimulationEnabled = debugSimulationEnabled,
                 challengeSessionId = activeHuntSessionId.orEmpty(),
                 onChallengeCompleted = { onComplete ->
@@ -766,12 +790,12 @@ fun MapScreen(
             }
         }
 
-        if (BuildConfig.DEBUG && selectedRelic == null && (!teamHuntActive ||
-                (teamHuntIsOwner && teamHuntTaskPendingForCurrentUser))) {
+        if (BuildConfig.DEBUG) {
             DebugChallengeLauncher(
-                relics = resolvedTreasures,
+                relics = debugTasks,
                 onLaunch = { relic ->
-                    openHunt(relic, simulateChallenge = true)
+                    debugTaskSession += 1
+                    debugTaskRelic = relic
                 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
@@ -798,7 +822,7 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 18.dp),
+                .padding(top = 18.dp),
             transitionSpec = {
                 (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { it } + fadeOut())
             },
@@ -806,24 +830,32 @@ fun MapScreen(
         ) { relic ->
             if (relic != null) {
                 ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(26.dp),
+                    modifier = Modifier.fillMaxWidth().animateContentSize(),
+                    shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = Color.White.copy(alpha = 0.97f)),
                 ) {
                     TreasurePeekHeader(
                         relic = relic,
                         distance = locationOutput.distanceToTargetMeters.formatDistance(),
                         isFound = relic.id in foundRelicIds,
-                        expanded = false,
-                        onChevron = { detailRelic = relic },
+                        expanded = treasureSheetExpanded,
+                        onChevron = { treasureSheetExpanded = !treasureSheetExpanded },
                         actionLabel = when {
                             teamHuntCanClaim -> "Claim treasure"
+                            !teamHuntActive && relic.id in foundRelicIds -> null
                             teamHuntActive && !teamHuntTaskPendingForCurrentUser -> null
                             locationOutput.distanceToTargetMeters?.let { it <= HUNT_READY_RADIUS_METERS } == true -> "Start Hunting"
                             else -> null
                         },
                         onAction = { openHunt(relic) },
                     )
+                    if (treasureSheetExpanded) {
+                        TreasureInformationPanel(
+                            relic = relic,
+                            isFound = relic.id in foundRelicIds,
+                            modifier = Modifier.fillMaxWidth().height(300.dp),
+                        )
+                    }
                 }
             }
         }
@@ -1059,28 +1091,20 @@ private fun MemberHuntQuiz(
     }
 }
 
-private val DEBUG_SENSOR_CHALLENGES = setOf(
-    RelicChallengeType.UNION_LAWN_PHOTO,
-    RelicChallengeType.WILSON_HALL_OBSERVATION,
-    RelicChallengeType.OLD_QUAD_EXCAVATION,
-    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE,
-    // Use System Garden for the local test flow; unlike Grainger Museum, it never requests audio.
-    RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE,
-)
-
 @Composable
 private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) -> Unit, modifier: Modifier = Modifier) {
-    val challenges = relics.filter { it.challengeConfig?.type in DEBUG_SENSOR_CHALLENGES }
-    if (challenges.isEmpty()) return
+    if (relics.isEmpty()) return
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
-        Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
-            IconButton(onClick = { expanded = true }) {
-                Icon(Icons.Rounded.Star, "Open debug tasks", tint = Brand)
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
+            TextButton(onClick = { expanded = true }) {
+                Icon(Icons.Rounded.Star, "Open debug tasks", tint = Brand, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("task", color = Brand, fontWeight = FontWeight.SemiBold)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            challenges.forEach { relic ->
+            relics.forEach { relic ->
                 DropdownMenuItem(text = { Text(relic.locationName) }, onClick = { expanded = false; onLaunch(relic) })
             }
         }
@@ -1561,8 +1585,8 @@ internal fun TreasureCompassGate(
     val locationReady = (BuildConfig.DEBUG && simulateSensors) ||
         locationOutput.validity == com.comp90018.app.sensors.SensorValidity.VALID
     val readiness = if (locationReady) {
-        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees)
-    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= HORIZONTAL_TOLERANCE_DEGREES)
+        evaluateHuntReadiness(distance, turnDegrees, effectiveMotion.tiltDegrees, relic.compassGateConfig)
+    } else HuntReadiness(false, false, effectiveMotion.tiltDegrees <= relic.compassGateConfig.horizontalToleranceDegrees)
     val nearTreasure = readiness.nearTreasure
     val facingTreasure = readiness.facingTreasure
     val phoneHorizontal = readiness.phoneHorizontal
@@ -1577,10 +1601,10 @@ internal fun TreasureCompassGate(
         }
     }
 
-    val proximityGlow = distance?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / 165.0).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val levelGlow = ((45f - effectiveMotion.tiltDegrees) / 33f).coerceIn(0f, 1f)
-    val stars = oracleStarCount(distance)
+    val proximityGlow = distance?.let { (((relic.compassGateConfig.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val headingGlow = turnDegrees?.let { ((180.0 - abs(it)) / (180.0 - relic.compassGateConfig.compassAlignmentToleranceDegrees).coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val levelGlow = (((relic.compassGateConfig.horizontalToleranceDegrees + 33.0) - effectiveMotion.tiltDegrees) / 33.0).toFloat().coerceIn(0f, 1f)
+    val stars = oracleStarCount(distance, relic.compassGateConfig.huntReadyRadiusMeters)
     val tone = remember { runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 55) }.getOrNull() }
     DisposableEffect(tone) { onDispose { tone?.release() } }
     var previousStars by remember(relic.id) { mutableIntStateOf(stars) }
@@ -1605,7 +1629,7 @@ internal fun TreasureCompassGate(
     val instruction = when {
         signalLocked -> "Treasure signal locked — the hidden trial has awakened."
         !locationReady || distance == null || targetBearing == null -> "Waiting for a reliable location signal…"
-        !nearTreasure -> "The signal faded. Move back within 10 m."
+        !nearTreasure -> "The signal faded. Move back within ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}."
         !facingTreasure && requireNotNull(turnDegrees) > 0 -> "Turn right ${abs(turnDegrees).formatDegrees()} toward the treasure."
         !facingTreasure -> "Turn left ${abs(requireNotNull(turnDegrees)).formatDegrees()} toward the treasure."
         !phoneHorizontal -> "Lower the phone until it is flat and level."
@@ -1633,6 +1657,7 @@ internal fun TreasureCompassGate(
         }
         DivineCompassVisual(
             readiness = readiness,
+            config = relic.compassGateConfig,
             turnDegrees = turnDegrees?.toFloat() ?: 0f,
             signalAvailable = turnDegrees != null,
             distanceMeters = distance,
@@ -1663,9 +1688,9 @@ internal fun TreasureCompassGate(
             ) {
                 Text(instruction, modifier = Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OracleLamp("The Trail", "Draw nearer", distance.formatDistance(), nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
-                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / 15°" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
-                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / 12°", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
+                    OracleLamp("The Trail", "Draw nearer", "${distance.formatDistance()} / ${relic.compassGateConfig.huntReadyRadiusMeters.formatGateDistance()}", nearTreasure, proximityGlow, Color(0xFFBD903D), Modifier.weight(1f))
+                    OracleLamp("The Bearing", "Follow the calling", turnDegrees?.let { "${abs(it).formatDegrees()} / ${relic.compassGateConfig.compassAlignmentToleranceDegrees.formatDegrees()}" } ?: "Await signal", facingTreasure, headingGlow, Color(0xFFA44736), Modifier.weight(1f))
+                    OracleLamp("The Balance", "Still the vessel", "${effectiveMotion.tiltDegrees.toDouble().formatDegrees()} / ${relic.compassGateConfig.horizontalToleranceDegrees.formatDegrees()}", phoneHorizontal, levelGlow, Color(0xFF507052), Modifier.weight(1f))
                 }
                 AnimatedVisibility(visible = allReady, enter = fadeIn(tween(350)) + slideInVertically { it / 2 }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1704,6 +1729,7 @@ private fun SensorTestSlider(label: String, value: Float, range: ClosedFloatingP
 @Composable
 private fun DivineCompassVisual(
     readiness: HuntReadiness,
+    config: CompassGateConfig,
     turnDegrees: Float,
     signalAvailable: Boolean,
     distanceMeters: Double?,
@@ -1725,7 +1751,7 @@ private fun DivineCompassVisual(
     val rust = if (readiness.facingTreasure) Color(0xFFA44736) else grey
     val compassInk = if (readiness.facingTreasure) plum else Color(0xFF777570)
     val levelColor = if (readiness.phoneHorizontal) Color(0xFF507052) else grey
-    val starCount = oracleStarCount(distanceMeters)
+    val starCount = oracleStarCount(distanceMeters, config.huntReadyRadiusMeters)
     val starFlash = remember { androidx.compose.animation.core.Animatable(0f) }
     var lastStarCount by remember { mutableIntStateOf(starCount) }
     var flashingStars by remember { mutableStateOf(0 until 0) }
@@ -1737,7 +1763,7 @@ private fun DivineCompassVisual(
             starFlash.animateTo(0f, tween(700))
         } else lastStarCount = starCount
     }
-    val distanceProgress = distanceMeters?.let { ((30.0 - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val distanceProgress = distanceMeters?.let { (((config.huntReadyRadiusMeters + 20.0) - it) / 20.0).toFloat().coerceIn(0f, 1f) } ?: 0f
     val levelDegrees = maxOf(abs(pitchDegrees), abs(rollDegrees))
     Box(modifier.padding(4.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().padding(bottom = 42.dp)) {
@@ -1838,13 +1864,13 @@ private fun DivineCompassVisual(
         }
         Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (signalLocked) "✦ SIGNAL AWAKENED ✦" else "${distanceMeters.formatDistance()} · $starCount / 10 stars", color = plum, fontFamily = GothicTreasureFontFamily, fontSize = 18.sp)
-            Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (levelDegrees <= HORIZONTAL_TOLERANCE_DEGREES) Color(0xFF507052) else rust, fontSize = 10.sp)
+            Text("LEVEL ${levelDegrees.toDouble().formatDegrees()}", color = if (readiness.phoneHorizontal) Color(0xFF507052) else rust, fontSize = 10.sp)
         }
     }
 }
 
-internal fun oracleStarCount(distanceMeters: Double?): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
-    kotlin.math.floor(((30.0 - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
+internal fun oracleStarCount(distanceMeters: Double?, huntReadyRadiusMeters: Double = 10.0): Int = distanceMeters?.takeIf { it.isFinite() }?.let {
+    kotlin.math.floor((((huntReadyRadiusMeters + 20.0) - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
 } ?: 0
 
 @Composable
@@ -2087,7 +2113,7 @@ private fun TreasurePeekHeader(
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
-                    relic.name,
+                    if (isFound) relic.name else "Undiscovered treasure",
                     color = Ink,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge,
@@ -2138,9 +2164,9 @@ private fun TreasureInformationPanel(
                     colors = CardDefaults.cardColors(containerColor = BrandSoft),
                 ) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("Known legend", color = Brand, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Adventure awaits!", color = Brand, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            relic.story.ifBlank { relic.clue.ifBlank { relic.description } },
+                            "Keep exploring and find this treasure to uncover its story. You’re getting closer!",
                             color = Ink,
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -2652,137 +2678,6 @@ private fun TreasureFoundPanel(relic: MapRelic, onViewStory: () -> Unit) {
 }
 
 @Composable
-internal fun TreasureStoryPanel(
-    relic: MapRelic,
-    collecting: Boolean,
-    collectionError: String?,
-    onPutInBackpack: (() -> Unit)?,
-    onBackToReveal: (() -> Unit)? = null,
-    onReturnToMap: (() -> Unit)? = null,
-    headerArtworkVisible: Boolean = true,
-    onHeaderArtworkBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-) {
-    val context = LocalContext.current
-    LazyColumn(
-        Modifier.fillMaxSize().background(Color(0xFFF8F0E4)),
-        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TreasureArtwork(relic, discovered = true, modifier = Modifier.size(82.dp)
-                    .onGloballyPositioned { onHeaderArtworkBounds(it.boundsInRoot()) }
-                    .graphicsLayer { alpha = if (headerArtworkVisible) 1f else 0f })
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text(relic.name, color = Ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                    Text(relic.locationName, color = Muted)
-                }
-            }
-        }
-        if (onBackToReveal != null) {
-            item {
-                OutlinedButton(onClick = onBackToReveal, modifier = Modifier.fillMaxWidth()) {
-                    Text("Back to reveal")
-                }
-            }
-        }
-        if (relic.description.isNotBlank()) {
-            item {
-                Text(relic.description, color = Ink, style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-        if (relic.story.isNotBlank()) {
-            item {
-                Card(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = BrandSoft),
-                ) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("The story", color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text(relic.story, color = Ink, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-        if (relic.historicalImageUrl.isNotBlank() || com.comp90018.app.features.treasure.historicalArtworkResource(relic) != null) {
-            item {
-                Card(
-                    Modifier.fillMaxWidth().height(220.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = BrandSoft),
-                ) {
-                    com.comp90018.app.features.treasure.HistoricalTreasureImage(
-                        relic = relic,
-                        modifier = Modifier.fillMaxSize().padding(10.dp),
-                    )
-                }
-            }
-        }
-        relic.historicalImageCredit.takeIf { it.isNotBlank() }?.let { credit ->
-            item { DetailTextRow("Image credit", credit) }
-        }
-        relic.sourceTitle.takeIf { it.isNotBlank() }?.let { source ->
-            item { DetailTextRow("Source", source) }
-        }
-        relic.sourceUrl.takeIf { it.startsWith("https://") }?.let { sourceUrl ->
-            item {
-                OutlinedButton(
-                    onClick = {
-                        runCatching {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl)))
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                ) {
-                    Text("Open historical source")
-                }
-            }
-        }
-        item { DetailTextRow("Found at", relic.locationName) }
-        relic.buildingStory.takeIf { it.isNotBlank() }?.let { buildingStory ->
-            item { DetailTextRow("About the landmark", buildingStory) }
-        }
-        if (onPutInBackpack != null) item {
-            Button(
-                onClick = onPutInBackpack,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp),
-                enabled = !collecting,
-            ) {
-                if (collecting) {
-                    CircularProgressIndicator(Modifier.size(23.dp), strokeWidth = 3.dp, color = Color.White)
-                } else {
-                    Image(painterResource(R.drawable.nav_treasure_symbol), null, modifier = Modifier.size(28.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(if (collecting) "Saving…" else "Put in backpack", fontWeight = FontWeight.Bold)
-            }
-        }
-        if (onPutInBackpack == null) item {
-            Text("Already in your collection", color = Brand, fontWeight = FontWeight.Bold)
-            onReturnToMap?.let { returnToMap ->
-                Button(onClick = returnToMap, modifier = Modifier.fillMaxWidth()) {
-                    Text("Return to map")
-                }
-            }
-        }
-        collectionError?.let { message ->
-            item {
-                Text(
-                    message,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun DetailTextRow(title: String, subtitle: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 15.dp)) {
         Text(title, color = Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
@@ -3221,6 +3116,9 @@ private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val HUNT_CAMERA_LEAD_METERS = 80.0
 private const val HUNT_CAMERA_ZOOM = 18.5f
 private const val HUNT_CAMERA_TILT = 45f
+
+private fun Double.formatGateDistance(): String =
+    "${java.math.BigDecimal.valueOf(this).stripTrailingZeros().toPlainString()} m"
 
 private fun Double?.formatDistance(): String = when {
     this == null -> "unknown"

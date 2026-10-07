@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 data class ChatTarget(val roomId: String, val friend: FriendSummary)
 
 data class FriendsUiState(
-    val friends: List<FriendSummary> = StarterContacts,
+    val friends: List<FriendSummary> = emptyList(),
     val recentChats: List<DirectChatSummary> = emptyList(),
     val requests: List<IncomingFriendRequest> = emptyList(),
     val outgoingRequests: List<OutgoingFriendRequest> = emptyList(),
@@ -52,13 +52,15 @@ class FriendsViewModel(
         }
         friendsSubscription = repository.observeFriends(currentUid) { friends, error ->
             mutableUiState.value = mutableUiState.value.copy(
-                friends = mergeWithStarterContacts(friends),
+                friends = friends.filterNot { isLegacyDemoContact(it.uid) }
+                    .distinctBy(FriendSummary::uid)
+                    .sortedBy { it.displayLabel.lowercase() },
                 message = error ?: mutableUiState.value.message,
             )
         }
         directChatsSubscription = repository.observeDirectChats(currentUid) { chats, error ->
             mutableUiState.value = mutableUiState.value.copy(
-                recentChats = chats,
+                recentChats = chats.filterNot { isLegacyDemoContact(it.friendUid) },
                 message = error ?: mutableUiState.value.message,
             )
         }

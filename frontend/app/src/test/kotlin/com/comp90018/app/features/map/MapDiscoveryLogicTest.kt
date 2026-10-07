@@ -55,6 +55,16 @@ class MapDiscoveryLogicTest {
         assertFalse(evaluateHuntReadiness(null, null, 0f).allReady)
     }
     @Test
+    fun compassGateUsesConfiguredBoundariesForAllThreeLights() {
+        val config = CompassGateConfig(25.0, 30.0, 20.0)
+        assertTrue(evaluateHuntReadiness(25.0, -30.0, 20f, config).allReady)
+        assertFalse(evaluateHuntReadiness(25.01, 0.0, 0f, config).nearTreasure)
+        assertFalse(evaluateHuntReadiness(0.0, -30.01, 0f, config).facingTreasure)
+        assertFalse(evaluateHuntReadiness(0.0, 0.0, 20.01f, config).phoneHorizontal)
+        assertFalse(evaluateHuntReadiness(null, null, 0f, config).allReady)
+    }
+
+    @Test
     fun recoveredMarkersRemainVisibleWhenTheNextHuntTargetChanges() {
         val here = com.comp90018.app.sensors.location.GeoCoordinate(-37.798, 144.96)
         val distant = com.comp90018.app.sensors.location.GeoCoordinate(-37.81, 144.98)

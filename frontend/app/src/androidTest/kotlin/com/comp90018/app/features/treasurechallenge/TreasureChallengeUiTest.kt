@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
 import com.comp90018.app.contextengine.challenge.*
 import org.junit.Rule
 import org.junit.Test
@@ -23,8 +24,8 @@ class TreasureChallengeUiTest {
                 )
             }
         }
-        rule.onNodeWithText("○ Valid GPS within this treasure's radius").assertIsDisplayed()
-        rule.onNodeWithText(RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE.taskInstructions()).assertIsDisplayed()
+        rule.onNodeWithText("○ Valid GPS within this treasure's radius").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Frame the lost glasshouse").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Enable microphone", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Take photo", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Phone horizontal", substring = true).assertDoesNotExist()
@@ -42,8 +43,8 @@ class TreasureChallengeUiTest {
                 )
             }
         }
-        rule.onNodeWithText("○ Sound above threshold").assertIsDisplayed()
-        rule.onNodeWithText(RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL.taskInstructions()).assertIsDisplayed()
+        rule.onNodeWithText("○ Sound above threshold").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Bring the melody to life").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Take photo", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Compass direction aligned", substring = true).assertDoesNotExist()
     }
