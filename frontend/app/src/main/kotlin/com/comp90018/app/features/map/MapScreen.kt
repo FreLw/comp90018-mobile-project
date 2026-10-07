@@ -1,5 +1,7 @@
 package com.comp90018.app.features.map
 
+import com.comp90018.app.data.rooms.TeamHuntLocation
+
 import android.Manifest
 import android.app.Activity
 import android.content.Context
@@ -203,6 +205,8 @@ fun MapScreen(
     activeHuntFoundFragmentIds: List<String> = emptyList(),
     activeHuntClaimedMemberIds: List<String> = emptyList(),
     currentUserId: String = "",
+    teammateLocations: List<TeamHuntLocation> = emptyList(),
+    huntMemberNames: Map<String, String> = emptyMap(),
     onCompleteActiveHuntTask: ((String?) -> Unit) -> Unit = { complete -> complete("No active team hunt") },
     onFindActiveHuntFragment: (String) -> Unit = {},
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
@@ -444,6 +448,9 @@ fun MapScreen(
     // remains stable as a room starts or ends a hunt.
     if (isSouthLawnFragmentHunt) {
         SouthLawnFragmentHuntScreen(
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = activeHuntOwnerId,
             fragments = SouthLawnFragments,
             foundFragmentIds = activeHuntFoundFragmentIds,
             userLocation = userLocation,
@@ -457,6 +464,9 @@ fun MapScreen(
         currentUserId in activeHuntClaimedMemberIds
     ) {
         SouthLawnClaimWaitingScreen(
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = activeHuntOwnerId,
             userLocation = userLocation,
             deviceHeading = deviceHeading,
         )
@@ -690,6 +700,9 @@ fun MapScreen(
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
             relics = visibleRelics,
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = activeHuntOwnerId,
             selectedRelic = selectedRelic,
             locationOutput = locationOutput,
             deviceHeading = deviceHeading,
@@ -1083,6 +1096,9 @@ internal fun saveRelicDiscovery(
 
 @Composable
 private fun SouthLawnFragmentHuntScreen(
+    teammateLocations: List<TeamHuntLocation>,
+    huntMemberNames: Map<String, String>,
+    huntOwnerId: String?,
     fragments: List<TeamHuntFragment>,
     foundFragmentIds: List<String>,
     userLocation: LocationOutput,
@@ -1110,6 +1126,9 @@ private fun SouthLawnFragmentHuntScreen(
             locationOutput = userLocation,
             deviceHeading = deviceHeading,
             huntFragments = fragments,
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = huntOwnerId,
             foundFragmentIds = foundFragmentIds.toSet(),
             focusSelectedRelic = false,
             onRelicSelected = {},
@@ -1162,6 +1181,9 @@ private fun SouthLawnFragmentHuntScreen(
 /** Shown after this explorer has claimed the reconstructed Atlas, until their teammate does too. */
 @Composable
 private fun SouthLawnClaimWaitingScreen(
+    teammateLocations: List<TeamHuntLocation>,
+    huntMemberNames: Map<String, String>,
+    huntOwnerId: String?,
     userLocation: LocationOutput,
     deviceHeading: Float,
 ) {
@@ -1172,6 +1194,9 @@ private fun SouthLawnClaimWaitingScreen(
             locationOutput = userLocation,
             deviceHeading = deviceHeading,
             focusSelectedRelic = false,
+            teammateLocations = teammateLocations,
+            huntMemberNames = huntMemberNames,
+            huntOwnerId = huntOwnerId,
             onRelicSelected = {},
             modifier = Modifier.fillMaxSize(),
         )
@@ -1200,6 +1225,9 @@ private fun GoogleMapView(
     flippingRelicId: String? = null,
     onFlipFinished: () -> Unit = {},
     huntFragments: List<TeamHuntFragment> = emptyList(),
+    teammateLocations: List<TeamHuntLocation> = emptyList(),
+    huntMemberNames: Map<String, String> = emptyMap(),
+    huntOwnerId: String? = null,
     foundFragmentIds: Set<String> = emptySet(),
     focusSelectedRelic: Boolean = true,
     perspective: MapPerspective = MapPerspective.GOD,
@@ -1218,6 +1246,7 @@ private fun GoogleMapView(
     var cameraRelicSignature by remember { mutableStateOf("") }
     var currentLocationMarker by remember { mutableStateOf<Marker?>(null) }
     var renderedRelicMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
+    val teammateMarkers = remember { mutableMapOf<String, Marker>() }
     var renderedPulseBucket by remember { mutableIntStateOf(-1) }
     var mapStyleConfigured by remember { mutableStateOf(false) }
     var cameraPerspective by remember { mutableStateOf(perspective) }
@@ -1272,6 +1301,7 @@ private fun GoogleMapView(
                 val mapKey = "$selectedRelicId|$activeHuntTreasureId|$relicSignature|$fragmentSignature"
                 if (renderedMapKey != mapKey) {
                     map.clear()
+                    teammateMarkers.clear()
                     currentLocationMarker = null
                     renderedRelicMarkers = renderRelics(context, map, relics, selectedRelic, activeHuntTreasureId, markerPulse, discoveredTreasureIds)
                     renderHuntFragments(context, map, huntFragments, foundFragmentIds)
@@ -1309,6 +1339,24 @@ private fun GoogleMapView(
                     headingDegrees = deviceHeading,
                     stale = isStaleDisplay,
                 )
+                val visibleTeammateIds = teammateLocations.map { it.uid }.toSet()
+                teammateMarkers.keys.filterNot { it in visibleTeammateIds }.forEach { uid ->
+                    teammateMarkers.remove(uid)?.remove()
+                }
+                teammateLocations.forEach { teammate ->
+                    val position = LatLng(teammate.coordinate.latitude, teammate.coordinate.longitude)
+                    val isHost = teammate.uid == huntOwnerId
+                    val name = huntMemberNames[teammate.uid]?.takeIf { it.isNotBlank() } ?: "Teammate"
+                    val title = "$name (${if (isHost) "Host" else "Teammate"})"
+                    val marker = teammateMarkers[teammate.uid] ?: map.addMarker(
+                        MarkerOptions().position(position).title(title).snippet("Online · Shared hunt location")
+                            .icon(BitmapDescriptorFactory.defaultMarker(
+                                if (isHost) BitmapDescriptorFactory.HUE_ORANGE else BitmapDescriptorFactory.HUE_AZURE,
+                            )).zIndex(CURRENT_LOCATION_Z_INDEX + 1f),
+                    )?.also { teammateMarkers[teammate.uid] = it; it.tag = "teammate:${teammate.uid}" }
+                    marker?.position = position
+                    marker?.title = title
+                }
                 if (cameraPerspective != perspective) {
                     cameraPerspective = perspective
                     cameraInitialised = false

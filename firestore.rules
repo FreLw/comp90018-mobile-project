@@ -334,6 +334,32 @@ service cloud.firestore {
     }
 
     match /teamRooms/{roomId} {
+      // Positions belong to a single active hunt, and each explorer writes only their own.
+      match /locations/{userId} {
+        function activeHuntMember() {
+          let room = get(/databases/$(database)/documents/teamRooms/$(roomId)).data;
+          return signedIn() && request.auth.uid in room.memberIds
+            && room.memberIds.size() >= 2 && room.creatorId in room.memberIds
+            && room.taskStatus == 'hunting' && room.huntSessionId is string
+            && room.huntSessionId.size() > 0;
+        }
+        allow read: if activeHuntMember()
+          && resource.data.sessionId == get(/databases/$(database)/documents/teamRooms/$(roomId)).data.huntSessionId;
+        allow create, update: if isOwner(userId) && activeHuntMember()
+          && request.resource.data.keys().hasOnly(['sessionId', 'latitude', 'longitude', 'observedAt', 'updatedAt'])
+          && request.resource.data.sessionId == get(/databases/$(database)/documents/teamRooms/$(roomId)).data.huntSessionId
+          && request.resource.data.latitude is number
+          && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90
+          && request.resource.data.longitude is number
+          && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180
+          && request.resource.data.observedAt is timestamp
+          && request.resource.data.observedAt >= request.time - duration.value(30, 's')
+          && request.resource.data.observedAt <= request.time + duration.value(5, 's')
+          && request.resource.data.updatedAt == request.time;
+        // Cleanup remains possible after leaving the room or ending the hunt.
+        allow delete: if isOwner(userId);
+      }
+
       // ID-only rooms are accessible by exact ID; only public rooms can be queried.
       allow get: if signedIn();
       allow list: if signedIn() && resource.data.get('idOnly', true) == false;
