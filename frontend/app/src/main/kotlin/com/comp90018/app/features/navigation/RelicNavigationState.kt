@@ -7,6 +7,7 @@ internal object RelicNavigationConfig {
     const val drawnStrongBoundaryMeters = 30.0
     const val huntArrivalEntryRadiusMeters = 10.0
     const val huntArrivalExitRadiusMeters = 15.0
+    const val requiredArrivalFixes = 2
 }
 
 internal enum class RelicResonanceStage {
@@ -15,7 +16,7 @@ internal enum class RelicResonanceStage {
     FAINT,
     DRAWN,
     STRONG,
-    // Reserved for a future reliable arrival confirmation policy.
+    // Emitted by the arrival confirmation policy, never by distance alone.
     CONFIRMING,
     ARRIVED,
 }
@@ -53,4 +54,28 @@ internal fun relicResonanceStage(
     distanceMeters > RelicNavigationConfig.faintDrawnBoundaryMeters -> RelicResonanceStage.FAINT
     distanceMeters > RelicNavigationConfig.drawnStrongBoundaryMeters -> RelicResonanceStage.DRAWN
     else -> RelicResonanceStage.STRONG
+}
+
+/** Use the current sample's updated confirmation state; progress alone never grants arrival. */
+internal fun deriveRelicNavigationUiState(
+    sample: RelicArrivalSample,
+    confirmation: RelicArrivalConfirmationState,
+    targetBearingDegrees: Double? = null,
+): RelicNavigationUiState {
+    val stage = confirmedRelicResonanceStage(sample, confirmation)
+    val distance = sample.distanceMeters?.takeIf {
+        sample.hasActionableLocation && it.isFinite() && it >= 0.0
+    }
+    val arrived = stage == RelicResonanceStage.ARRIVED
+    return RelicNavigationUiState(
+        resonanceStage = stage,
+        distanceMeters = distance,
+        // Preserve the current full battery while confirmed arrival is retained by hysteresis.
+        resonanceProgress = if (arrived) 1f else navigationEnergyProgress(distance),
+        targetBearingDegrees = targetBearingDegrees?.takeIf { distance != null && it.isFinite() },
+        directionHint = NavigationDirectionHint.UNAVAILABLE,
+        headingErrorDegrees = null,
+        arrivalConfirmed = arrived,
+        canBeginHunt = arrived,
+    )
 }

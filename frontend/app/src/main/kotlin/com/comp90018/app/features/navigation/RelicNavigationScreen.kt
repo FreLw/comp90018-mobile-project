@@ -86,7 +86,9 @@ fun RelicNavigationScreen(
 ) {
     val deviceHeading = rememberDeviceHeading()
     var recenterRequestKey by remember { mutableIntStateOf(0) }
-    var simulatedDistance by remember(relic.id) { androidx.compose.runtime.mutableStateOf<Double?>(null) }
+    var distanceSimulation by remember(relic.id) { mutableStateOf(RelicNavigationSimulation()) }
+    val simulatedDistance = distanceSimulation.distanceMeters.takeIf { BuildConfig.DEBUG }
+    val isSimulating = simulatedDistance != null
     var simulatedHeading by remember(relic.id) { androidx.compose.runtime.mutableStateOf<Double?>(null) }
     val effectiveHeading = simulatedHeading?.toFloat() ?: deviceHeading
     val simulatedCoordinate = simulatedDistance?.let { navigationTestCoordinate(relic.coordinate, it) }
@@ -99,19 +101,36 @@ fun RelicNavigationScreen(
         ),
         simulatedCoordinate = simulatedCoordinate,
     )
-    val distanceMeters = navigationLocation.distanceToTargetMeters
-    var arrivalReached by remember(relic.id) { mutableStateOf(false) }
-    var arrivalAnimationComplete by remember(relic.id) { mutableStateOf(false) }
+    val arrivalSample = if (isSimulating) distanceSimulation.arrivalSample() else RelicArrivalSample(
+        hasActionableLocation = LocationActionPolicy.actionableCoordinate(userLocation) != null,
+        distanceMeters = navigationLocation.distanceToTargetMeters,
+        accuracyMeters = userLocation.accuracyMeters,
+        timestampNanos = userLocation.timestampNanos,
+    )
+    // GPS and synthetic fix identities belong to separate target/session-local evidence streams.
+    var arrivalConfirmation by remember(relic.id, isSimulating) {
+        mutableStateOf(RelicArrivalConfirmationState())
+    }
+    val updatedConfirmation = remember(arrivalSample, arrivalConfirmation) {
+        updateRelicArrivalConfirmation(arrivalConfirmation, arrivalSample)
+    }
+    // Present the transition immediately so stale arrival cannot keep the button visible.
+    val uiState = deriveRelicNavigationUiState(
+        sample = arrivalSample,
+        confirmation = updatedConfirmation,
+        targetBearingDegrees = navigationLocation.targetBearingDegrees,
+    )
+    LaunchedEffect(relic.id, isSimulating, arrivalSample) {
+        arrivalConfirmation = updatedConfirmation
+    }
+    var arrivalAnimationComplete by remember(relic.id, isSimulating) { mutableStateOf(false) }
     val arrivalSweep = remember(relic.id) { Animatable(-0.25f) }
     val arrivalScale = remember(relic.id) { Animatable(1f) }
-    LaunchedEffect(distanceMeters) {
-        arrivalReached = navigationArrivalReached(arrivalReached, distanceMeters)
-    }
-    LaunchedEffect(arrivalReached) {
+    LaunchedEffect(relic.id, isSimulating, uiState.arrivalConfirmed) {
         arrivalAnimationComplete = false
         arrivalSweep.snapTo(-0.25f)
         arrivalScale.snapTo(1f)
-        if (arrivalReached) {
+        if (uiState.arrivalConfirmed) {
             coroutineScope {
                 launch { arrivalSweep.animateTo(1.25f, tween(950, easing = FastOutSlowInEasing)) }
                 launch {
@@ -122,9 +141,8 @@ fun RelicNavigationScreen(
             arrivalAnimationComplete = true
         }
     }
-    val targetEnergyProgress = if (arrivalReached) 1f else navigationEnergyProgress(distanceMeters)
     val energyProgress by animateFloatAsState(
-        targetValue = targetEnergyProgress,
+        targetValue = uiState.resonanceProgress,
         animationSpec = tween(650),
         label = "relic_energy_progress",
     )
@@ -135,7 +153,7 @@ fun RelicNavigationScreen(
         animationSpec = infiniteRepeatable(
             animation = tween(
                 durationMillis = navigationTrailDurationMillis(
-                    navigationLocation.targetBearingDegrees,
+                    uiState.targetBearingDegrees,
                     effectiveHeading.toDouble(),
                 ),
                 easing = LinearEasing,
@@ -192,7 +210,7 @@ fun RelicNavigationScreen(
                 DraggableTestControl {
                     DistanceSimulationControl(
                         distance = simulatedDistance,
-                        onDistance = { simulatedDistance = it },
+                        onDistance = { distanceSimulation = distanceSimulation.withDistance(it) },
                         maximumDistance = 300f,
                         initialDistance = 250.0,
                     )
@@ -237,7 +255,7 @@ fun RelicNavigationScreen(
                         Text(relic.locationName, color = Muted, style = MaterialTheme.typography.bodyMedium)
                     }
                     Text(
-                        navigationDistanceLabel(distanceMeters),
+                        navigationDistanceLabel(uiState.distanceMeters),
                         color = Ink,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
@@ -261,7 +279,7 @@ fun RelicNavigationScreen(
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    if (arrivalReached && arrivalAnimationComplete) {
+                    if (uiState.canBeginHunt && arrivalAnimationComplete) {
                         Spacer(Modifier.width(10.dp))
                         Button(onClick = { onStartHunting(relic.id) }) {
                             Text("Start Hunting")
