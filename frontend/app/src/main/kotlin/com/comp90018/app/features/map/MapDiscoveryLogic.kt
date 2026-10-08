@@ -87,3 +87,13 @@ internal fun visibleMapRelics(
     showAllRelics || it.id in discoveredIds || it.id == returningRelicId ||
         LocationCalculator.distanceMeters(coordinate, it.coordinate) <= radiusMeters
 }
+
+/** Replays use a fresh, precise fix and the same proximity radius as the compass gate. */
+internal fun canReplayTreasure(
+    distanceMeters: Double?,
+    validity: com.comp90018.app.sensors.SensorValidity,
+    preciseLocationEnabled: Boolean,
+    radiusMeters: Double = HUNT_READY_RADIUS_METERS,
+): Boolean = preciseLocationEnabled && validity == com.comp90018.app.sensors.SensorValidity.VALID &&
+    distanceMeters != null && distanceMeters.isFinite() && distanceMeters >= 0 &&
+    distanceMeters <= radiusMeters

@@ -18,6 +18,8 @@ import com.comp90018.app.features.treasure.treasureArtworkResource
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.CircleShape
 import android.graphics.Bitmap
 import android.graphics.Paint
@@ -665,6 +667,14 @@ fun MapScreen(
                 }
             },
             onStartChallenge = { openHunt(relic) },
+            onRestartHunt = if (!teamHuntActive) ({
+                if (canReplayTreasure(locationOutput.distanceToTargetMeters,
+                        locationOutput.validity, preciseLocationEnabled, relic.compassGateConfig.huntReadyRadiusMeters)) {
+                    detailRelic = null
+                    selectedRelic = null
+                    openHunt(relic)
+                }
+            }) else null,
             forceReadyToDig = teamHuntAllCompleted && relic.id == teamHuntTarget.id,
             onTeamTaskFinished = null,
             onBack = {
@@ -833,6 +843,7 @@ fun MapScreen(
                         isFound = relic.id in foundRelicIds,
                         expanded = treasureSheetExpanded,
                         onChevron = { treasureSheetExpanded = !treasureSheetExpanded },
+                        onSheetDrag = { expanded -> treasureSheetExpanded = expanded },
                         actionLabel = when {
                             teamHuntCanClaim -> "Claim treasure"
                             !teamHuntActive && relic.id in foundRelicIds -> null
@@ -847,6 +858,16 @@ fun MapScreen(
                             relic = relic,
                             isFound = relic.id in foundRelicIds,
                             modifier = Modifier.fillMaxWidth().height(300.dp),
+                            replayEnabled = canReplayTreasure(locationOutput.distanceToTargetMeters,
+                                locationOutput.validity, preciseLocationEnabled, relic.compassGateConfig.huntReadyRadiusMeters),
+                            replayRadiusMeters = relic.compassGateConfig.huntReadyRadiusMeters,
+                            onRestartHunt = if (!teamHuntActive) ({
+                                if (canReplayTreasure(locationOutput.distanceToTargetMeters,
+                                        locationOutput.validity, preciseLocationEnabled, relic.compassGateConfig.huntReadyRadiusMeters)) {
+                                    selectedRelic = null
+                                    openHunt(relic)
+                                }
+                            }) else null,
                         )
                     }
                 }
@@ -2137,6 +2158,7 @@ private fun TreasureDetailScreen(
     preciseLocationEnabled: Boolean,
     onCollected: ((String?) -> Unit) -> Unit,
     onStartChallenge: (() -> Unit)?,
+    onRestartHunt: (() -> Unit)? = null,
     forceReadyToDig: Boolean = false,
     onTeamTaskFinished: (() -> Unit)? = null,
     onBack: () -> Unit,
@@ -2239,6 +2261,10 @@ private fun TreasureDetailScreen(
                                 relic = relic,
                                 isFound = isFound,
                                 modifier = Modifier.weight(1f),
+                                replayEnabled = canReplayTreasure(locationOutput.distanceToTargetMeters,
+                                    locationValidity, preciseLocationEnabled, relic.compassGateConfig.huntReadyRadiusMeters),
+                                replayRadiusMeters = relic.compassGateConfig.huntReadyRadiusMeters,
+                                onRestartHunt = onRestartHunt,
                             )
                         }
                         TreasureHuntStage.SEARCHING -> if (realSensorHuntConfig != null) {
@@ -2286,9 +2312,22 @@ private fun TreasurePeekHeader(
     onChevron: () -> Unit,
     actionLabel: String? = null,
     onAction: () -> Unit = {},
+    onSheetDrag: ((Boolean) -> Unit)? = null,
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().then(
+            if (onSheetDrag != null) Modifier.pointerInput(onSheetDrag) {
+                var dragged = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onVerticalDrag = { change, amount -> change.consume(); dragged += amount },
+                    onDragEnd = {
+                        if (dragged < -24.dp.toPx()) onSheetDrag(true)
+                        else if (dragged > 24.dp.toPx()) onSheetDrag(false)
+                    },
+                )
+            } else Modifier
+        ).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
@@ -2341,12 +2380,37 @@ private fun TreasureInformationPanel(
     relic: MapRelic,
     isFound: Boolean,
     modifier: Modifier = Modifier,
+    replayEnabled: Boolean = false,
+    replayRadiusMeters: Double = HUNT_READY_RADIUS_METERS,
+    onRestartHunt: (() -> Unit)? = null,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (isFound && onRestartHunt != null) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onRestartHunt,
+                        enabled = replayEnabled,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Brand,
+                            disabledContainerColor = Color(0xFFE0DDD7),
+                            disabledContentColor = Color(0xFF8B8781),
+                        ),
+                    ) { Text("Start Hunting Again", fontWeight = FontWeight.Bold) }
+                    Text(
+                        if (replayEnabled) "Experience this treasure hunt again. Your collected treasure stays in your backpack."
+                        else "Move within ${replayRadiusMeters.formatGateDistance()} and enable precise location to hunt again.",
+                        color = Muted, style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
         if (!isFound) {
             item {
                 Card(
@@ -3124,7 +3188,7 @@ private fun questMarkerIcon(
     val key = "$artworkRes:$density:$discovered:$selected:$active:$pulseBucket:${(flipScale * 40).toInt()}"
     treasureMarkerIcons.get(key)?.let { return it }
     val scale = pulseBucket / 20f
-    val size = (72f * density).toInt().coerceAtLeast(1)
+    val size = (56f * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
     val center = size / 2f
