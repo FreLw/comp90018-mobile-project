@@ -332,7 +332,9 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
                         }
                     }
                     if (config.photoActionRequired) {
-                        Text("Use the camera below when ready.", style = MaterialTheme.typography.bodySmall)
+                        Text(if (config.type == RelicChallengeType.UNION_LAWN_PHOTO)
+                            "Tap the camera engraving when ready." else "Use the camera below when ready.",
+                            style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

@@ -100,15 +100,17 @@ fun TreasureChallengeRoute(
     val simulation = viewModel.simulationSession
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val discoverySave = viewModel.discoverySave
+    val photoRevealPending = state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO &&
+        state.capturedPhotoUri != null && !viewModel.photoRevealFinished
 
-    LaunchedEffect(config.challengeId, state.completed) {
+    LaunchedEffect(config.challengeId, state.completed, photoRevealPending) {
         if (canOpenTreasureReveal(state.completed)) {
             if (discoverySave.status == DiscoverySaveStatus.WAITING) {
                 discoverySave.onChallengeCompleted(onChallengeCompleted) {
                     onChallengeSatisfied(viewModel.completionId)
-                    onDiscoveryReady(state.capturedPhotoUri, discoverySave)
+                    if (!photoRevealPending) onDiscoveryReady(state.capturedPhotoUri, discoverySave)
                 }
-            } else {
+            } else if (!photoRevealPending) {
                 // Re-entering a retained completed task restores its page without repeating save or feedback.
                 onDiscoveryReady(state.capturedPhotoUri, discoverySave)
             }
@@ -160,6 +162,7 @@ fun TreasureChallengeRoute(
         onPhotoCaptureStarted = viewModel::onPhotoCaptureStarted,
         onPhotoCaptured = viewModel::onPhotoCaptured,
         onCameraError = viewModel::onCameraError,
+        onPhotoRevealFinished = viewModel::finishPhotoReveal,
         onMicPermissionGranted = viewModel::restart,
         onCompleteWithDebugSnapshot = viewModel::completeWithDebugSnapshot,
     )
@@ -181,10 +184,12 @@ fun TreasureChallengeScreen(
     onMicPermissionGranted: () -> Unit = {},
     onCompleteWithDebugSnapshot: (com.comp90018.app.contextengine.DeviceContextSnapshot) -> Unit = {},
     testPanelToggle: (@Composable () -> Unit)? = null,
+    onPhotoRevealFinished: () -> Unit = {},
 ) {
     var emblemCenterInRoot by remember(state.challengeId) { mutableStateOf<Offset?>(null) }
     var backdropTopLeftInRoot by remember(state.challengeId) { mutableStateOf(Offset.Zero) }
     val fullscreenWater = state.challengeType == RelicChallengeType.WILSON_HALL_OBSERVATION
+    val lakePhotoDeveloping = state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO && state.capturedPhotoUri != null
     Box(Modifier.fillMaxSize().testTag("quest_screen").onGloballyPositioned { coordinates ->
         if (fullscreenWater) backdropTopLeftInRoot = coordinates.localToRoot(Offset.Zero)
     }) {
@@ -219,7 +224,7 @@ fun TreasureChallengeScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    AnimatedVisibility(visible = simulation != null && !state.completed,
+                    AnimatedVisibility(visible = simulation != null && (!state.completed || lakePhotoDeveloping),
                         enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                         simulation?.Controls(
                             state = state,
@@ -227,9 +232,21 @@ fun TreasureChallengeScreen(
                             onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
                         )
                     }
-                    ChallengeExperience(state, onEmblemCenterChanged = { emblemCenterInRoot = it })
+                    if (state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO) {
+                        UnionLawnPhotoExperience(
+                            state = state,
+                            onEmblemCenterChanged = { emblemCenterInRoot = it },
+                            onPhotoCaptureStarted = onPhotoCaptureStarted,
+                            onPhotoCaptured = onPhotoCaptured,
+                            onCameraError = onCameraError,
+                            onPhotoRevealFinished = onPhotoRevealFinished,
+                        )
+                    } else {
+                        ChallengeExperience(state, onEmblemCenterChanged = { emblemCenterInRoot = it })
+                    }
                     ChallengeStatusCard(state)
-                    if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
+                    if (state.challengeType != RelicChallengeType.UNION_LAWN_PHOTO &&
+                        state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
                         (state.actionReady || state.capturedPhotoUri != null)
                     ) {
                         UnionPhotoPanel(
@@ -249,7 +266,7 @@ fun TreasureChallengeScreen(
                         }
                         if (showDiagnostics) debugCalibrationInfo.invoke()
                     }
-                    if (state.completed) {
+                    if (state.completed && !lakePhotoDeveloping) {
                         when (saveStatus) {
                             DiscoverySaveStatus.WAITING, DiscoverySaveStatus.SAVING -> {
                                 CircularProgressIndicator()
@@ -414,7 +431,7 @@ private fun CapturedPhotoReveal(
 }
 
 internal fun RelicChallengeType.taskInstructions(): String = when (this) {
-    RelicChallengeType.UNION_LAWN_PHOTO -> "Find the lost lake site, align with the configured compass direction, then take a photograph."
+    RelicChallengeType.UNION_LAWN_PHOTO -> "Approach the lost lake site: golden water rises through the camera as the distance falls. Align with the compass direction to light the other half of the ring. Once both halves glow, tap the camera and allow camera access. Frame the scene in sepia, then press the button beneath the frame. Your photograph tilts and blends into a keepsake of the lost lake."
     RelicChallengeType.WILSON_HALL_OBSERVATION -> "Approach the rosette: water and floating stars turn to gold across the whole field. Guide the needle towards the star to awaken a spreading ripple. Four petals glow when you stop turning; the other four glow when movement and shake are still. Light all four stars to reveal the relic immediately."
     RelicChallengeType.OLD_QUAD_EXCAVATION -> "Excavate the fossil by holding your phone horizontal, stationary and stable. Light every star to reveal the relic immediately."
     RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "Approach Atlas and watch the vines turn to gold, from crown to root. Find the viewing direction, then remain perfectly still. Movement and shake share one stillness star; the orbit settles only when your phone stops turning. Light all four stars to reveal the relic immediately."

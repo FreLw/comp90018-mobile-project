@@ -88,6 +88,7 @@ private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onRetur
                         else -> AndroidView(
                             factory = { context -> ImageView(context).apply {
                                 scaleType = ImageView.ScaleType.CENTER_CROP
+                                colorFilter = com.comp90018.app.features.treasurechallenge.lostLakePhotoColorFilter()
                                 setImageURI(Uri.parse(photoUri))
                             } },
                             update = { it.setImageURI(Uri.parse(photoUri)) },

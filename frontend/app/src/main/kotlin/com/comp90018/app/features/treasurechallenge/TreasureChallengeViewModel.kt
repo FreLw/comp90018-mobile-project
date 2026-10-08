@@ -5,6 +5,9 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.comp90018.app.contextengine.AndroidDeviceContextEngine
 import com.comp90018.app.contextengine.DeviceContextEngine
 import com.comp90018.app.contextengine.DeviceContextSnapshot
@@ -80,6 +83,8 @@ class TreasureChallengeViewModel(
         private set
     var discoverySave = ChallengeDiscoverySave()
         private set
+    var photoRevealFinished by mutableStateOf(false)
+        private set
     private var collectionJob: Job? = null
     private var isActive = false
     private var photoOpportunityReady = false
@@ -129,6 +134,7 @@ class TreasureChallengeViewModel(
         evaluator = ChallengeRuleEvaluator(config)
         discoverySave = ChallengeDiscoverySave()
         completionId = UUID.randomUUID().toString()
+        photoRevealFinished = false
         mutableUiState.value = initialUiState(newConfig)
         if (shouldStart) start()
     }
@@ -139,6 +145,13 @@ class TreasureChallengeViewModel(
             cameraState = ChallengeCameraState.CAPTURING,
             cameraError = null,
         )
+    }
+
+    fun finishPhotoReveal() {
+        val state = mutableUiState.value
+        if (state.completed && state.capturedPhotoUri != null && config.type == RelicChallengeType.UNION_LAWN_PHOTO) {
+            photoRevealFinished = true
+        }
     }
 
     fun onPhotoCaptured(uri: String) {

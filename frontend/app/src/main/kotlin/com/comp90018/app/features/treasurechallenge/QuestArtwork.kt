@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import kotlin.math.*
@@ -146,6 +147,13 @@ internal fun QuestEmblem(state: TreasureChallengeUiState, modifier: Modifier = M
     }
     val motion = artworkMotion(state)
     val phase = ambientPhase()
+    val isLakeCamera = state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO
+    val lakeGoldTarget = if (isLakeCamera) questApproachFill(QuestVisualSignals.from(state).distanceMeters,
+        state.insideRadiusMeters) else 0f
+    val lakeGoldWater by animateFloatAsState(lakeGoldTarget, spring(dampingRatio = 1f, stiffness = 65f),
+        label = "lake_distance_gold_water")
+    val distanceRipple = if (isLakeCamera) lakeConditionRipple(state, ChallengeCondition.LOCATION_INSIDE) else 1f
+    val headingRipple = if (isLakeCamera) lakeConditionRipple(state, ChallengeCondition.HEADING_ALIGNED) else 1f
     val progress by animateFloatAsState(state.holdProgress.toFloat().coerceIn(0f, 1f), tween(250), label = "engraving_hold")
     val lights = ChallengeCondition.entries.associateWith { condition ->
         animateFloatAsState(if (state.conditionLit(condition)) 1f else 0f,
@@ -153,7 +161,14 @@ internal fun QuestEmblem(state: TreasureChallengeUiState, modifier: Modifier = M
     }
     val photo by animateFloatAsState(if (state.completed || state.capturedPhotoUri != null) 1f else 0f,
         tween(700), label = "photograph")
-    Canvas(modifier.testTag("quest_emblem").semantics { contentDescription = "Sensor-responsive relic engraving" }) {
+    Canvas(modifier.testTag("quest_emblem").semantics {
+        contentDescription = "Sensor-responsive relic engraving"
+        if (isLakeCamera) stateDescription = "Distance semicircle: ${if (state.conditionLit(ChallengeCondition.LOCATION_INSIDE)) "lit" else "unlit"}. " +
+            "Heading semicircle: ${if (state.conditionLit(ChallengeCondition.HEADING_ALIGNED)) "lit" else "unlit"}. " +
+            "Distance ripple: ${if (distanceRipple < 1f) "expanding" else "settled"}. " +
+            "Heading ripple: ${if (headingRipple < 1f) "expanding" else "settled"}. " +
+            "Camera gold water: ${(lakeGoldTarget * 100).roundToInt()}%."
+    }) {
         val unit = size.minDimension / 264f
         withTransform({
             translate(center.x, center.y)
@@ -173,7 +188,11 @@ internal fun QuestEmblem(state: TreasureChallengeUiState, modifier: Modifier = M
             translate(motion.roll * .16f + sin(phase) * .8f + sin(phase * 7f) * motion.movement * 3f,
                 motion.pitch * .12f + cos(phase) * .8f) {
                 when (state.challengeType) {
-                    RelicChallengeType.UNION_LAWN_PHOTO -> drawLakeCamera(motion, nearby, aligned, shutter, progress)
+                    RelicChallengeType.UNION_LAWN_PHOTO -> {
+                        drawLakeConditionRipple(distanceRipple)
+                        drawLakeConditionRipple(headingRipple)
+                        drawLakeCamera(motion, phase, lakeGoldWater, aligned, shutter)
+                    }
                     RelicChallengeType.WILSON_HALL_OBSERVATION -> Unit // Rendered by WilsonHallEmblem.
                     RelicChallengeType.OLD_QUAD_EXCAVATION -> drawFernFossil(motion, phase, progress, nearby, level, still, steady)
                     RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> Unit // Rendered by SouthLawnEmblem.
@@ -182,6 +201,29 @@ internal fun QuestEmblem(state: TreasureChallengeUiState, modifier: Modifier = M
                         (((state.soundThresholdDecibels ?: -30.0) + 80.0) / 80.0).toFloat().coerceIn(0f, 1f))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun lakeConditionRipple(state: TreasureChallengeUiState, condition: ChallengeCondition): Float {
+    val satisfied = state.conditionLit(condition)
+    val ripple = remember(state.challengeId, condition) { Animatable(1f) }
+    LaunchedEffect(state.challengeId, condition, satisfied) {
+        ripple.snapTo(if (satisfied) 0f else 1f)
+        if (satisfied) ripple.animateTo(1f, tween(2000, easing = LinearEasing))
+    }
+    return ripple.value
+}
+
+private fun DrawScope.drawLakeConditionRipple(progress: Float) {
+    if (progress >= 1f) return
+    repeat(3) { ring ->
+        val p = progress * 1.3f - ring * .15f
+        if (p in 0f..1f) {
+            val radius = 12f + p * 142f
+            drawCircle(QuestGold.copy(alpha = (1f - p) * .42f), radius, Offset(0f, 6f), style = Stroke(1.3f))
+            drawCircle(QuestGold.copy(alpha = (1f - p) * .055f), radius, Offset(0f, 6f), style = Stroke(6f))
         }
     }
 }
@@ -238,12 +280,18 @@ private fun DrawScope.drawOrnament(phase: Float, state: TreasureChallengeUiState
     }
     drawPath(diamond(0f, -121f, 5f), QuestGold.copy(alpha = .7f + sin(phase) * .15f))
     drawPath(diamond(0f, 111f, 5f), border)
-    // The ring is divided by the actual requirements; every lit star has a matching gold arc.
-    val conditions = state.conditionStates
+    // The lake camera has two halves: photo capture belongs to the shutter, never a third arc.
+    val conditions = if (state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO) {
+        listOf(ChallengeCondition.LOCATION_INSIDE, ChallengeCondition.HEADING_ALIGNED)
+    } else state.conditionStates.map { it.condition }
     val count = conditions.size.coerceAtLeast(1)
     repeat(count) { i ->
-        val light = conditions.getOrNull(i)?.let { lights.getValue(it.condition) } ?: 0f
+        val light = conditions.getOrNull(i)?.let { lights.getValue(it) } ?: 0f
         val c = lerp(QuestStone.copy(alpha = .25f), QuestGold, light)
+        if (state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO) {
+            drawArc(QuestGold.copy(alpha = light * .12f), -90f + i * 360f / count, 360f / count - 5f, false,
+                Offset(-88f, -88f), Size(176f, 176f), style = Stroke(7f, cap = StrokeCap.Round))
+        }
         drawArc(c, -90f + i * 360f / count, 360f / count - 5f, false,
             Offset(-88f, -88f), Size(176f, 176f), style = Stroke(1.6f, cap = StrokeCap.Round))
     }
@@ -255,26 +303,48 @@ private fun DrawScope.drawOrnament(phase: Float, state: TreasureChallengeUiState
     }
 }
 
-private fun DrawScope.drawLakeCamera(m: ArtworkMotion, nearby: Color, aligned: Color, shutter: Color, progress: Float) {
+private fun DrawScope.drawLakeCamera(m: ArtworkMotion, phase: Float, goldWater: Float, aligned: Color, shutter: Color) {
     rotate(m.heading * .035f + m.roll * .14f, Offset.Zero) {
         val body = Path().apply {
             moveTo(-72f, -35f); lineTo(-52f, -35f); lineTo(-46f, -49f); lineTo(-15f, -49f)
             lineTo(-9f, -35f); lineTo(72f, -35f); lineTo(72f, 50f); lineTo(-72f, 50f); close()
         }
-        engrave(body, nearby, .16f, 2f)
-        drawRoundRect(QuestDeep, Offset(-65f, -28f), Size(130f, 70f), CornerRadius(5f))
-        repeat(5) { i ->
-            line(-60f + i * 3f, -19f, -60f + i * 3f, 33f, nearby.copy(alpha = .55f), .8f)
-            line(46f + i * 3f, -19f, 46f + i * 3f, 33f, nearby.copy(alpha = .55f), .8f)
+        fun casing(colour: Color) {
+            engrave(body, colour, .16f, 2f)
+            drawRoundRect(QuestDeep, Offset(-65f, -28f), Size(130f, 70f), CornerRadius(5f))
+            repeat(5) { i ->
+                line(-60f + i * 3f, -19f, -60f + i * 3f, 33f, colour.copy(alpha = .55f), .8f)
+                line(46f + i * 3f, -19f, 46f + i * 3f, 33f, colour.copy(alpha = .55f), .8f)
+            }
+            for (x in listOf(-62f, 62f)) for (y in listOf(-25f, 40f)) {
+                drawPath(diamond(x, y, 3f), colour)
+            }
+            line(-42f, -43f, -21f, -43f, colour, 2f)
+            drawCircle(colour.copy(alpha = .1f), 41f, Offset(0f, 6f))
+            drawCircle(colour, 40f, Offset(0f, 6f), style = Stroke(2f))
+            line(-66f, 58f, 66f, 58f, colour.copy(alpha = .4f), .8f)
         }
-        for (x in listOf(-62f, 62f)) for (y in listOf(-25f, 40f)) {
-            drawPath(diamond(x, y, 3f), nearby)
+        casing(QuestStone.copy(alpha = .65f))
+        val surface = Path().apply {
+            repeat(57) { i ->
+                val x = -78f + i * 156f / 56f
+                val y = 60f - goldWater * 120f + sin(x * .095f + phase * 2f) * 2.2f
+                if (i == 0) moveTo(x, y) else lineTo(x, y)
+            }
         }
-        line(-42f, -43f, -21f, -43f, nearby, 2f)
+        val water = Path().apply {
+            addPath(surface)
+            lineTo(78f, 82f); lineTo(-78f, 82f); close()
+        }
+        if (goldWater > 0f) {
+            clipPath(water) { casing(QuestGold) }
+            clipPath(body) {
+                drawPath(water, QuestGold.copy(alpha = .18f))
+                if (goldWater < .99f) drawPath(surface, QuestGold.copy(alpha = .75f), style = Stroke(.9f))
+            }
+        }
         drawRoundRect(shutter, Offset(42f, -42f), Size(19f, 5f), CornerRadius(2f))
         oval(43f, -25f, 15f, 9f, shutter)
-        drawCircle(nearby.copy(alpha = .1f), 41f, Offset(0f, 6f))
-        drawCircle(nearby, 40f, Offset(0f, 6f), style = Stroke(2f))
         drawCircle(aligned, 34f, Offset(0f, 6f), style = Stroke(.9f))
         rotate(m.heading * .25f, Offset(0f, 6f)) {
             repeat(8) { i -> rotate(i * 45f, Offset(0f, 6f)) {
@@ -289,16 +359,15 @@ private fun DrawScope.drawLakeCamera(m: ArtworkMotion, nearby: Color, aligned: C
         drawCircle(aligned, 18f, lensCentre, style = Stroke(1.2f))
         drawCircle(shutter, 4f, lensCentre + Offset(5f, -5f), style = Stroke(1f))
         repeat(3) { i ->
-            drawArc(nearby, 5f, 170f, false, lensCentre + Offset(-14f, -3f + i * 5f),
+            drawArc(QuestStone.copy(alpha = .6f), 5f, 170f, false, lensCentre + Offset(-14f, -3f + i * 5f),
                 Size(28f, 7f), style = Stroke(.9f))
+            clipPath(water) {
+                drawArc(QuestGold, 5f, 170f, false, lensCentre + Offset(-14f, -3f + i * 5f),
+                    Size(28f, 7f), style = Stroke(.9f))
+            }
         }
-        line(-66f, 58f, 66f, 58f, nearby.copy(alpha = .4f), .8f)
         val reticle = m.heading / 180f * 54f
         drawPath(diamond(reticle, 58f, 5f), aligned)
-        repeat(5) { i ->
-            line(-40f + i * 20f, 68f, -26f + i * 20f, 68f,
-                if (progress >= (i + 1) / 5f) shutter else QuestStone.copy(alpha = .4f), 1.8f)
-        }
     }
 }
 

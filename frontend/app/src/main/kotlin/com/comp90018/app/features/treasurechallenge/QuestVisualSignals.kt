@@ -5,7 +5,6 @@ import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.sensors.DirectionProcessor
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.location.LocationCalculator
-import kotlin.math.abs
 
 /** A bounded presentation of live readings. Only evaluator conditions can illuminate the artwork. */
 internal data class QuestVisualSignals(
@@ -80,6 +79,7 @@ internal fun questMeasurement(state: TreasureChallengeUiState): Pair<String, Str
     fun number(value: Double?, unit: String): String =
         value?.takeIf(Double::isFinite)?.let { String.format(java.util.Locale.US, "%.1f", it) + unit } ?: "—"
     return when (state.challengeType) {
+        RelicChallengeType.UNION_LAWN_PHOTO -> "DISTANCE" to number(signals.distanceMeters, " m")
         RelicChallengeType.OLD_QUAD_EXCAVATION ->
             "BALANCE" to number(state.latestSnapshot?.orientation?.attitude?.takeIf { it.validity == SensorValidity.VALID }?.rollDegrees, "°")
         RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL ->
@@ -90,8 +90,5 @@ internal fun questMeasurement(state: TreasureChallengeUiState): Pair<String, Str
             "DISTANCE TO ATLAS" to number(signals.distanceMeters, " m")
         RelicChallengeType.WILSON_HALL_OBSERVATION ->
             "DISTANCE TO ROSETTE" to number(signals.distanceMeters, " m")
-        else -> "DIRECTION TO ALIGN" to number(signals.headingError.toDouble().takeIf {
-            state.latestSnapshot?.orientation?.direction?.headingValidity == SensorValidity.VALID
-        }?.let(::abs), "°")
     }
 }

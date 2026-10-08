@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,9 @@ internal fun RelicChallengeType.questTitle(): String = when (this) {
 internal fun ChallengeExperience(
     state: TreasureChallengeUiState,
     onEmblemCenterChanged: ((Offset) -> Unit)? = null,
+    emblemContent: (@Composable (Modifier) -> Unit)? = null,
+    afterEmblemContent: (@Composable () -> Unit)? = null,
+    beforeGuideContent: (@Composable () -> Unit)? = null,
 ) {
     val entrance = remember(state.challengeId) { Animatable(0f) }
     LaunchedEffect(state.challengeId) {
@@ -49,7 +53,7 @@ internal fun ChallengeExperience(
                 alpha = entrance.value
                 translationY = (1f - entrance.value) * 12.dp.toPx()
             })
-        QuestEmblem(state, Modifier.fillMaxWidth().height(
+        val emblemModifier = Modifier.fillMaxWidth().height(
             if (state.challengeType == RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE ||
                 state.challengeType == RelicChallengeType.WILSON_HALL_OBSERVATION) 300.dp else 280.dp
         ).graphicsLayer {
@@ -59,31 +63,37 @@ internal fun ChallengeExperience(
         }.onGloballyPositioned { coordinates ->
             onEmblemCenterChanged?.invoke(coordinates.localToRoot(
                 Offset(coordinates.size.width / 2f, coordinates.size.height / 2f)))
-        })
+        }
+        if (emblemContent == null) QuestEmblem(state, emblemModifier) else emblemContent(emblemModifier)
+        afterEmblemContent?.invoke()
         val measurement = questMeasurement(state)
-        Row(verticalAlignment = Alignment.CenterVertically,
+        val isLake = state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO
+        Row(modifier = if (isLake) Modifier.fillMaxWidth().testTag("union_measurements") else Modifier,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Canvas(Modifier.width(24.dp).height(1.dp)) {
+            if (!isLake) Canvas(Modifier.width(24.dp).height(1.dp)) {
                 drawLine(QuestGold.copy(alpha = .5f), Offset.Zero, Offset(size.width, 0f), 1f)
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(if (isLake) Modifier.weight(1f) else Modifier, horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(measurement.first, color = QuestStone, fontSize = 10.sp, letterSpacing = 2.sp)
                 Text(measurement.second, color = QuestParchment, fontFamily = FontFamily.Serif, fontSize = 19.sp)
             }
-            if (state.challengeType == RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE ||
+            if (isLake || state.challengeType == RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE ||
                 state.challengeType == RelicChallengeType.WILSON_HALL_OBSERVATION) {
-                Spacer(Modifier.width(4.dp))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("VIEWING ANGLE", color = QuestStone, fontSize = 10.sp, letterSpacing = 2.sp)
+                if (!isLake) Spacer(Modifier.width(4.dp))
+                Column(if (isLake) Modifier.weight(1f) else Modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (isLake) "DIRECTION TO ALIGN" else "VIEWING ANGLE", color = QuestStone,
+                        fontSize = 10.sp, letterSpacing = if (isLake) 1.sp else 2.sp)
                     val angle = if (state.latestSnapshot?.orientation?.direction?.headingValidity == SensorValidity.VALID)
                         String.format(java.util.Locale.US, "%.1f°", kotlin.math.abs(QuestVisualSignals.from(state).headingError)) else "—"
                     Text(angle, color = QuestParchment, fontFamily = FontFamily.Serif, fontSize = 19.sp)
                 }
             }
-            Canvas(Modifier.width(24.dp).height(1.dp)) {
+            if (!isLake) Canvas(Modifier.width(24.dp).height(1.dp)) {
                 drawLine(QuestGold.copy(alpha = .5f), Offset.Zero, Offset(size.width, 0f), 1f)
             }
         }
+        beforeGuideContent?.invoke()
         QuestFieldGuide(state)
     }
 }

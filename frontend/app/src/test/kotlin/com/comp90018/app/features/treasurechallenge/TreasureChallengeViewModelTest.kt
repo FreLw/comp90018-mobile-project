@@ -35,6 +35,31 @@ class TreasureChallengeViewModelTest {
     /** Each call represents a fresh device reading unless a test pins an explicit timestamp. */
     private var nextAutoTimestampNanos = 1L
 
+    @Test fun unionPhotoRevealRequiresACompletedCaptureAndSurvivesActivityStopsButResetsForANewTask() {
+        withHarness(unionConfig()) { model, engine, _ ->
+            model.start()
+            model.finishPhotoReveal()
+            assertFalse(model.photoRevealFinished)
+            engine.emit(snapshot())
+            engine.emit(snapshot())
+            model.finishPhotoReveal()
+            assertFalse(model.photoRevealFinished)
+            model.onPhotoCaptureStarted()
+            model.onPhotoCaptured("content://test/lake-photo")
+            assertTrue(model.uiState.value.completed)
+            assertFalse(model.photoRevealFinished)
+            model.finishPhotoReveal()
+            assertTrue(model.photoRevealFinished)
+            model.stop()
+            model.start()
+            assertTrue(model.photoRevealFinished)
+            assertTrue(model.uiState.value.completed)
+            model.activateChallenge(unionConfig().copy(challengeId = "another-lake-visit"))
+            assertFalse(model.photoRevealFinished)
+            assertFalse(model.uiState.value.completed)
+        }
+    }
+
     @Test fun allSixTasksCompleteAtZeroElapsedTimeAsSoonAsEveryStarIsLit() {
         val configs = listOf(unionConfig(), wilsonConfig(), oldQuadConfig(), southConfig(),
             RelicChallengeConfigs.systemGardenGlasshouse("garden", target, 20.0), toneToolConfig())
