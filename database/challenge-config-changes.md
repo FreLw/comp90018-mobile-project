@@ -13,7 +13,7 @@
 | Collection | `treasures` |
 | 配置位置 | 各宝藏文档的 `challenge` map |
 
-Android App 的 `frontend/app/google-services.json` 指向 `mobile-melbourne`。仓库 `.firebaserc` 中的 `STAGING` 别名指向 `com90018-96a56`，因此执行更新时必须显式指定 `mobile-melbourne`。
+Android App 的 `frontend/app/google-services.json` 指向 `mobile-melbourne`。仓库 `.firebaserc` 中的 `STAGING` 别名已于 2026-10-09 更新为 `mobile-melbourne`，与 Android App 配置一致。执行数据库更新脚本时仍应显式指定 `mobile-melbourne`。
 
 ## 修复原因
 

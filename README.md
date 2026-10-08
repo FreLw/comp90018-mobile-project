@@ -112,11 +112,17 @@ frontend/                 Android Studio / Gradle project
   app/                    App source, resources, and tests
   ARCHITECTURE.md         Detailed Android architecture guide
 database/                 Shared treasure catalogue and import utility
-firestore.rules           Firestore authorization and validation rules
-firestore.indexes.json    Firestore indexes
-storage.rules             Firebase Storage rules
+firebase/                 Firebase rules and indexes
+  firestore.rules         Firestore authorization and validation rules
+  firestore.indexes.json  Firestore indexes
+  storage.rules           Firebase Storage rules
+docs/                     Project documents
+  REQUIREMENTS.md         Requirements and acceptance criteria
+  Mobile A1.pdf           Assignment specification
+tests/                    Firestore security rules tests
 firebase.json             Firebase deployment and emulator configuration
-REQUIREMENTS.md           Requirements and acceptance criteria
+.firebaserc                Firebase project selection
+.gitignore                Git ignore rules
 ```
 
 ## Local setup
@@ -227,5 +233,5 @@ behaviour should additionally be checked on physical Android devices.
 - Debug simulation tools are excluded from release builds and are not evidence
   of physical-device validation.
 
-See [`REQUIREMENTS.md`](REQUIREMENTS.md) for detailed acceptance criteria and
+See [`REQUIREMENTS.md`](docs/REQUIREMENTS.md) for detailed acceptance criteria and
 [`frontend/README.md`](frontend/README.md) for the Android client quick start.
