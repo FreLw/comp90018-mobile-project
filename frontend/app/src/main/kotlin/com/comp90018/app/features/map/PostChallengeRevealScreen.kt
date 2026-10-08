@@ -32,18 +32,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.comp90018.app.features.treasure.RemoteTreasureImage
 import com.comp90018.app.features.treasure.TreasurePrototypeImage
+import com.comp90018.app.features.treasurechallenge.DiscoverySaveStatus
 import kotlinx.coroutines.delay
 
 @Composable
 fun PostChallengeRevealScreen(session: PostChallengeRevealSession, onReturnToMap: () -> Unit) {
     when (session.page) {
         PostChallengePage.PHOTO_HISTORY -> UnionPhotoHistoryReveal(session, onReturnToMap)
-        PostChallengePage.TREASURE -> TreasureRevealPanel(session.relic, session::viewStory, onReturnToMap)
+        PostChallengePage.TREASURE -> TreasureRevealPanel(session, onReturnToMap)
         PostChallengePage.STORY -> TreasureStoryPanel(
             relic = session.relic,
-            collecting = false,
-            collectionError = null,
-            onPutInBackpack = null,
+            collecting = session.discoverySave?.status == DiscoverySaveStatus.SAVING,
+            collectionError = if (session.discoverySave?.status == DiscoverySaveStatus.FAILED)
+                "Please retry saving this discovery to your collection." else null,
+            onPutInBackpack = session.onRetrySave.takeIf { session.discoverySave?.status != DiscoverySaveStatus.SAVED },
             onBackToReveal = session::backToTreasure,
             onReturnToMap = onReturnToMap,
         )
@@ -109,6 +111,7 @@ private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onRetur
 }
 
 @Composable
-private fun TreasureRevealPanel(relic: MapRelic, onViewStory: () -> Unit, onReturnToMap: () -> Unit) {
-    TreasureDiscoveryReveal(relic, onViewStory, onReturnToMap)
+private fun TreasureRevealPanel(session: PostChallengeRevealSession, onReturnToMap: () -> Unit) {
+    TreasureDiscoveryReveal(session.relic, session::viewStory, onReturnToMap,
+        discoverySave = session.discoverySave, onRetrySave = session.onRetrySave)
 }

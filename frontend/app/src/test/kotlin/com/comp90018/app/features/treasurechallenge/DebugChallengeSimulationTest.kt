@@ -34,7 +34,7 @@ class DebugChallengeSimulationTest {
         assertFalse(runPreset(union, "Heading misaligned").completed)
         val evaluator = ChallengeRuleEvaluator(union)
         val engine = ChallengeSimulationFactory.create(union).engine as FakeDeviceContextEngine
-        val controls = preset(union, "Photo ready (hold)")
+        val controls = preset(union, "Photo ready")
         engine.emit(controls.snapshot(union, 1L))
         evaluator.evaluate(engine.output.value, 0L)
         engine.emit(controls.snapshot(union, 2L))
@@ -50,28 +50,28 @@ class DebugChallengeSimulationTest {
     @Test fun wilsonFailuresAndThreeSecondHoldUseEvaluator() {
         listOf("Inside but moving", "Stationary but unstable", "Stable but rotating", "Heading misaligned")
             .forEach { assertFalse(it, runPreset(wilson, it).completed) }
-        assertTrue(runPreset(wilson, "All valid (3s hold)").completed)
+        assertTrue(runPreset(wilson, "All stars ready").completed)
     }
 
     @Test fun oldQuadFailuresAndHoldUseEvaluator() {
         assertFalse(runPreset(oldQuad, "Not horizontal").completed)
         assertFalse(runPreset(oldQuad, "Horizontal but moving").completed)
-        assertTrue(runPreset(oldQuad, "All valid (hold)").completed)
+        assertTrue(runPreset(oldQuad, "All stars ready").completed)
     }
 
     @Test fun southLawnFailuresAndHoldUseEvaluator() {
         assertFalse(runPreset(south, "Heading misaligned").completed)
         assertFalse(runPreset(south, "Aligned but rotating").completed)
-        assertTrue(runPreset(south, "All valid (hold)").completed)
+        assertTrue(runPreset(south, "All stars ready").completed)
     }
 
     @Test fun toneToolDebugPresetsSimulateQuietAndDetectedSound() {
         assertFalse(runPreset(toneTool, "Quiet (inside target)").completed)
-        assertTrue(runPreset(toneTool, "Make noise (hold)").completed)
+        assertTrue(runPreset(toneTool, "Sound detected").completed)
     }
 
     @Test fun invalidGpsAndPoorAccuracyBlockCompletion() {
-        val valid = preset(wilson, "All valid (3s hold)")
+        val valid = preset(wilson, "All stars ready")
         assertEquals(SensorValidity.UNRELIABLE, valid.copy(locationValid = false).snapshot(wilson, 1L).location.validity)
         assertFalse(runControls(wilson, valid.copy(locationValid = false)).completed)
         assertFalse(runControls(wilson, valid.copy(accuracyMeters = 50.0)).completed)
@@ -80,17 +80,17 @@ class DebugChallengeSimulationTest {
     }
 
     @Test fun completedSimulationUsesExistingTreasureIdSaveAndRevealGate() {
-        val progress = runPreset(wilson, "All valid (3s hold)")
+        val progress = runPreset(wilson, "All stars ready")
         val save = ChallengeDiscoverySave()
         val reveal = PostChallengeRevealCoordinator()
         val relic = MapRelic("wilson_hall_rosette", "The Surviving Stone Rosette", "Wilson Hall",
             coordinate = target, challengeConfig = wilson)
         var savedId: String? = null
-        assertFalse(canOpenTreasureReveal(false, save.status))
+        assertFalse(canOpenTreasureReveal(false))
         if (progress.completed) save.onChallengeCompleted { done ->
             saveRelicDiscovery(relic, { id, callback -> savedId = id; callback(null) }, done)
         }
-        if (canOpenTreasureReveal(progress.completed, save.status)) reveal.openAfterSave(relic, null)
+        if (canOpenTreasureReveal(progress.completed)) reveal.openOnCompletion(relic, null)
         assertEquals("wilson_hall_rosette", savedId)
         assertEquals(relic, reveal.session?.relic)
         save.onChallengeCompleted { error("Duplicate persistence") }

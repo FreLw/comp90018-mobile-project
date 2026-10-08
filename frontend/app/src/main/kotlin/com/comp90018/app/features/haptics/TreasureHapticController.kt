@@ -9,6 +9,8 @@ class TreasureHapticController(
     private val attempts = mutableSetOf<TreasureHapticAttempt>()
     private val nearbyIds = mutableSetOf<String>()
     private val unlockedIds = mutableSetOf<String>()
+    private val completedChallengeIds = mutableSetOf<String>()
+    private val challengeFeedbackTreasureIds = mutableSetOf<String>()
     var ended = false
         private set
     var enabled = false
@@ -24,6 +26,8 @@ class TreasureHapticController(
         attempts.clear()
         nearbyIds.clear()
         unlockedIds.clear()
+        completedChallengeIds.clear()
+        challengeFeedbackTreasureIds.clear()
     }
 
     @Synchronized
@@ -79,6 +83,18 @@ class TreasureHapticController(
         driver.play(TreasureHapticEvent.Nearby(treasureId))
     }
 
+    /** A fully satisfied task gives feedback once, independently of cloud-save latency. */
+    @Synchronized
+    fun challengeCompleted(treasureId: String, completionId: String) {
+        if (ended || treasureId.isBlank() || completionId.isBlank() || !completedChallengeIds.add(completionId)) return
+        nearbyIds.add(treasureId)
+        challengeFeedbackTreasureIds.add(treasureId)
+        if (enabled && foreground) {
+            successStartedAtNanos = nowNanos()
+            driver.play(TreasureHapticEvent.Unlocked(treasureId))
+        }
+    }
+
     /** Called only by the existing discovery-save confirmation, never by sensor readiness. */
     @Synchronized
     fun discoverySaved(
@@ -88,7 +104,8 @@ class TreasureHapticController(
         if (ended || error != null || alreadyDiscovered || treasureId.isBlank() || completionId.isBlank() || !unlockedIds.add(completionId)) return
         // A background/disabled success is consumed, not replayed later on navigation/resume.
         nearbyIds.add(treasureId) // prevent a lagging collection snapshot from notifying an unlocked target
-        if (enabled && foreground) {
+        val taskAlreadyGaveFeedback = completionId == "discovery:$treasureId" && treasureId in challengeFeedbackTreasureIds
+        if (enabled && foreground && !taskAlreadyGaveFeedback) {
             successStartedAtNanos = nowNanos()
             driver.play(TreasureHapticEvent.Unlocked(treasureId))
         }

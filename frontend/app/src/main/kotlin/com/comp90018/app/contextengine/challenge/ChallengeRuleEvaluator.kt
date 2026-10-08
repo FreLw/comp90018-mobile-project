@@ -28,6 +28,7 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         snapshot: DeviceContextSnapshot,
         nowNanos: Long,
         event: ChallengeEvent? = null,
+        allowCompletion: Boolean = true,
     ): ChallengeProgress {
         require(nowNanos >= 0L)
         require(lastEvaluationNanos == null || nowNanos >= lastEvaluationNanos!!) {
@@ -55,17 +56,18 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         val holdComplete = allConditionsSatisfied && holdProgress >= 1.0
         val actionReady = !isCompleted && config.photoActionRequired && holdComplete
 
-        if (!isCompleted && holdComplete && !config.photoActionRequired) {
+        if (allowCompletion && !isCompleted && holdComplete && !config.photoActionRequired) {
             isCompleted = true
         }
-        if (!isCompleted && event == ChallengeEvent.PHOTO_CAPTURED && actionReady) {
+        if (allowCompletion && !isCompleted && event == ChallengeEvent.PHOTO_CAPTURED && actionReady) {
             isCompleted = true
         }
 
         return ChallengeProgress(
             challengeId = config.challengeId,
             challengeType = config.type,
-            requiredConditions = conditions,
+            requiredConditions = if (config.photoActionRequired)
+                conditions + ChallengeConditionState(ChallengeCondition.PHOTO_CAPTURED, isCompleted) else conditions,
             instruction = instruction(conditions, direction, holdComplete),
             holdProgress = if (isCompleted) 1.0 else holdProgress,
             actionReady = actionReady && !isCompleted,
@@ -100,14 +102,20 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
                     direction.alignment == DirectionAlignment.ALIGNED,
             ))
         }
-        if (config.requiresStationary) {
+        val combinedStillness = config.type in listOf(RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE,
+            RelicChallengeType.WILSON_HALL_OBSERVATION) &&
+            config.requiresStationary && config.requiresStability
+        if (combinedStillness) {
+            add(ChallengeConditionState(ChallengeCondition.STILLNESS, ChallengePoise.isStill(snapshot)))
+        }
+        if (config.requiresStationary && !combinedStillness) {
             add(ChallengeConditionState(
                 ChallengeCondition.STATIONARY,
                 snapshot.motionStability.motion.validity == SensorValidity.VALID &&
                     snapshot.motionStability.motion.classification == MotionState.STATIONARY,
             ))
         }
-        if (config.requiresStability) {
+        if (config.requiresStability && !combinedStillness) {
             add(ChallengeConditionState(
                 ChallengeCondition.STABLE,
                 snapshot.motionStability.stability.validity == SensorValidity.VALID &&
@@ -117,7 +125,9 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         if (config.requiresRotationStill) {
             add(ChallengeConditionState(
                 ChallengeCondition.ROTATION_STILL,
-                snapshot.orientation.rotation.validity == SensorValidity.VALID &&
+                if (config.type == RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE ||
+                    config.type == RelicChallengeType.WILSON_HALL_OBSERVATION) ChallengePoise.isTurnStill(snapshot)
+                else snapshot.orientation.rotation.validity == SensorValidity.VALID &&
                     snapshot.orientation.rotation.classification == RotationState.STILL,
             ))
         }
@@ -180,7 +190,9 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
                 else -> ChallengeInstruction.FIND_VIEWING_DIRECTION
             }
         }
-        if (!conditions.isSatisfied(ChallengeCondition.STATIONARY)) return ChallengeInstruction.STOP_MOVING
+        if (!conditions.isSatisfied(ChallengeCondition.STATIONARY) ||
+            !conditions.isSatisfied(ChallengeCondition.STILLNESS)
+        ) return ChallengeInstruction.STOP_MOVING
         if (!conditions.isSatisfied(ChallengeCondition.STABLE) ||
             !conditions.isSatisfied(ChallengeCondition.ROTATION_STILL)
         ) return ChallengeInstruction.HOLD_STILL

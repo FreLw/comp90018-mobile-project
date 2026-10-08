@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.geometry.Offset
@@ -36,12 +38,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.comp90018.app.GothicTreasureFontFamily
 import com.comp90018.app.features.treasure.TreasurePrototypeImage
+import com.comp90018.app.features.treasurechallenge.ChallengeDiscoverySave
+import com.comp90018.app.features.treasurechallenge.DiscoverySaveStatus
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Reveals a saved discovery and transfers its artwork into the story header. */
+/** Reveals a completed task's discovery and transfers its artwork into the story header. */
 @Composable
-internal fun TreasureDiscoveryReveal(relic: MapRelic, onViewTreasure: () -> Unit, onReturnToMap: () -> Unit) {
+internal fun TreasureDiscoveryReveal(
+    relic: MapRelic, onViewTreasure: () -> Unit, onReturnToMap: () -> Unit,
+    discoverySave: ChallengeDiscoverySave? = null, onRetrySave: (() -> Unit)? = null,
+) {
     var movingToStory by remember(relic.id) { mutableStateOf(false) }
     var sourceBounds by remember(relic.id) { mutableStateOf<Rect?>(null) }
     var targetBounds by remember(relic.id) { mutableStateOf<Rect?>(null) }
@@ -61,7 +68,7 @@ internal fun TreasureDiscoveryReveal(relic: MapRelic, onViewTreasure: () -> Unit
     val orbit by transition.animateFloat(0f, 360f, infiniteRepeatable(tween(28000, easing = LinearEasing)), label = "relic_sparks")
     val gold = Color(0xFFE8BC65)
     val ink = Color(0xFF382B40)
-    Box(Modifier.fillMaxSize().onGloballyPositioned { rootBounds = it.boundsInRoot() }) {
+    Box(Modifier.fillMaxSize().testTag("treasure_discovery_page").onGloballyPositioned { rootBounds = it.boundsInRoot() }) {
         if (movingToStory) {
             TreasureStoryPanel(relic, false, null, null,
                 headerArtworkVisible = transfer.value >= .7f,
@@ -100,6 +107,15 @@ internal fun TreasureDiscoveryReveal(relic: MapRelic, onViewTreasure: () -> Unit
             }
             Text(relic.name, color = ink, fontFamily = GothicTreasureFontFamily, fontSize = 34.sp, lineHeight = 39.sp, textAlign = TextAlign.Center)
             Text("The trail has revealed its secret. Discover the story within.", color = Color(0xFF786B60), textAlign = TextAlign.Center, fontSize = 14.sp)
+            when (discoverySave?.status) {
+                DiscoverySaveStatus.SAVING -> Text("Saving to your collection…", color = ink, fontSize = 12.sp)
+                DiscoverySaveStatus.FAILED -> {
+                    Text("Your discovery is ready. Please retry saving it to your collection.",
+                        color = ink, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    if (onRetrySave != null) OutlinedButton(onClick = onRetrySave) { Text("Retry save") }
+                }
+                else -> Unit
+            }
             Button(onClick = { if (sourceBounds != null) movingToStory = true }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = ink)) {
                 Text("View treasure", fontFamily = GothicTreasureFontFamily, color = Color(0xFFFFE1A0), fontSize = 22.sp)
             }
