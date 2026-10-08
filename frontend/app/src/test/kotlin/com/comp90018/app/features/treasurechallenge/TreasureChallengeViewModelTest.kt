@@ -1,5 +1,6 @@
 package com.comp90018.app.features.treasurechallenge
 
+import androidx.compose.ui.geometry.Rect
 import com.comp90018.app.contextengine.DeviceContextSnapshot
 import com.comp90018.app.contextengine.FakeDeviceContextEngine
 import com.comp90018.app.contextengine.challenge.ChallengeInstruction
@@ -35,28 +36,35 @@ class TreasureChallengeViewModelTest {
     /** Each call represents a fresh device reading unless a test pins an explicit timestamp. */
     private var nextAutoTimestampNanos = 1L
 
-    @Test fun unionPhotoRevealRequiresACompletedCaptureAndSurvivesActivityStopsButResetsForANewTask() {
-        withHarness(unionConfig()) { model, engine, _ ->
-            model.start()
-            model.finishPhotoReveal()
-            assertFalse(model.photoRevealFinished)
-            engine.emit(snapshot())
-            engine.emit(snapshot())
-            model.finishPhotoReveal()
-            assertFalse(model.photoRevealFinished)
-            model.onPhotoCaptureStarted()
-            model.onPhotoCaptured("content://test/lake-photo")
-            assertTrue(model.uiState.value.completed)
-            assertFalse(model.photoRevealFinished)
-            model.finishPhotoReveal()
-            assertTrue(model.photoRevealFinished)
-            model.stop()
-            model.start()
-            assertTrue(model.photoRevealFinished)
-            assertTrue(model.uiState.value.completed)
-            model.activateChallenge(unionConfig().copy(challengeId = "another-lake-visit"))
-            assertFalse(model.photoRevealFinished)
-            assertFalse(model.uiState.value.completed)
+    @Test fun bothPhotoRevealsRequireACompletedCaptureAndSurviveActivityStopsButResetForANewTask() {
+        val photoConfigs = listOf(unionConfig(), RelicChallengeConfigs.systemGardenGlasshouse("garden", target, 20.0))
+        photoConfigs.forEach { config ->
+            withHarness(config) { model, engine, _ ->
+                model.start()
+                model.finishPhotoReveal()
+                assertFalse(model.photoRevealFinished)
+                engine.emit(snapshot())
+                engine.emit(snapshot())
+                model.finishPhotoReveal()
+                assertFalse(model.photoRevealFinished)
+                model.onPhotoCaptureStarted()
+                model.onPhotoCaptured("content://test/captured-photo")
+                assertTrue(model.uiState.value.completed)
+                assertFalse(model.photoRevealFinished)
+                val arrival = PhotoRevealArrival(Rect(10f, 120f, 290f, 400f), 123)
+                model.finishPhotoReveal(arrival)
+                assertTrue(model.photoRevealFinished)
+                assertEquals(arrival, model.photoRevealArrival)
+                model.stop()
+                model.start()
+                assertTrue(model.photoRevealFinished)
+                assertEquals(arrival, model.photoRevealArrival)
+                assertTrue(model.uiState.value.completed)
+                model.activateChallenge(config.copy(challengeId = "another-photo-visit"))
+                assertFalse(model.photoRevealFinished)
+                assertEquals(null, model.photoRevealArrival)
+                assertFalse(model.uiState.value.completed)
+            }
         }
     }
 

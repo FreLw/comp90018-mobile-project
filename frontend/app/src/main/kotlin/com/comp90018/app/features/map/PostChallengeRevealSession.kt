@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.comp90018.app.features.treasurechallenge.ChallengeDiscoverySave
+import com.comp90018.app.features.treasurechallenge.PhotoRevealArrival
 
 enum class PostChallengePage { PHOTO_HISTORY, TREASURE, STORY }
 
@@ -13,9 +14,10 @@ class PostChallengeRevealSession(
     val capturedPhotoUri: String?,
     val discoverySave: ChallengeDiscoverySave? = null,
     val onRetrySave: (() -> Unit)? = null,
+    val photoArrival: PhotoRevealArrival? = null,
 ) {
-    // Completed tasks open the normal treasure reveal immediately, including photo tasks.
-    // The reusable historical-image panel remains available but is not part of task completion.
+    // Photo tasks finish their continuous arrival before handing off this same treasure layout.
+    // The historical-image panel remains available but is not part of task completion.
     var page by mutableStateOf(PostChallengePage.TREASURE)
         private set
     var historicalShown by mutableStateOf(false)
@@ -37,9 +39,10 @@ class PostChallengeRevealCoordinator {
 
     fun openOnCompletion(
         relic: MapRelic, capturedPhotoUri: String?,
-        discoverySave: ChallengeDiscoverySave? = null, onRetrySave: (() -> Unit)? = null,
+        discoverySave: ChallengeDiscoverySave? = null, photoArrival: PhotoRevealArrival? = null,
+        onRetrySave: (() -> Unit)? = null,
     ) {
-        if (session == null) session = PostChallengeRevealSession(relic, capturedPhotoUri, discoverySave, onRetrySave)
+        if (session == null) session = PostChallengeRevealSession(relic, capturedPhotoUri, discoverySave, onRetrySave, photoArrival)
     }
 
     fun clear() { session = null }

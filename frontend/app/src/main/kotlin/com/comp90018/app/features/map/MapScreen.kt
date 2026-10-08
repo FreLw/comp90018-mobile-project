@@ -601,8 +601,9 @@ fun MapScreen(
             // UI previews complete locally, without changing collection or Room progress.
             onChallengeCompleted = { complete -> complete(null) },
             onChallengeSatisfied = { completionId -> hapticController?.challengeCompleted(relic.id, completionId) },
-            onDiscoveryReady = { capturedPhotoUri, discoverySave ->
-                revealCoordinator.openOnCompletion(relic, capturedPhotoUri, discoverySave)
+            revealRelic = relic,
+            onDiscoveryReady = { capturedPhotoUri, discoverySave, photoArrival ->
+                revealCoordinator.openOnCompletion(relic, capturedPhotoUri, discoverySave, photoArrival)
                 debugTaskRelic = null
             },
             onBack = { debugTaskRelic = null },
@@ -640,9 +641,10 @@ fun MapScreen(
                     }
                 },
                 onChallengeSatisfied = { completionId -> hapticController?.challengeCompleted(relic.id, completionId) },
-                onDiscoveryReady = { capturedPhotoUri, discoverySave ->
+                revealRelic = relic,
+                onDiscoveryReady = { capturedPhotoUri, discoverySave, photoArrival ->
                     if (!teamHuntActive) {
-                        revealCoordinator.openOnCompletion(relic, capturedPhotoUri, discoverySave) {
+                        revealCoordinator.openOnCompletion(relic, capturedPhotoUri, discoverySave, photoArrival) {
                             discoverySave.retry { done -> saveRelicDiscovery(relic, ::collectWithHaptics, done) }
                         }
                         challengeRelic = null

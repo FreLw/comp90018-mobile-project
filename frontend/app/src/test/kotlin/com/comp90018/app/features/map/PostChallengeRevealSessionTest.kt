@@ -1,6 +1,8 @@
 package com.comp90018.app.features.map
 
 import com.comp90018.app.R
+import androidx.compose.ui.geometry.Rect
+import com.comp90018.app.features.treasurechallenge.PhotoRevealArrival
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.features.treasure.treasureArtworkResource
@@ -48,14 +50,17 @@ class PostChallengeRevealSessionTest {
         val relic = relic("union_lawn_lost_lake", "The Lost Lake Photograph", "Union Lawn", "treasure_postcard",
             RelicChallengeType.UNION_LAWN_PHOTO)
         val coordinator = PostChallengeRevealCoordinator()
-        coordinator.openOnCompletion(relic, "content://local/first-photo")
+        val arrival = PhotoRevealArrival(Rect(20f, 140f, 300f, 420f), R.drawable.treasure_postcard)
+        coordinator.openOnCompletion(relic, "content://local/first-photo", photoArrival = arrival)
         val original = coordinator.session
         coordinator.openOnCompletion(relic, "content://local/duplicate-photo")
         assertTrue(original === coordinator.session)
         assertEquals("content://local/first-photo", coordinator.session?.capturedPhotoUri)
+        assertEquals(arrival, coordinator.session?.photoArrival)
         coordinator.session?.continueToTreasure()
         coordinator.session?.viewStory()
         assertEquals(PostChallengePage.STORY, coordinator.session?.page)
+        assertEquals(arrival, coordinator.session?.photoArrival)
         // Reveal navigation has no persistence callback or repository dependency.
     }
 

@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.ColorFilter
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -58,18 +61,22 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.comp90018.app.sensors.camera.CameraXCapture
-import com.comp90018.app.R
+import com.comp90018.app.contextengine.challenge.RelicChallengeType
 
 /** Camera access is requested by a deliberate tap; the viewfinder occupies the engraving's slot. */
 @Composable
-internal fun UnionLawnPhotoExperience(
+internal fun QuestPhotoExperience(
     state: TreasureChallengeUiState,
     onEmblemCenterChanged: (Offset) -> Unit,
     onPhotoCaptureStarted: () -> Unit,
     onPhotoCaptured: (String) -> Unit,
     onCameraError: (String) -> Unit,
-    onPhotoRevealFinished: () -> Unit,
+    onPhotoMorphFinished: () -> Unit,
+    onLogoBoundsChanged: (Rect) -> Unit,
+    departureProgress: Float = 0f,
+    artworkTransferred: Boolean = false,
 ) {
+    val style = requireNotNull(state.challengeType.photoRevealStyle())
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var cameraOpened by rememberSaveable(state.challengeId) { mutableStateOf(false) }
@@ -96,7 +103,7 @@ internal fun UnionLawnPhotoExperience(
             scaleType = PreviewView.ScaleType.FILL_CENTER
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             // Filter the TextureView's composited pixels, leaving the frame and controls in gold.
-            setLayerType(View.LAYER_TYPE_HARDWARE, Paint().apply { colorFilter = lostLakePhotoColorFilter() })
+            setLayerType(View.LAYER_TYPE_HARDWARE, Paint().apply { colorFilter = questPhotoColorFilter() })
         }
     }
     var frozenPreview by remember(state.challengeId) { mutableStateOf<Bitmap?>(null) }
@@ -117,19 +124,21 @@ internal fun UnionLawnPhotoExperience(
     }
     ChallengeExperience(
         state = state,
+        departureProgress = departureProgress,
         onEmblemCenterChanged = onEmblemCenterChanged,
         emblemContent = { modifier ->
             if (showViewfinder) {
-                UnionLawnViewfinder(state, modifier, previewView, previewReady, frozenPreview, onPhotoRevealFinished)
+                QuestPhotoViewfinder(state, style, modifier, previewView, previewReady, frozenPreview,
+                    onPhotoMorphFinished, onLogoBoundsChanged, artworkTransferred)
             } else {
-                Box(modifier.testTag("union_camera_trigger")
+                Box(modifier.testTag(style.tag("camera_trigger"))
                     .clickable(enabled = state.actionReady && !state.completed, role = Role.Button,
                         onClickLabel = "Open camera") {
                         permissionDenied = false
                         hasCameraPermission = cameraGranted()
                         if (hasCameraPermission) cameraOpened = true
                         else permissionLauncher.launch(Manifest.permission.CAMERA)
-                    }.semantics { contentDescription = "Open the lost lake camera" }) {
+                    }.semantics { contentDescription = "Open ${style.sceneName} camera" }) {
                     QuestEmblem(state, Modifier.fillMaxSize())
                 }
             }
@@ -150,7 +159,7 @@ internal fun UnionLawnPhotoExperience(
                         }
                     }
                 }, enabled = state.actionReady && previewReady && !captureInFlight && state.cameraState != ChallengeCameraState.CAPTURING,
-                    modifier = Modifier.testTag("union_photo_shutter"),
+                    modifier = Modifier.testTag(style.tag("photo_shutter")),
                     colors = ButtonDefaults.buttonColors(containerColor = QuestGold, contentColor = QuestForest,
                         disabledContainerColor = QuestForest.copy(alpha = .85f), disabledContentColor = QuestStone)) {
                     if (captureInFlight || state.cameraState == ChallengeCameraState.CAPTURING) {
@@ -169,11 +178,11 @@ internal fun UnionLawnPhotoExperience(
         },
         beforeGuideContent = {
             // Expanding in the column pushes the guide, stars and other interactions down.
-            AnimatedVisibility(visible = state.actionReady || showViewfinder,
+            AnimatedVisibility(visible = state.actionReady || showViewfinder || permissionDenied,
                 enter = fadeIn(tween(350)) + expandVertically(tween(350)),
                 exit = fadeOut(tween(250)) + shrinkVertically(tween(250))) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-                    .testTag("union_photo_prompt"), horizontalAlignment = Alignment.CenterHorizontally,
+                    .testTag(style.tag("photo_prompt")), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Canvas(Modifier.width(110.dp).height(12.dp)) {
                         drawCrossStar(center, 4.dp.toPx(), QuestGold)
@@ -183,10 +192,12 @@ internal fun UnionLawnPhotoExperience(
                         }
                     }
                     Text(when {
-                        state.completed -> "A memory of the lost lake is taking shape."
-                        permissionDenied -> "Allow camera access to take your photograph. Tap the camera to try again."
-                        !showViewfinder -> "Tap the camera to take a photograph."
-                        !state.actionReady -> "Align distance and heading again to take your photograph."
+                        state.completed -> "A memory of ${style.sceneName} is taking shape."
+                        permissionDenied -> "Allow camera access to take your photograph. Tap the ${style.triggerName} to try again."
+                        !showViewfinder -> "Tap the ${style.triggerName} to take a photograph."
+                        !state.actionReady -> if (state.challengeType == RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE)
+                            "Return to the glasshouse site to take your photograph."
+                        else "Align distance and heading again to take your photograph."
                         else -> "Frame the scene, then take your photograph."
                     }, color = QuestParchment, fontFamily = FontFamily.Serif, fontSize = 16.sp,
                         lineHeight = 22.sp, textAlign = TextAlign.Center)
@@ -201,22 +212,25 @@ internal fun UnionLawnPhotoExperience(
 }
 
 @Composable
-private fun UnionLawnViewfinder(
+private fun QuestPhotoViewfinder(
     state: TreasureChallengeUiState,
+    style: QuestPhotoStyle,
     modifier: Modifier,
     previewView: PreviewView,
     previewReady: Boolean,
     frozenPreview: Bitmap?,
-    onPhotoRevealFinished: () -> Unit,
+    onPhotoMorphFinished: () -> Unit,
+    onLogoBoundsChanged: (Rect) -> Unit,
+    artworkTransferred: Boolean,
 ) {
     val capturedUri = state.capturedPhotoUri
     val morph = remember(state.challengeId, capturedUri) { Animatable(0f) }
     val flash = remember(state.challengeId) { Animatable(0f) }
-    val currentRevealFinished by rememberUpdatedState(onPhotoRevealFinished)
+    val currentMorphFinished by rememberUpdatedState(onPhotoMorphFinished)
     LaunchedEffect(state.completed, capturedUri) {
         if (state.completed && capturedUri != null) {
-            morph.animateTo(1f, tween(LostLakePhotoMorphDurationMillis, easing = FastOutSlowInEasing))
-            currentRevealFinished()
+            morph.animateTo(1f, tween(QuestPhotoMorphDurationMillis, easing = FastOutSlowInEasing))
+            currentMorphFinished()
         }
     }
     LaunchedEffect(state.cameraState) {
@@ -225,31 +239,32 @@ private fun UnionLawnViewfinder(
             flash.animateTo(0f, tween(420))
         } else flash.snapTo(0f)
     }
-    val sepia = remember { ColorFilter.colorMatrix(ColorMatrix(LostLakeSepiaMatrix)) }
+    val sepia = remember { ColorFilter.colorMatrix(ColorMatrix(QuestPhotoSepiaMatrix)) }
     val frozenImage = remember(frozenPreview) { frozenPreview?.asImageBitmap() }
-    BoxWithConstraints(modifier.testTag("union_viewfinder"), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(modifier.testTag(style.tag("viewfinder")), contentAlignment = Alignment.Center) {
         val logoSize = minOf(maxWidth, maxHeight)
         val p = morph.value
         val shape = (p / .65f).coerceIn(0f, 1f)
         val blend = ((p - .25f) / .6f).coerceIn(0f, 1f)
-        // These proportions match the inner photograph in the 512px bundled postcard.
-        val frameWidth = (maxWidth - 52.dp) * (1f - shape) + logoSize * .69f * shape
-        val frameHeight = (maxHeight - 20.dp) * (1f - shape) + logoSize * .56f * shape
-        Box(Modifier.size(frameWidth, frameHeight).offset(x = logoSize * .008f * shape, y = logoSize * .046f * shape)
-            .graphicsLayer { rotationZ = LostLakePostcardTiltDegrees * shape; alpha = 1f - blend }
+        // Fit the frozen photograph to its own relic artwork as the two layers blend.
+        val frameWidth = (maxWidth - 52.dp) * (1f - shape) + logoSize * style.frameWidthFraction * shape
+        val frameHeight = (maxHeight - 20.dp) * (1f - shape) + logoSize * style.frameHeightFraction * shape
+        Box(Modifier.size(frameWidth, frameHeight).offset(x = logoSize * style.frameOffsetXFraction * shape,
+            y = logoSize * style.frameOffsetYFraction * shape)
+            .graphicsLayer { rotationZ = style.frameTiltDegrees * shape; alpha = 1f - blend }
             .clip(RoundedCornerShape(16.dp * (1f - shape) + 2.dp * shape)).background(QuestForest)
-            .testTag("union_photo_frame").semantics { stateDescription = "Vintage sepia photograph" }) {
+            .testTag(style.tag("photo_frame")).semantics { stateDescription = "Vintage sepia photograph" }) {
             if (frozenImage != null) {
                 Image(frozenImage, "Captured scene in sepia", Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
                     colorFilter = sepia)
             } else if (capturedUri == null) {
                 AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize()
-                    .testTag("union_camera_preview"))
+                    .testTag(style.tag("camera_preview")))
             } else {
                 AndroidView(factory = {
                     ImageView(it).apply {
                         scaleType = ImageView.ScaleType.CENTER_CROP
-                        colorFilter = lostLakePhotoColorFilter()
+                        colorFilter = questPhotoColorFilter()
                     }
                 }, update = { it.setImageURI(Uri.parse(capturedUri)) }, modifier = Modifier.fillMaxSize())
             }
@@ -272,9 +287,12 @@ private fun UnionLawnViewfinder(
                     strokeWidth = 1.5.dp)
             }
         }
-        if (capturedUri != null) Image(painterResource(R.drawable.treasure_postcard), "The lost lake postcard",
-            Modifier.size(logoSize).graphicsLayer { alpha = blend }.testTag("union_photo_morph").semantics {
-                stateDescription = if (p < 1f) "Photograph blending into the lake postcard" else "Lake postcard revealed"
+        if (capturedUri != null) Image(painterResource(style.artworkResId), style.artworkDescription,
+            Modifier.size(logoSize).onGloballyPositioned {
+                onLogoBoundsChanged(Rect(it.positionInRoot(), Size(it.size.width.toFloat(), it.size.height.toFloat())))
+            }.graphicsLayer { alpha = if (artworkTransferred) 0f else blend }
+                .testTag(style.tag("photo_morph")).semantics {
+                stateDescription = if (p < 1f) style.blendingDescription else style.revealedDescription
             }, contentScale = ContentScale.Fit)
     }
 }

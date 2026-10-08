@@ -88,7 +88,7 @@ private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onRetur
                         else -> AndroidView(
                             factory = { context -> ImageView(context).apply {
                                 scaleType = ImageView.ScaleType.CENTER_CROP
-                                colorFilter = com.comp90018.app.features.treasurechallenge.lostLakePhotoColorFilter()
+                                colorFilter = com.comp90018.app.features.treasurechallenge.questPhotoColorFilter()
                                 setImageURI(Uri.parse(photoUri))
                             } },
                             update = { it.setImageURI(Uri.parse(photoUri)) },
@@ -114,5 +114,5 @@ private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onRetur
 @Composable
 private fun TreasureRevealPanel(session: PostChallengeRevealSession, onReturnToMap: () -> Unit) {
     TreasureDiscoveryReveal(session.relic, session::viewStory, onReturnToMap,
-        discoverySave = session.discoverySave, onRetrySave = session.onRetrySave)
+        discoverySave = session.discoverySave, onRetrySave = session.onRetrySave, photoArrival = session.photoArrival)
 }

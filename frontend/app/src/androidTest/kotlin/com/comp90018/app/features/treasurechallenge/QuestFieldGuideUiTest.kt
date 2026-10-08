@@ -244,10 +244,10 @@ class QuestFieldGuideUiTest {
                             config = configs()[1], treasureId = "wilson", radarRadiusMeters = 100.0,
                             onChallengeCompleted = persist,
                             onChallengeSatisfied = { controller.challengeCompleted("wilson", it) },
-                            onDiscoveryReady = { photo, discovery ->
+                            onDiscoveryReady = { photo, discovery, arrival ->
                                 val relic = MapRelic("wilson", "Stone Rosette", "Wilson Hall",
                                     coordinate = configs()[1].targetLocation, artworkKey = "treasure_rosette")
-                                coordinator.openOnCompletion(relic, photo, discovery) { discovery.retry(persist) }
+                                coordinator.openOnCompletion(relic, photo, discovery, arrival) { discovery.retry(persist) }
                             }, onBack = {},
                         )
                     }
@@ -346,8 +346,8 @@ class QuestFieldGuideUiTest {
                             config, relic.id, 100.0, debugSimulationEnabled = true,
                             onChallengeCompleted = { done -> saves++; done(null) },
                             onChallengeSatisfied = { controller.challengeCompleted(relic.id, it) },
-                            onDiscoveryReady = { photo, discovery ->
-                                coordinator.openOnCompletion(relic, photo, discovery)
+                            onDiscoveryReady = { photo, discovery, arrival ->
+                                coordinator.openOnCompletion(relic, photo, discovery, arrival)
                             }, onBack = {},
                         )
                     }

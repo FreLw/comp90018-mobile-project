@@ -51,6 +51,7 @@ internal fun QuestBackdrop(
     state: TreasureChallengeUiState,
     modifier: Modifier = Modifier,
     emblemCenter: Offset? = null,
+    drawBackground: Boolean = true,
 ) {
     if (state.challengeType == RelicChallengeType.WILSON_HALL_OBSERVATION) {
         WilsonHallBackdrop(state, modifier, emblemCenter)
@@ -59,7 +60,7 @@ internal fun QuestBackdrop(
     val motion = artworkMotion(state)
     val phase = ambientPhase()
     Canvas(modifier) {
-        drawRect(QuestForest)
+        if (drawBackground) drawRect(QuestForest)
         val origin = Offset(size.width / 2f + motion.roll * .65f + motion.heading * .13f,
             size.height * .32f + motion.pitch * .7f)
         val ink = QuestGold.copy(alpha = .075f)

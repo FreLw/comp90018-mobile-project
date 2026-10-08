@@ -33,13 +33,13 @@ import org.junit.runners.MethodSorters
 import java.io.File
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-class UnionLawnPhotoUiTest {
+class SystemGardenPhotoUiTest {
     @get:Rule val rule = createComposeRule()
-    private val config = RelicChallengeConfigs.unionLawnPhoto("union-camera", GeoCoordinate(-37.8, 145.0), 20.0, 0.0)
+    private val config = RelicChallengeConfigs.systemGardenGlasshouse("garden-camera", GeoCoordinate(-37.8, 145.0), 20.0)
 
     @Test
-    fun a_eachHalfLightsAndRipplesIndependentlyThenThePromptPushesTheGuideDown() {
-        val current = mutableStateOf(state(distance = 100.0, heading = 40.0))
+    fun a_distanceAloneUnlocksTheCentralCameraAndPushesTheGuideDown() {
+        val current = mutableStateOf(state(distance = 100.0, heading = 180.0))
         rule.mainClock.autoAdvance = false
         rule.setContent {
             MaterialTheme(colorScheme = RelicColorScheme, typography = RelicTypography) {
@@ -50,58 +50,24 @@ class UnionLawnPhotoUiTest {
             }
         }
         settle()
-        rule.onNodeWithTag("union_camera_trigger").assertIsNotEnabled()
-        rule.onNodeWithTag("union_camera_preview").assertDoesNotExist()
-        rule.onNodeWithTag("union_photo_prompt").assertDoesNotExist()
+        rule.onNodeWithTag("garden_camera_trigger").assertIsNotEnabled()
+        rule.onNodeWithTag("garden_camera_preview").assertDoesNotExist()
+        rule.onNodeWithTag("garden_photo_prompt").assertDoesNotExist()
+        rule.onNodeWithTag("garden_photo_shutter").assertDoesNotExist()
         val guideTop = rule.onNodeWithTag("how_to_play").fetchSemanticsNode().boundsInRoot.top
-        assertEngraving("Distance semicircle: unlit.", "Heading semicircle: unlit.")
-        assertEngraving("Camera gold water: 0%.")
-        val distanceLabel = rule.onNodeWithText("DISTANCE").fetchSemanticsNode().boundsInRoot
-        val headingLabel = rule.onNodeWithText("DIRECTION TO ALIGN").fetchSemanticsNode().boundsInRoot
-        assertEquals(distanceLabel.top, headingLabel.top, 1f)
-        assertTrue(distanceLabel.right < headingLabel.left)
-        screenshot("union_two_halves_unlit")
-
-        rule.runOnIdle { current.value = state(distance = 60.0, heading = 40.0) }
+        rule.runOnIdle { current.value = state(distance = 5.0, heading = 180.0) }
         settle()
-        assertEngraving("Camera gold water: 50%.", "Distance semicircle: unlit.")
-        screenshot("union_distance_gold_half")
-
-        rule.runOnIdle { current.value = state(distance = 5.0, heading = 40.0) }
-        rule.mainClock.advanceTimeByFrame()
-        rule.mainClock.advanceTimeBy(500)
-        assertEngraving("Distance semicircle: lit.", "Heading semicircle: unlit.", "Distance ripple: expanding.",
-            "Camera gold water: 100%.")
-        rule.onNodeWithTag("union_photo_prompt").assertDoesNotExist()
-        screenshot("union_distance_ripple")
-        settle()
-        assertEngraving("Distance ripple: settled.")
-
-        rule.runOnIdle { current.value = state(distance = 5.0, heading = 0.0) }
-        rule.mainClock.advanceTimeByFrame()
-        rule.mainClock.advanceTimeBy(500)
-        assertEngraving("Distance semicircle: lit.", "Heading semicircle: lit.",
-            "Distance ripple: settled.", "Heading ripple: expanding.")
-        rule.onNodeWithTag("union_camera_trigger").assertIsEnabled()
-        rule.onNodeWithText("Tap the camera to take a photograph.").assertIsDisplayed()
-        val prompt = rule.onNodeWithTag("union_photo_prompt").fetchSemanticsNode().boundsInRoot
+        rule.onNodeWithTag("garden_camera_trigger").assertIsEnabled()
+        rule.onNodeWithText("Tap the glasshouse to take a photograph.").assertIsDisplayed()
+        rule.onNodeWithTag("garden_camera_preview").assertDoesNotExist()
+        rule.onNodeWithText("DIRECTION TO ALIGN").assertDoesNotExist()
+        val prompt = rule.onNodeWithTag("garden_photo_prompt").fetchSemanticsNode().boundsInRoot
         val guide = rule.onNodeWithTag("how_to_play").fetchSemanticsNode().boundsInRoot
         assertTrue(prompt.bottom <= guide.top)
         assertTrue(guide.top > guideTop + 20f)
-        // No extra arc is tied to the unlit Photograph star, and no preview opens without a tap.
         rule.onNodeWithContentDescription("Photograph condition").assert(SemanticsMatcher.expectValue(
             SemanticsProperties.StateDescription, "Star unlit"))
-        rule.onNodeWithTag("union_camera_preview").assertDoesNotExist()
-        screenshot("union_both_halves_ready")
-
-        rule.runOnIdle { current.value = state(distance = 100.0, heading = 0.0) }
-        settle()
-        rule.onNodeWithTag("union_camera_trigger").assertIsNotEnabled()
-        rule.onNodeWithTag("union_photo_prompt").assertDoesNotExist()
-        rule.runOnIdle { current.value = state(distance = 5.0, heading = 0.0) }
-        rule.mainClock.advanceTimeByFrame()
-        rule.mainClock.advanceTimeBy(400)
-        assertEngraving("Distance ripple: expanding.", "Heading ripple: settled.")
+        screenshot("garden_distance_ready")
     }
 
     @Test
@@ -109,8 +75,8 @@ class UnionLawnPhotoUiTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         assertEquals("Run this flow with camera permission initially revoked", PackageManager.PERMISSION_DENIED,
             ContextCompat.checkSelfPermission(instrumentation.targetContext, Manifest.permission.CAMERA))
-        val relic = MapRelic("union", "Lost Lake Photograph", "Union Lawn", coordinate = config.targetLocation,
-            artworkKey = "treasure_postcard")
+        val relic = MapRelic("garden", "The Lost Glasshouse", "System Garden", coordinate = config.targetLocation,
+            artworkKey = "treasure_glasshouse")
         val coordinator = PostChallengeRevealCoordinator()
         var photoUri: String? = null
         var saves = 0
@@ -122,7 +88,7 @@ class UnionLawnPhotoUiTest {
                 Box(Modifier.fillMaxSize().systemBarsPadding()) {
                     val session = coordinator.session
                     if (session != null) PostChallengeRevealScreen(session, coordinator::clear)
-                    else TreasureChallengeRoute(config, "union", 100.0, debugSimulationEnabled = true,
+                    else TreasureChallengeRoute(config, "garden", 100.0, debugSimulationEnabled = true,
                         revealRelic = relic,
                         onChallengeCompleted = { saves++; pendingSave = it },
                         onChallengeSatisfied = { feedback++ },
@@ -139,75 +105,75 @@ class UnionLawnPhotoUiTest {
         settle()
         rule.waitUntil(5000) {
             rule.mainClock.advanceTimeByFrame()
-            rule.onAllNodesWithTag("union_photo_prompt").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithTag("garden_photo_prompt").fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithTag("union_camera_trigger").performScrollTo()
-        val slot = rule.onNodeWithTag("union_camera_trigger").fetchSemanticsNode().boundsInRoot
-        rule.onNodeWithTag("union_camera_trigger").performClick()
+        rule.onNodeWithTag("garden_camera_trigger").performScrollTo()
+        val slot = rule.onNodeWithTag("garden_camera_trigger").fetchSemanticsNode().boundsInRoot
+        rule.onNodeWithTag("garden_camera_trigger").performClick()
         clickSystemPermission("permission_deny_button")
         rule.waitUntil(5000) {
             rule.mainClock.advanceTimeByFrame()
-            rule.onAllNodesWithText("Allow camera access to take your photograph. Tap the camera to try again.")
+            rule.onAllNodesWithText("Allow camera access to take your photograph. Tap the glasshouse to try again.")
                 .fetchSemanticsNodes().isNotEmpty()
         }
         settle()
-        rule.onNodeWithTag("union_viewfinder").assertDoesNotExist()
-        rule.onNodeWithText("Allow camera access to take your photograph. Tap the camera to try again.")
+        rule.onNodeWithTag("garden_viewfinder").assertDoesNotExist()
+        rule.onNodeWithText("Allow camera access to take your photograph. Tap the glasshouse to try again.")
             .performScrollTo().assertIsDisplayed()
         rule.waitUntil(5000) {
             rule.mainClock.advanceTimeByFrame()
-            !rule.onNodeWithTag("union_camera_trigger").fetchSemanticsNode().config.contains(SemanticsProperties.Disabled)
+            !rule.onNodeWithTag("garden_camera_trigger").fetchSemanticsNode().config.contains(SemanticsProperties.Disabled)
         }
-        rule.onNodeWithTag("union_camera_trigger").performScrollTo().performClick()
+        rule.onNodeWithTag("garden_camera_trigger").performScrollTo().performClick()
         clickSystemPermission("permission_allow_foreground_only_button", "permission_allow_button")
         rule.waitUntil(5000) {
             rule.mainClock.advanceTimeByFrame()
-            rule.onAllNodesWithTag("union_viewfinder").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithTag("garden_viewfinder").fetchSemanticsNodes().isNotEmpty()
         }
         settle()
-        rule.onNodeWithTag("union_camera_trigger").assertDoesNotExist()
+        rule.onNodeWithTag("garden_camera_trigger").assertDoesNotExist()
         rule.onNodeWithTag("quest_emblem").assertDoesNotExist()
-        rule.onNodeWithTag("union_viewfinder").performScrollTo().assertIsDisplayed()
-        val viewfinder = rule.onNodeWithTag("union_viewfinder").fetchSemanticsNode().boundsInRoot
+        rule.onNodeWithTag("garden_viewfinder").performScrollTo().assertIsDisplayed()
+        val viewfinder = rule.onNodeWithTag("garden_viewfinder").fetchSemanticsNode().boundsInRoot
         assertEquals(slot.width, viewfinder.width, 1f)
         assertEquals(slot.height, viewfinder.height, 1f)
-        rule.onAllNodesWithTag("union_camera_preview").assertCountEquals(1)
-        val shutter = rule.onNodeWithTag("union_photo_shutter").fetchSemanticsNode().boundsInRoot
-        val frame = rule.onNodeWithTag("union_photo_frame").fetchSemanticsNode().boundsInRoot
+        rule.onAllNodesWithTag("garden_camera_preview").assertCountEquals(1)
+        val shutter = rule.onNodeWithTag("garden_photo_shutter").fetchSemanticsNode().boundsInRoot
+        val frame = rule.onNodeWithTag("garden_photo_frame").fetchSemanticsNode().boundsInRoot
         assertTrue(shutter.top >= frame.bottom)
         assertTrue(shutter.top >= viewfinder.bottom)
         waitForCamera()
-        screenshot("union_camera_in_emblem")
-        rule.onNodeWithTag("union_photo_shutter").performScrollTo().performClick()
+        screenshot("garden_camera_in_emblem")
+        rule.onNodeWithTag("garden_photo_shutter").performScrollTo().performClick()
         rule.waitUntil(15000) {
             rule.mainClock.advanceTimeByFrame()
-            rule.onAllNodesWithTag("union_photo_morph").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithTag("garden_photo_morph").fetchSemanticsNodes().isNotEmpty()
         }
         rule.onNodeWithTag("treasure_discovery_page").assertDoesNotExist()
         rule.runOnIdle { assertEquals(1, saves); assertEquals(1, feedback) }
         rule.mainClock.advanceTimeBy(700)
-        rule.onNodeWithTag("union_photo_morph").assert(SemanticsMatcher.expectValue(
-            SemanticsProperties.StateDescription, "Photograph blending into the lake postcard"))
-        screenshot("union_photo_blending")
+        rule.onNodeWithTag("garden_photo_morph").assert(SemanticsMatcher.expectValue(
+            SemanticsProperties.StateDescription, "Photograph blending into the glasshouse"))
+        screenshot("garden_photo_blending")
         rule.mainClock.advanceTimeBy(900)
         rule.onNodeWithTag("treasure_discovery_page").assertDoesNotExist()
-        screenshot("union_photo_becomes_postcard")
-        val logoBounds = rule.onNodeWithTag("union_photo_morph").fetchSemanticsNode().boundsInRoot
+        screenshot("garden_photo_becomes_glasshouse")
+        val logoBounds = rule.onNodeWithTag("garden_photo_morph").fetchSemanticsNode().boundsInRoot
         val oldTitle = rule.onNodeWithText(config.type.questTitle()).fetchSemanticsNode().boundsInRoot
-        val oldDistance = rule.onNodeWithText("DISTANCE").fetchSemanticsNode().boundsInRoot
+        val oldDistance = rule.onNodeWithText("DISTANCE TO SITE").fetchSemanticsNode().boundsInRoot
         rule.mainClock.advanceTimeBy(650)
         rule.onNodeWithTag("photo_reveal_transition").assertExists()
         assertLogoStaysAt(logoBounds)
         rule.mainClock.advanceTimeBy(350)
         assertLogoStaysAt(logoBounds)
         assertTrue(rule.onNodeWithText(config.type.questTitle()).fetchSemanticsNode().boundsInRoot.top < oldTitle.top)
-        assertTrue(rule.onNodeWithText("DISTANCE").fetchSemanticsNode().boundsInRoot.top > oldDistance.top)
-        screenshot("union_reveal_background_warming")
+        assertTrue(rule.onNodeWithText("DISTANCE TO SITE").fetchSemanticsNode().boundsInRoot.top > oldDistance.top)
+        screenshot("garden_reveal_background_warming")
         rule.mainClock.advanceTimeBy(600)
         assertLogoStaysAt(logoBounds)
         rule.onNodeWithTag("photo_reveal_transition").assert(SemanticsMatcher.expectValue(
             SemanticsProperties.StateDescription, "Discovery lettering appearing"))
-        screenshot("union_reveal_letters_appearing")
+        screenshot("garden_reveal_letters_appearing")
         rule.mainClock.advanceTimeBy(900)
         rule.waitUntil(5000) {
             rule.mainClock.advanceTimeByFrame()
@@ -227,7 +193,7 @@ class UnionLawnPhotoUiTest {
             assertEquals(1, feedback)
             requireNotNull(pendingSave)(null)
         }
-        screenshot("union_photo_discovery")
+        screenshot("garden_photo_discovery")
         rule.runOnIdle { coordinator.clear() }
         settle()
         rule.onNodeWithTag("treasure_discovery_page").assertIsDisplayed()
@@ -249,22 +215,22 @@ class UnionLawnPhotoUiTest {
             }
         }
         settle()
-        rule.onNodeWithTag("union_camera_trigger").assertIsDisplayed()
-        rule.onNodeWithTag("union_viewfinder").assertDoesNotExist()
-        rule.onNodeWithTag("union_camera_trigger").performClick()
+        rule.onNodeWithTag("garden_camera_trigger").assertIsDisplayed()
+        rule.onNodeWithTag("garden_viewfinder").assertDoesNotExist()
+        rule.onNodeWithTag("garden_camera_trigger").performClick()
         settle()
-        rule.onNodeWithTag("union_viewfinder").assertIsDisplayed()
+        rule.onNodeWithTag("garden_viewfinder").assertIsDisplayed()
         waitForCamera()
-        rule.onNodeWithTag("union_photo_shutter").assertIsEnabled()
-        screenshot("union_sepia_frame_external_shutter")
-        rule.runOnIdle { current.value = state(distance = 5.0, heading = 40.0) }
+        rule.onNodeWithTag("garden_photo_shutter").assertIsEnabled()
+        screenshot("garden_sepia_frame_external_shutter")
+        rule.runOnIdle { current.value = state(distance = 100.0, heading = 40.0) }
         settle()
-        rule.onNodeWithTag("union_viewfinder").assertIsDisplayed()
-        rule.onNodeWithTag("union_photo_shutter").assertIsNotEnabled()
-        rule.onNodeWithText("Align distance and heading again to take your photograph.").assertIsDisplayed()
+        rule.onNodeWithTag("garden_viewfinder").assertIsDisplayed()
+        rule.onNodeWithTag("garden_photo_shutter").assertIsNotEnabled()
+        rule.onNodeWithText("Return to the glasshouse site to take your photograph.").assertIsDisplayed()
         rule.runOnIdle { current.value = state(distance = 5.0, heading = 0.0) }
         settle()
-        rule.onNodeWithTag("union_photo_shutter").assertIsEnabled()
+        rule.onNodeWithTag("garden_photo_shutter").assertIsEnabled()
     }
 
     private fun state(distance: Double, heading: Double): TreasureChallengeUiState {
@@ -279,13 +245,7 @@ class UnionLawnPhotoUiTest {
             actionReady = progress.actionReady, conditionStates = progress.requiredConditions,
             cameraState = if (progress.actionReady) ChallengeCameraState.READY else ChallengeCameraState.LOCKED,
             latestSnapshot = snapshot, angularErrorDegrees = snapshot.orientation.direction.angularErrorDegrees,
-            requiredHeadingDegrees = 0.0, insideRadiusMeters = 20.0)
-    }
-
-    private fun assertEngraving(vararg descriptions: String) {
-        val actual = rule.onNodeWithTag("quest_emblem", useUnmergedTree = true).fetchSemanticsNode()
-            .config[SemanticsProperties.StateDescription]
-        descriptions.forEach { assertTrue("Expected '$it' in '$actual'", actual.contains(it)) }
+            requiredHeadingDegrees = null, insideRadiusMeters = 20.0)
     }
 
     private fun assertLogoStaysAt(expected: Rect) {
@@ -305,7 +265,7 @@ class UnionLawnPhotoUiTest {
     private fun waitForCamera() {
         rule.waitUntil(10000) {
             rule.mainClock.advanceTimeByFrame()
-            !rule.onNodeWithTag("union_photo_shutter").fetchSemanticsNode().config.contains(SemanticsProperties.Disabled)
+            !rule.onNodeWithTag("garden_photo_shutter").fetchSemanticsNode().config.contains(SemanticsProperties.Disabled)
         }
     }
 

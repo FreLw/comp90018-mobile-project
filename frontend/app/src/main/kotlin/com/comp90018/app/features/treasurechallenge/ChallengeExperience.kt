@@ -39,7 +39,13 @@ internal fun ChallengeExperience(
     emblemContent: (@Composable (Modifier) -> Unit)? = null,
     afterEmblemContent: (@Composable () -> Unit)? = null,
     beforeGuideContent: (@Composable () -> Unit)? = null,
+    departureProgress: Float = 0f,
 ) {
+    val exit = (departureProgress / .42f).coerceIn(0f, 1f)
+    val lowerDeparture = Modifier.graphicsLayer {
+        alpha = 1f - exit
+        translationY = 140.dp.toPx() * exit
+    }
     val entrance = remember(state.challengeId) { Animatable(0f) }
     LaunchedEffect(state.challengeId) {
         entrance.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
@@ -50,8 +56,8 @@ internal fun ChallengeExperience(
         Text(state.challengeType.questTitle(), color = QuestParchment, fontFamily = GothicTreasureFontFamily,
             fontSize = 29.sp, lineHeight = 32.sp, textAlign = TextAlign.Center,
             modifier = Modifier.graphicsLayer {
-                alpha = entrance.value
-                translationY = (1f - entrance.value) * 12.dp.toPx()
+                alpha = entrance.value * (1f - exit)
+                translationY = (1f - entrance.value) * 12.dp.toPx() - 110.dp.toPx() * exit
             })
         val emblemModifier = Modifier.fillMaxWidth().height(
             if (state.challengeType == RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE ||
@@ -65,10 +71,10 @@ internal fun ChallengeExperience(
                 Offset(coordinates.size.width / 2f, coordinates.size.height / 2f)))
         }
         if (emblemContent == null) QuestEmblem(state, emblemModifier) else emblemContent(emblemModifier)
-        afterEmblemContent?.invoke()
+        if (afterEmblemContent != null) Box(lowerDeparture.fillMaxWidth()) { afterEmblemContent() }
         val measurement = questMeasurement(state)
         val isLake = state.challengeType == RelicChallengeType.UNION_LAWN_PHOTO
-        Row(modifier = if (isLake) Modifier.fillMaxWidth().testTag("union_measurements") else Modifier,
+        Row(modifier = if (isLake) lowerDeparture.fillMaxWidth().testTag("union_measurements") else lowerDeparture,
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!isLake) Canvas(Modifier.width(24.dp).height(1.dp)) {
@@ -93,7 +99,7 @@ internal fun ChallengeExperience(
                 drawLine(QuestGold.copy(alpha = .5f), Offset.Zero, Offset(size.width, 0f), 1f)
             }
         }
-        beforeGuideContent?.invoke()
-        QuestFieldGuide(state)
+        if (beforeGuideContent != null) Box(lowerDeparture.fillMaxWidth()) { beforeGuideContent() }
+        Box(lowerDeparture.fillMaxWidth()) { QuestFieldGuide(state) }
     }
 }

@@ -85,6 +85,8 @@ class TreasureChallengeViewModel(
         private set
     var photoRevealFinished by mutableStateOf(false)
         private set
+    var photoRevealArrival: PhotoRevealArrival? = null
+        private set
     private var collectionJob: Job? = null
     private var isActive = false
     private var photoOpportunityReady = false
@@ -135,6 +137,7 @@ class TreasureChallengeViewModel(
         discoverySave = ChallengeDiscoverySave()
         completionId = UUID.randomUUID().toString()
         photoRevealFinished = false
+        photoRevealArrival = null
         mutableUiState.value = initialUiState(newConfig)
         if (shouldStart) start()
     }
@@ -147,10 +150,11 @@ class TreasureChallengeViewModel(
         )
     }
 
-    fun finishPhotoReveal() {
+    fun finishPhotoReveal(arrival: PhotoRevealArrival? = null) {
         val state = mutableUiState.value
-        if (state.completed && state.capturedPhotoUri != null && config.type == RelicChallengeType.UNION_LAWN_PHOTO) {
+        if (state.completed && state.capturedPhotoUri != null && config.type.photoRevealStyle() != null) {
             photoRevealFinished = true
+            photoRevealArrival = arrival
         }
     }
 
