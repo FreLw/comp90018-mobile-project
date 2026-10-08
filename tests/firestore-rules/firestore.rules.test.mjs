@@ -24,7 +24,7 @@ const PROJECT_ID = "demo-lost-treasures";
 let testEnvironment;
 
 before(async () => {
-  const rules = await readFile(new URL("../../firestore.rules", import.meta.url), "utf8");
+  const rules = await readFile(new URL("../../firebase/firestore.rules", import.meta.url), "utf8");
   testEnvironment = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: { rules },

@@ -1,6 +1,6 @@
 # Firestore security rules tests
 
-These tests exercise `firestore.rules` against the local Firestore Emulator.
+These tests exercise [`firebase/firestore.rules`](../../firebase/firestore.rules) against the local Firestore Emulator.
 They use the demo project ID `demo-lost-treasures`, so the test run cannot
 access the production Firebase project.
 

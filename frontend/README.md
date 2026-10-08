@@ -62,4 +62,4 @@ To build a debug APK from PowerShell instead:
 
 For end-user instructions, Firebase setup, the data model, and detailed
 acceptance criteria, see the repository [README](../README.md) and
-[REQUIREMENTS.md](../REQUIREMENTS.md).
+[REQUIREMENTS.md](../docs/REQUIREMENTS.md).
