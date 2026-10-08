@@ -188,6 +188,131 @@ describe("treasure catalogue and collection", () => {
   });
 });
 
+describe("assigned team fragments", () => {
+  const ids = ['south_lawn_north_west', 'south_lawn_north_east', 'south_lawn_south_west', 'south_lawn_south_east'];
+  const members = ['alice', 'bob', 'carol', 'dave'];
+  const path = 'teamRooms/assigned-fragments';
+  const assignments = (team) => ({
+    huntParticipantIds: team,
+    fragmentOwnerIds: Object.fromEntries(ids.map((id, i) => [id,
+      team.length === 3 && i === 3 ? '' : team[i % team.length]])),
+  });
+  async function room(team = members, extra = {}) {
+    await seed(path, {
+      creatorId: 'alice', memberIds: team, maxMembers: 4,
+      taskId: 'south_lawn_atlas', taskTitle: 'Atlas', taskStatus: 'hunting',
+      huntSessionId: 'assigned-run', taskCompletedMemberIds: [],
+      taskClaimedMemberIds: [], foundFragmentIds: [],
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      ...assignments(team), ...extra,
+    });
+  }
+  test('each of four members can collect only their own fragment', async () => {
+    await room();
+    for (let i = 0; i < members.length; i++) {
+      const db = authenticatedDb(members[i]);
+      if (i < 3) await assertFails(updateDoc(doc(db, path), {
+        foundFragmentIds: [...ids.slice(0, i), ids[i + 1]], updatedAt: serverTimestamp(),
+      }));
+      await assertSucceeds(updateDoc(doc(db, path), {
+        foundFragmentIds: ids.slice(0, i + 1),
+        taskCompletedMemberIds: i === 3 ? members : [], updatedAt: serverTimestamp(),
+      }));
+    }
+  });
+  test('two players cannot mark a four-player hunt complete', async () => {
+    await room(members, { foundFragmentIds: ids.slice(0, 2) });
+    await assertFails(updateDoc(doc(authenticatedDb('alice'), path), {
+      taskCompletedMemberIds: members, updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(authenticatedDb('alice'), path), {
+      taskCompletedMemberIds: ['alice'], updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(authenticatedDb('alice'), path), {
+      foundFragmentIds: ids, taskCompletedMemberIds: members, updatedAt: serverTimestamp(),
+    }));
+  });
+  test('the fourth fragment is shared in a three-player hunt', async () => {
+    for (const uid of members.slice(0, 3)) {
+      await room(members.slice(0, 3));
+      await assertSucceeds(updateDoc(doc(authenticatedDb(uid), path), {
+        foundFragmentIds: [ids[3]], updatedAt: serverTimestamp(),
+      }));
+    }
+  });
+  test('a two-player hunt assigns two fragments to each member', async () => {
+    const team = members.slice(0, 2);
+    await room(team);
+    for (let i = 0; i < ids.length; i++) {
+      await assertSucceeds(updateDoc(doc(authenticatedDb(team[i % 2]), path), {
+        foundFragmentIds: ids.slice(0, i + 1),
+        taskCompletedMemberIds: i === 3 ? team : [], updatedAt: serverTimestamp(),
+      }));
+    }
+  });
+  test('assignments cannot change during a hunt', async () => {
+    await room();
+    await assertFails(updateDoc(doc(authenticatedDb('alice'), path), {
+      ...assignments([...members].reverse()), updatedAt: serverTimestamp(),
+    }));
+  });
+  test('repeated collection is harmless and claims require all four fragments', async () => {
+    await room(members, { foundFragmentIds: ids.slice(0, 2) });
+    await assertSucceeds(updateDoc(doc(authenticatedDb('alice'), path), {
+      foundFragmentIds: ids.slice(0, 2), updatedAt: serverTimestamp(),
+    }));
+    await seed('treasures/south_lawn_atlas', { title: 'Atlas' });
+    for (const uid of members) await seed(`teamMemberships/${uid}`, {
+      roomId: 'assigned-fragments', createdAt: serverTimestamp(),
+    });
+    const discovery = (uid) => ({ ownerUid: uid, treasureId: 'south_lawn_atlas',
+      status: 'discovered', discoveredAt: serverTimestamp() });
+    await assertFails(setDoc(doc(authenticatedDb('alice'), 'users/alice/treasureCollection/south_lawn_atlas'), discovery('alice')));
+    await room(members, { foundFragmentIds: ids, taskCompletedMemberIds: members });
+    for (let i = 0; i < members.length; i++) {
+      const uid = members[i];
+      const db = authenticatedDb(uid);
+      const batch = writeBatch(db);
+      batch.set(doc(db, `users/${uid}/treasureCollection/south_lawn_atlas`), discovery(uid));
+      batch.update(doc(db, path), i < 3 ? {
+        taskClaimedMemberIds: members.slice(0, i + 1), updatedAt: serverTimestamp(),
+      } : {
+        taskStatus: 'unassigned', taskId: '', taskTitle: '', taskCompletedMemberIds: [],
+        foundFragmentIds: [], taskClaimedMemberIds: [], updatedAt: serverTimestamp(),
+      });
+      await assertSucceeds(batch.commit());
+      const snapshot = await getDoc(doc(db, path));
+      if (snapshot.data().taskStatus !== (i < 3 ? 'hunting' : 'unassigned')) {
+        throw new Error('Hunt ended before every participant claimed');
+      }
+    }
+  });
+  test('new fragment hunts require a valid assignment at start', async () => {
+    await room(members, { taskStatus: 'assigned', huntSessionId: 'old-run',
+      huntParticipantIds: [], fragmentOwnerIds: {} });
+    const ref = doc(authenticatedDb('alice'), path);
+    await assertFails(updateDoc(ref, { taskStatus: 'hunting', huntSessionId: 'new-run', updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(ref, { taskStatus: 'hunting', huntSessionId: 'new-run',
+      ...assignments(members), updatedAt: serverTimestamp() }));
+  });
+  test('membership is locked until the owner terminates the hunt', async () => {
+    const team = members.slice(0, 3);
+    await room(team);
+    const db = authenticatedDb('dave');
+    const batch = writeBatch(db);
+    batch.update(doc(db, path), { memberIds: members, updatedAt: serverTimestamp() });
+    batch.set(doc(db, 'teamMemberships/dave'), { roomId: 'assigned-fragments', createdAt: serverTimestamp(), unreadCount: 0 });
+    await assertFails(batch.commit());
+    await assertFails(updateDoc(doc(authenticatedDb('bob'), path), {
+      memberIds: ['alice', 'carol'], updatedAt: serverTimestamp(),
+    }));
+    await assertSucceeds(updateDoc(doc(authenticatedDb('alice'), path), {
+      taskStatus: 'unassigned', taskId: '', taskTitle: '', taskCompletedMemberIds: [],
+      foundFragmentIds: [], taskClaimedMemberIds: [], updatedAt: serverTimestamp(),
+    }));
+  });
+});
+
 describe("team hunt completion and claims", () => {
   const discovery = (uid, treasureId = "relic-one") => ({
     ownerUid: uid, treasureId, status: "discovered", discoveredAt: serverTimestamp(),

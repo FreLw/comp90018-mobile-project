@@ -1,6 +1,6 @@
 package com.comp90018.app.data.rooms
 
-const val TEAM_ROOM_CAPACITY = 2
+const val TEAM_ROOM_CAPACITY = 4
 
 /** Shared hunt state stored in `teamRooms/{roomId}`. */
 data class TeamRoom(
@@ -18,6 +18,7 @@ data class TeamRoom(
     val description: String = "",
     val huntSessionId: String = "",
     val idOnly: Boolean = true,
+    val fragmentAssignments: RoomFragmentAssignments? = null,
 )
 
 /** Display information loaded for one room member. */

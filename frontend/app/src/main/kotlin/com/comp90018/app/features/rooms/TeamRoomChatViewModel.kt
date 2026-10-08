@@ -163,7 +163,8 @@ class TeamRoomChatViewModel(
             onComplete("Available in Debug builds only")
             return
         }
-        if (fragmentIds.size != SouthLawnFragmentIds.size || fragmentIds.toSet() != SouthLawnFragmentIds) {
+        if (fragmentIds.isEmpty() || fragmentIds.distinct().size != fragmentIds.size ||
+            fragmentIds.any { it !in SouthLawnFragmentIds }) {
             onComplete("Invalid fragment configuration")
             return
         }

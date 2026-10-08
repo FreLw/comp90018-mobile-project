@@ -8,6 +8,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DebugFragmentUnlockTest {
+    @Test fun singleAssignedFragmentIsAccepted() {
+        val stub = RepositoryStub()
+        val model = TeamRoomChatViewModel(stub.repository, "room", "user")
+        val id = SouthLawnFragmentIds.first()
+        var completed = false
+        model.debugUnlockHuntFragments(listOf(id)) { error -> assertNull(error); completed = true }
+        assertEquals(listOf(id), stub.writes)
+        stub.complete()
+        assertTrue(completed)
+        assertFalse(model.uiState.value.updatingTask)
+    }
+
+    @Test fun invalidSubsetsAreRejectedWithoutWriting() {
+        val stub = RepositoryStub()
+        val model = TeamRoomChatViewModel(stub.repository, "room", "user")
+        val id = SouthLawnFragmentIds.first()
+        for (ids in listOf(emptyList(), listOf("unknown"), listOf(id, id))) {
+            model.debugUnlockHuntFragments(ids) { assertEquals("Invalid fragment configuration", it) }
+        }
+        assertTrue(stub.writes.isEmpty())
+    }
+
     private class RepositoryStub {
         val writes = mutableListOf<String>()
         var pending: ((String?) -> Unit)? = null

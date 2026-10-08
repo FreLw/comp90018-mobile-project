@@ -215,6 +215,7 @@ fun MapScreen(
     activeHuntMemberIds: List<String> = emptyList(),
     activeHuntCompletedMemberIds: List<String> = emptyList(),
     activeHuntFoundFragmentIds: List<String> = emptyList(),
+    activeHuntFragmentAssignments: com.comp90018.app.data.rooms.RoomFragmentAssignments? = null,
     activeHuntClaimedMemberIds: List<String> = emptyList(),
     currentUserId: String = "",
     teammateLocations: List<TeamHuntLocation> = emptyList(),
@@ -500,6 +501,8 @@ fun MapScreen(
             fragments = huntFragments,
             collectionRadiusMeters = fragmentHuntConfig?.collectionRadiusMeters,
             foundFragmentIds = activeHuntFoundFragmentIds,
+            assignments = activeHuntFragmentAssignments,
+            currentUserId = currentUserId,
             userLocation = userLocation,
             deviceHeading = deviceHeading,
             onFindFragment = onFindActiveHuntFragment,
@@ -1177,6 +1180,8 @@ private fun SouthLawnFragmentHuntScreen(
     fragments: List<TeamHuntFragment>,
     collectionRadiusMeters: Double?,
     foundFragmentIds: List<String>,
+    assignments: com.comp90018.app.data.rooms.RoomFragmentAssignments?,
+    currentUserId: String,
     userLocation: LocationOutput,
     deviceHeading: Float,
     onFindFragment: (String) -> Unit,
@@ -1186,17 +1191,28 @@ private fun SouthLawnFragmentHuntScreen(
     var debugUnlocking by remember { mutableStateOf(false) }
     var debugUnlockError by remember { mutableStateOf<String?>(null) }
     val selectedFragment = fragments.firstOrNull { it.id == selectedFragmentId }
+    val foundIds = foundFragmentIds.toSet()
+    val debugCollectibleIds = fragments.map { it.id }.filter {
+        FragmentOwnershipUi.canCollect(assignments, it, currentUserId, foundIds)
+    }
+    val nextDebugFragment = FragmentOwnershipUi.nextDebugFragment(
+        assignments, fragments.map { it.id }, currentUserId, foundIds,
+    )
     val currentLocation = LocationActionPolicy.actionableCoordinate(userLocation)
     val selectedDistance = selectedFragment?.let { fragment ->
         currentLocation?.let { LocationCalculator.distanceMeters(it, fragment.coordinate) }
     }
-    val canCollect = collectionRadiusMeters != null && selectedFragment?.let { fragment ->
+    val isWithinRange = collectionRadiusMeters != null && selectedFragment?.let { fragment ->
         LocationActionPolicy.isWithinRadius(
             location = userLocation,
             target = fragment.coordinate,
             radiusMeters = collectionRadiusMeters,
         )
     } == true
+    val ownsSelected = selectedFragment?.let {
+        FragmentOwnershipUi.canCollect(assignments, it.id, currentUserId, foundIds)
+    } == true
+    val canCollect = isWithinRange && ownsSelected
 
     Box(Modifier.fillMaxSize()) {
         GoogleMapView(
@@ -1231,7 +1247,8 @@ private fun SouthLawnFragmentHuntScreen(
                 fragments.forEach { fragment ->
                     val found = fragment.id in foundFragmentIds
                     Text(
-                        "${if (found) "✓" else "○"} ${fragment.title}: ${if (found) "is found" else "not found"}",
+                        "${if (found) "✓" else "○"} ${fragment.title}: ${if (found) "is found" else "not found"}\n" +
+                            FragmentOwnershipUi.label(assignments, fragment.id, currentUserId, huntMemberNames),
                         color = if (found) Brand else Muted,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1241,14 +1258,14 @@ private fun SouthLawnFragmentHuntScreen(
                         onClick = {
                             debugUnlocking = true
                             debugUnlockError = null
-                            onDebugUnlockFragments(fragments.map { it.id }) { error ->
+                            onDebugUnlockFragments(listOfNotNull(nextDebugFragment)) { error ->
                                 debugUnlocking = false
                                 debugUnlockError = error
                             }
                         },
-                        enabled = collectionRadiusMeters != null && !debugUnlocking,
+                        enabled = collectionRadiusMeters != null && debugCollectibleIds.isNotEmpty() && !debugUnlocking,
                     ) {
-                        Text(if (debugUnlocking) "Unlocking fragments…" else "Debug: Unlock all 4 fragments")
+                        Text(if (debugUnlocking) "Collecting fragment…" else "Debug: Collect one available fragment")
                     }
                     debugUnlockError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
@@ -1264,13 +1281,21 @@ private fun SouthLawnFragmentHuntScreen(
             ) {
                 Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(fragment.title, color = Ink, fontWeight = FontWeight.Bold)
+                    Text(FragmentOwnershipUi.label(assignments, fragment.id, currentUserId, huntMemberNames),
+                        color = Muted, style = MaterialTheme.typography.bodySmall)
                     Text(selectedDistance.formatDistance() + " away", color = Muted)
                     Button(
                         onClick = { onFindFragment(fragment.id); selectedFragmentId = null },
                         enabled = canCollect && !debugUnlocking,
                         colors = ButtonDefaults.buttonColors(containerColor = Brand),
                     ) { Text("Collect fragment") }
-                    if (!canCollect) Text("Move within $collectionRadiusMeters m to collect this fragment.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    if (!ownsSelected) {
+                        Text("Only the assigned explorer can collect this fragment.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    } else if (collectionRadiusMeters == null) {
+                        Text("Fragment location configuration is unavailable.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    } else if (!isWithinRange) {
+                        Text("Move within $collectionRadiusMeters m to collect this fragment.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }

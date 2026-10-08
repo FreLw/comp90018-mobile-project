@@ -13,6 +13,11 @@ import java.util.UUID
 
 /** Low-level Firestore operations for shared treasure-hunt rooms. */
 object FirebaseTeamRoomService {
+    private fun requiresFixedParticipants(snapshot: com.google.firebase.firestore.DocumentSnapshot): Boolean =
+        snapshot.getString("taskStatus") == "hunting" &&
+            snapshot.getString("taskId") == "south_lawn_atlas" &&
+            snapshot.contains("huntParticipantIds")
+
     fun observeMembership(
         firestore: FirebaseFirestore,
         userId: String,
@@ -104,6 +109,7 @@ object FirebaseTeamRoomService {
             if (transaction.get(membership).exists()) throw IllegalStateException("You are already in a treasure room")
             val roomSnapshot = transaction.get(room)
             if (!roomSnapshot.exists()) throw IllegalStateException("Room not found")
+            if (requiresFixedParticipants(roomSnapshot)) throw IllegalStateException("Wait for the current fragment hunt to end before joining")
             if (publicEntry && roomSnapshot.getBoolean("idOnly") != false) throw IllegalStateException("This room now requires a room ID")
             val members = roomSnapshot.get("memberIds") as? List<*> ?: emptyList<String>()
             if (members.size >= (roomSnapshot.getLong("maxMembers") ?: TEAM_ROOM_CAPACITY.toLong())) throw IllegalStateException("This room is full")
@@ -135,6 +141,7 @@ object FirebaseTeamRoomService {
             val snapshot = transaction.get(room)
             val memberSnapshot = transaction.get(membership)
             if (snapshot.getString("creatorId") != ownerId) throw IllegalStateException("Only the room owner can remove members")
+            if (requiresFixedParticipants(snapshot)) throw IllegalStateException("Terminate the fragment hunt before changing members")
             if (memberId == ownerId) throw IllegalStateException("The owner cannot be removed")
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             if (memberId !in members || memberSnapshot.getString("roomId") != roomId) throw IllegalStateException("This explorer is no longer in the room")
@@ -175,6 +182,9 @@ object FirebaseTeamRoomService {
                     taskCompletedMemberIds = (snapshot.get("taskCompletedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     foundFragmentIds = (snapshot.get("foundFragmentIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     taskClaimedMemberIds = (snapshot.get("taskClaimedMemberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+                    fragmentAssignments = RoomFragmentAssignments.fromFields(
+                        snapshot.get("huntParticipantIds"), snapshot.get("fragmentOwnerIds"),
+                    ),
                     huntSessionId = snapshot.getString("huntSessionId")
                         ?: "legacy:${snapshot.id}:${snapshot.getTimestamp("createdAt")?.seconds ?: 0}:${snapshot.getString("taskId").orEmpty()}",
                 ), null)
@@ -221,9 +231,13 @@ object FirebaseTeamRoomService {
             if (members.size < 2) throw IllegalStateException("Start Hunt requires at least two room members")
             if (snapshot.getString("taskStatus") != "assigned") throw IllegalStateException("Choose a destination before starting")
             if (snapshot.getString("taskId").isNullOrBlank()) throw IllegalStateException("Choose a destination before starting")
+            val assignments = if (snapshot.getString("taskId") == "south_lawn_atlas")
+                RoomFragmentAssignments.create(members).toFields() else emptyMap()
             transaction.update(room, mapOf(
                 "taskStatus" to "hunting",
                 "huntSessionId" to huntSessionId,
+                "huntParticipantIds" to (assignments["huntParticipantIds"] ?: emptyList<String>()),
+                "fragmentOwnerIds" to (assignments["fragmentOwnerIds"] ?: emptyMap<String, String>()),
                 "taskCompletedMemberIds" to emptyList<String>(),
                 "foundFragmentIds" to emptyList<String>(),
                 "taskClaimedMemberIds" to emptyList<String>(),
@@ -261,6 +275,7 @@ object FirebaseTeamRoomService {
             val snapshot = transaction.get(room)
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
+            if (snapshot.getString("taskId") == "south_lawn_atlas") throw IllegalStateException("Find the assigned fragments to complete this hunt")
             // Keep the hunt active after the second answer. MapScreen observes both member
             // IDs, then gives *both* explorers the ready-to-dig screen and lets each save the
             // treasure to their own collection. Clearing the hunt here would remove that screen
@@ -292,6 +307,16 @@ object FirebaseTeamRoomService {
             if (userId !in members || snapshot.getString("taskStatus") != "hunting") throw IllegalStateException("This hunt is not active")
             if (snapshot.getString("taskId") != "south_lawn_atlas") throw IllegalStateException("Fragments are only used for the South Lawn hunt")
             val existingFragments = (snapshot.get("foundFragmentIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            if (snapshot.contains("huntParticipantIds")) {
+                val assignments = RoomFragmentAssignments.fromFields(
+                    snapshot.get("huntParticipantIds"), snapshot.get("fragmentOwnerIds"),
+                ) ?: throw IllegalStateException("Invalid fragment assignment; restart the hunt")
+                if (assignments.participantIds != members) throw IllegalStateException("Hunt membership changed; restart the hunt")
+                if (fragmentId in existingFragments) return@runTransaction
+                if (!assignments.canCollect(userId, fragmentId, existingFragments.toSet())) {
+                    throw IllegalStateException("This fragment belongs to another explorer")
+                }
+            }
             val allFound = (existingFragments + fragmentId).toSet().containsAll(validFragmentIds)
             transaction.update(room, mapOf(
                 "foundFragmentIds" to FieldValue.arrayUnion(fragmentId),
@@ -331,6 +356,14 @@ object FirebaseTeamRoomService {
             }
             if (taskId == "south_lawn_atlas" && !fragments.containsAll(requiredFragments)) {
                 throw IllegalStateException("Find all fragments before claiming the Atlas")
+            }
+            if (taskId == "south_lawn_atlas" && snapshot.contains("huntParticipantIds")) {
+                val assignments = RoomFragmentAssignments.fromFields(
+                    snapshot.get("huntParticipantIds"), snapshot.get("fragmentOwnerIds"),
+                ) ?: throw IllegalStateException("Invalid fragment assignment; restart the hunt")
+                if (assignments.participantIds != members || !assignments.isComplete(fragments.toSet())) {
+                    throw IllegalStateException("All assigned fragments must be found before claiming")
+                }
             }
             if (collectionItem.exists() && collectionItem.getString("ownerUid") != userId) {
                 throw IllegalStateException("This collection item belongs to another explorer")
@@ -501,6 +534,7 @@ object FirebaseTeamRoomService {
             val snapshot = transaction.get(room)
             if (!snapshot.exists()) throw IllegalStateException("Room not found")
             if (snapshot.getString("creatorId") == userId) throw IllegalStateException("The room owner must dismiss the room")
+            if (requiresFixedParticipants(snapshot)) throw IllegalStateException("Ask the owner to terminate the fragment hunt before leaving")
             val members = (snapshot.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
             if (userId !in members) throw IllegalStateException("You are not a member of this room")
             transaction.update(room, mapOf(

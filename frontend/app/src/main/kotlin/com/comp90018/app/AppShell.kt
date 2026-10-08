@@ -241,6 +241,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                     activeHuntMemberIds = activeRoomHuntState.room?.memberIds.orEmpty(),
                     activeHuntCompletedMemberIds = activeRoomHuntState.room?.taskCompletedMemberIds.orEmpty(),
                     activeHuntFoundFragmentIds = activeRoomHuntState.room?.foundFragmentIds.orEmpty(),
+                    activeHuntFragmentAssignments = activeRoomHuntState.room?.fragmentAssignments,
                     activeHuntClaimedMemberIds = activeRoomHuntState.room?.taskClaimedMemberIds.orEmpty(),
                     currentUserId = user.uid,
                     teammateLocations = teammateLocations,
