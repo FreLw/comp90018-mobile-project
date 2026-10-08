@@ -25,6 +25,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG && BuildConfig.USE_FIREBASE_EMULATORS) {
+            LocalFirebaseTestEnvironment.connect(this)
+        }
         setContent { Comp90018App() }
     }
 }

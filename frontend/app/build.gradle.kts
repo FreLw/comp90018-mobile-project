@@ -26,6 +26,7 @@ android {
 		targetSdk = 37
 		versionCode = 1
 		versionName = "1.0"
+		buildConfigField("boolean", "USE_FIREBASE_EMULATORS", "false")
 		manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey.get()
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -37,6 +38,12 @@ android {
 	}
 
 	buildTypes {
+		debug {
+			buildConfigField("boolean", "USE_FIREBASE_EMULATORS",
+				providers.gradleProperty("USE_FIREBASE_EMULATORS")
+					.orElse(localProperties.getProperty("USE_FIREBASE_EMULATORS", "false"))
+					.get().toBooleanStrict().toString())
+		}
 		release {
 			isMinifyEnabled = false
 			proguardFiles(
