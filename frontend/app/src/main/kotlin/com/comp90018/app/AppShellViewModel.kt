@@ -22,33 +22,47 @@ class AppShellViewModel(
     private val mutableUiState = MutableStateFlow(AppShellUiState())
     val uiState: StateFlow<AppShellUiState> = mutableUiState.asStateFlow()
     private var ensuringProfile = false
-    private var profileEnsured = false
-    private val profileSubscription: Subscription = repository.observeProfile(uid) { profile, error ->
-        mutableUiState.value = mutableUiState.value.copy(profile = profile, profileError = error)
-        if (error == null && !profileEnsured) {
-            profileEnsured = true
-            ensureProfile()
-        }
+    private var initializationError: String? = null
+    private var observationError: String? = null
+    private var profileSubscription: Subscription? = null
+
+    init {
+        // New accounts must be bootstrapped even before the first profile snapshot arrives.
+        ensureProfile()
+        observeProfile()
     }
 
     fun retry() {
-        mutableUiState.value = mutableUiState.value.copy(profileError = null)
-        profileEnsured = false
+        observeProfile()
         ensureProfile()
+    }
+
+    private fun observeProfile() {
+        profileSubscription?.cancel()
+        observationError = null
+        profileSubscription = repository.observeProfile(uid) { profile, error ->
+            observationError = error
+            mutableUiState.value = mutableUiState.value.copy(
+                profile = profile,
+                profileError = error ?: initializationError,
+            )
+        }
     }
 
     private fun ensureProfile() {
         if (ensuringProfile) return
-        profileEnsured = true
+        initializationError = null
         ensuringProfile = true
+        mutableUiState.value = mutableUiState.value.copy(profileError = observationError)
         repository.ensureProfile(uid, email) { error ->
             ensuringProfile = false
-            if (error != null) mutableUiState.value = mutableUiState.value.copy(profileError = error)
+            initializationError = error
+            mutableUiState.value = mutableUiState.value.copy(profileError = observationError ?: error)
         }
     }
 
     override fun onCleared() {
-        profileSubscription.cancel()
+        profileSubscription?.cancel()
     }
 
     companion object {

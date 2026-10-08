@@ -53,8 +53,10 @@ enum class ChallengeCondition {
     HEADING_ALIGNED,
     STATIONARY,
     STABLE,
+    STILLNESS,
     ROTATION_STILL,
     SOUND_DETECTED,
+    PHOTO_CAPTURED,
 }
 
 data class ChallengeConditionState(

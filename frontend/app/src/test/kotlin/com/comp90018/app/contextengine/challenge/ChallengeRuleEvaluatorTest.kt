@@ -148,6 +148,37 @@ class ChallengeRuleEvaluatorTest {
         assertTrue(evaluator.evaluate(snapshot(), 6_000_000_000L).completed)
     }
 
+    @Test fun wilsonCombinesMotionAndShakeIntoOneOfFourRequirements() {
+        val evaluator = ChallengeRuleEvaluator(wilsonConfig())
+        val baseline = snapshot()
+        val disturbed = baseline.copy(motionStability = baseline.motionStability.copy(
+            motion = baseline.motionStability.motion.copy(smoothedMagnitude = .2),
+            stability = baseline.motionStability.stability.copy(variation = .06),
+        ))
+        evaluator.evaluate(disturbed, 0L)
+        val result = evaluator.evaluate(disturbed, 3_000_000_000L)
+        assertEquals(listOf(ChallengeCondition.LOCATION_INSIDE, ChallengeCondition.HEADING_ALIGNED,
+            ChallengeCondition.STILLNESS, ChallengeCondition.ROTATION_STILL), result.requiredConditions.map { it.condition })
+        assertFalse(result.condition(ChallengeCondition.STILLNESS))
+        assertFalse(result.completed)
+        assertEquals(ChallengeInstruction.STOP_MOVING, result.instruction)
+    }
+
+    @Test fun calibrationCanHoldAllRulesWithoutCompletingAndStillRespondToChangedData() {
+        val evaluator = ChallengeRuleEvaluator(wilsonConfig())
+        evaluator.evaluate(snapshot(), 0L, allowCompletion = false)
+        evaluator.evaluate(snapshot(), 0L, allowCompletion = false)
+        val held = evaluator.evaluate(snapshot(), 3_000_000_000L, allowCompletion = false)
+        assertEquals(1.0, held.holdProgress, 0.0)
+        assertFalse(held.completed)
+        val changed = evaluator.evaluate(snapshot(headingDegrees = 25.0), 4_000_000_000L, allowCompletion = false)
+        assertFalse(changed.condition(ChallengeCondition.HEADING_ALIGNED))
+        assertEquals(0.0, changed.holdProgress, 0.0)
+        evaluator.evaluate(snapshot(), 5_000_000_000L, allowCompletion = false)
+        val finished = evaluator.evaluate(snapshot(), 8_000_000_000L, allowCompletion = true)
+        assertTrue(finished.completed)
+    }
+
     @Test fun oldQuadNonHorizontalCannotProgress() {
         val evaluator = ChallengeRuleEvaluator(oldQuadConfig())
         evaluator.evaluate(snapshot(horizontal = false), 0L)
@@ -212,6 +243,53 @@ class ChallengeRuleEvaluatorTest {
         assertEquals(ChallengeInstruction.COMPLETED, completed.instruction)
     }
 
+    @Test fun southLawnSharesOneBudgetForMotionAndShakeAndResetsTheHold() {
+        val evaluator = ChallengeRuleEvaluator(southConfig())
+        evaluator.evaluate(snapshot(), 0L)
+        val ready = evaluator.evaluate(snapshot(), 0L)
+        assertEquals(listOf(ChallengeCondition.LOCATION_INSIDE, ChallengeCondition.HEADING_ALIGNED,
+            ChallengeCondition.STILLNESS, ChallengeCondition.ROTATION_STILL), ready.requiredConditions.map { it.condition })
+        assertTrue(evaluator.evaluate(snapshot(), 500_000_000L).holdProgress > 0.0)
+        val baseline = snapshot()
+        // Each value is below its individual threshold, but their normalized sum exceeds one.
+        val combinedMovement = baseline.copy(motionStability = baseline.motionStability.copy(
+            motion = baseline.motionStability.motion.copy(smoothedMagnitude = .3),
+            stability = baseline.motionStability.stability.copy(variation = .06),
+        ))
+        val disturbed = evaluator.evaluate(combinedMovement, 600_000_000L)
+        assertFalse(disturbed.condition(ChallengeCondition.STILLNESS))
+        assertEquals(ChallengeInstruction.STOP_MOVING, disturbed.instruction)
+        assertEquals(0.0, disturbed.holdProgress, 0.0)
+        evaluator.evaluate(snapshot(), 700_000_000L)
+        assertFalse(evaluator.evaluate(snapshot(), 1_899_999_999L).completed)
+        assertTrue(evaluator.evaluate(snapshot(), 1_900_000_000L).completed)
+    }
+
+    @Test fun southLawnTurnMustMeetTheNumericThresholdEvenIfTheClassificationIsStill() {
+        val evaluator = ChallengeRuleEvaluator(southConfig())
+        val baseline = snapshot()
+        val turning = baseline.copy(orientation = baseline.orientation.copy(
+            rotation = baseline.orientation.rotation.copy(angularVelocityMagnitude = .2),
+        ))
+        evaluator.evaluate(turning, 0L)
+        val result = evaluator.evaluate(turning, 2_000_000_000L)
+        assertFalse(result.condition(ChallengeCondition.ROTATION_STILL))
+        assertFalse(result.completed)
+        assertEquals(0.0, result.holdProgress, 0.0)
+    }
+
+    @Test fun southLawnMissingOrInvalidNumericReadingsCannotPassStillness() {
+        val baseline = snapshot()
+        listOf<Double?>(null, Double.NaN, Double.POSITIVE_INFINITY, -.1).forEach { value ->
+            val evaluator = ChallengeRuleEvaluator(southConfig())
+            val missing = baseline.copy(motionStability = baseline.motionStability.copy(
+                motion = baseline.motionStability.motion.copy(smoothedMagnitude = value),
+            ))
+            evaluator.evaluate(missing, 0L)
+            assertFalse(evaluator.evaluate(missing, 2_000_000_000L).condition(ChallengeCondition.STILLNESS))
+        }
+    }
+
     @Test fun systemGardenRequiresPhotoWithoutMotionOrHeading() {
         val config = systemGardenConfig()
         assertEquals(null, config.requiredHeadingDegrees)
@@ -223,9 +301,13 @@ class ChallengeRuleEvaluatorTest {
         val ready = evaluator.evaluate(snapshot(horizontal = false, stationary = false, stable = false), 1L)
         assertTrue(ready.actionReady)
         assertFalse(ready.completed)
-        assertEquals(listOf(ChallengeCondition.LOCATION_INSIDE), ready.requiredConditions.map { it.condition })
+        assertEquals(listOf(ChallengeCondition.LOCATION_INSIDE, ChallengeCondition.PHOTO_CAPTURED),
+            ready.requiredConditions.map { it.condition })
+        assertFalse(ready.requiredConditions.all { it.satisfied })
         assertFalse(evaluator.evaluate(snapshot(), 3_000_000_000L).completed)
-        assertTrue(evaluator.evaluate(snapshot(), 3_000_000_001L, ChallengeEvent.PHOTO_CAPTURED).completed)
+        val captured = evaluator.evaluate(snapshot(), 3_000_000_001L, ChallengeEvent.PHOTO_CAPTURED)
+        assertTrue(captured.completed)
+        assertTrue(captured.requiredConditions.all { it.satisfied })
     }
 
     @Test fun systemGardenPhotoOutsideCannotComplete() {
@@ -405,6 +487,7 @@ class ChallengeRuleEvaluatorTest {
                 headingValidity = SensorValidity.VALID,
             ),
             rotation = RotationOutput(
+                angularVelocityMagnitude = if (rotationStill) .05 else .8,
                 classification = if (rotationStill) RotationState.STILL else RotationState.ROTATING,
                 validity = SensorValidity.VALID,
             ),
@@ -415,10 +498,12 @@ class ChallengeRuleEvaluatorTest {
         ),
         motionStability = MotionStabilityOutput(
             motion = MotionOutput(
+                smoothedMagnitude = if (stationary) .05 else 1.5,
                 classification = if (stationary) MotionState.STATIONARY else MotionState.MOVING,
                 validity = SensorValidity.VALID,
             ),
             stability = StabilityOutput(
+                variation = if (stable) .03 else .5,
                 classification = if (stable) StabilityState.STABLE else StabilityState.UNSTABLE,
                 validity = SensorValidity.VALID,
             ),

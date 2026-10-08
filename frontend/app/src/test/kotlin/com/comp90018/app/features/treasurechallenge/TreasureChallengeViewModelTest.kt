@@ -3,6 +3,7 @@ package com.comp90018.app.features.treasurechallenge
 import com.comp90018.app.contextengine.DeviceContextSnapshot
 import com.comp90018.app.contextengine.FakeDeviceContextEngine
 import com.comp90018.app.contextengine.challenge.ChallengeInstruction
+import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfigs
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.sensors.AttitudeOutput
@@ -34,6 +35,34 @@ class TreasureChallengeViewModelTest {
     /** Each call represents a fresh device reading unless a test pins an explicit timestamp. */
     private var nextAutoTimestampNanos = 1L
 
+    @Test fun allSixTasksCompleteAtZeroElapsedTimeAsSoonAsEveryStarIsLit() {
+        val configs = listOf(unionConfig(), wilsonConfig(), oldQuadConfig(), southConfig(),
+            RelicChallengeConfigs.systemGardenGlasshouse("garden", target, 20.0), toneToolConfig())
+        configs.forEach { config ->
+            listOf(false, true).forEach { simulated ->
+                withHarness(config, simulationMode = simulated) { model, engine, clock ->
+                    model.start()
+                    val controls = DebugContextControls(soundDetected = true)
+                    engine.emit(controls.snapshot(config, 1L))
+                    assertFalse(model.uiState.value.completed)
+                    engine.emit(controls.snapshot(config, 2L))
+                    if (config.photoActionRequired) {
+                        assertTrue(model.uiState.value.actionReady)
+                        assertFalse(model.uiState.value.conditionStates.all { it.satisfied })
+                        assertFalse(model.uiState.value.conditionStates.single {
+                            it.condition == ChallengeCondition.PHOTO_CAPTURED
+                        }.satisfied)
+                        model.onPhotoCaptureStarted()
+                        model.onPhotoCaptured("content://test/captured-photo")
+                    }
+                    assertTrue(config.type.name, model.uiState.value.completed)
+                    assertTrue(model.uiState.value.conditionStates.all { it.satisfied })
+                    assertEquals(0L, clock.now)
+                }
+            }
+        }
+    }
+
     @Test fun unionFlowsFromOutsideThroughPhotoCaptureAndKeepsReadyDuringShutterMovement() {
         withHarness(unionConfig()) { viewModel, engine, clock ->
             viewModel.start()
@@ -45,7 +74,7 @@ class TreasureChallengeViewModelTest {
             assertEquals(ChallengeInstruction.TURN_RIGHT, viewModel.uiState.value.instruction)
 
             engine.emit(snapshot())
-            assertEquals(ChallengeInstruction.HOLD_ALIGNMENT, viewModel.uiState.value.instruction)
+            assertEquals(ChallengeInstruction.TAKE_PHOTO, viewModel.uiState.value.instruction)
             clock.now = 800_000_000L
             engine.emit(snapshot(timestampNanos = clock.now))
             assertTrue(viewModel.uiState.value.actionReady)
@@ -54,6 +83,8 @@ class TreasureChallengeViewModelTest {
             clock.now = 900_000_000L
             engine.emit(snapshot(headingDegrees = 90.0))
             assertTrue(viewModel.uiState.value.actionReady)
+            assertEquals(90.0, viewModel.uiState.value.latestSnapshot?.orientation?.direction?.headingDegrees)
+            assertEquals(ChallengeInstruction.TAKE_PHOTO, viewModel.uiState.value.instruction)
 
             viewModel.onPhotoCaptureStarted()
             assertEquals(ChallengeCameraState.CAPTURING, viewModel.uiState.value.cameraState)
@@ -65,76 +96,70 @@ class TreasureChallengeViewModelTest {
         }
     }
 
-    @Test fun wilsonInterruptionResetsProgressBeforeSuccessfulObservation() {
+    @Test fun wilsonCompletesOnTheFirstReadingThatLightsAllStarsWithoutWaiting() {
         withHarness(wilsonConfig()) { viewModel, engine, clock ->
             viewModel.start()
-            engine.emit(snapshot())
+            engine.emit(snapshot(headingDegrees = 30.0))
             engine.emit(snapshot(headingDegrees = 30.0))
             assertEquals(ChallengeInstruction.TURN_LEFT, viewModel.uiState.value.instruction)
-
-            engine.emit(snapshot())
-            clock.now = 1_500_000_000L
-            engine.emit(snapshot(timestampNanos = clock.now))
-            assertEquals(0.5, viewModel.uiState.value.holdProgress, 1e-9)
-
-            clock.now = 1_600_000_000L
             engine.emit(snapshot(stationary = false))
             assertEquals(ChallengeInstruction.STOP_MOVING, viewModel.uiState.value.instruction)
-            assertEquals(0.0, viewModel.uiState.value.holdProgress, 0.0)
-
-            clock.now = 2_000_000_000L
+            assertFalse(viewModel.uiState.value.completed)
             engine.emit(snapshot())
-            clock.now = 5_000_000_000L
-            engine.emit(snapshot(timestampNanos = clock.now))
+            assertTrue(viewModel.uiState.value.completed)
+            assertTrue(viewModel.uiState.value.conditionStates.all { it.satisfied })
+            assertEquals(0L, clock.now)
+            // Sensor changes cannot undo a completion while the discovery page opens.
+            engine.emit(snapshot(stationary = false))
             assertTrue(viewModel.uiState.value.completed)
         }
     }
 
-    @Test fun oldQuadTiltResetsExcavationBeforeSuccessfulHold() {
+    @Test fun debugTestAutomaticallyCompletesExactlyLikeLiveSensors() {
+        withHarness(wilsonConfig(), simulationMode = true) { viewModel, engine, clock ->
+            viewModel.start()
+            engine.emit(snapshot(headingDegrees = 28.0))
+            engine.emit(snapshot(headingDegrees = 28.0))
+            assertFalse(viewModel.uiState.value.completed)
+            assertEquals(28.0, viewModel.uiState.value.angularErrorDegrees!!, 0.0)
+            engine.emit(snapshot())
+            assertTrue(viewModel.uiState.value.completed)
+            assertEquals(0L, clock.now)
+            val discovery = viewModel.discoverySave
+            val completionId = viewModel.completionId
+            viewModel.stop()
+            viewModel.start()
+            assertTrue(viewModel.uiState.value.completed)
+            assertTrue(discovery === viewModel.discoverySave)
+            assertEquals(completionId, viewModel.completionId)
+        }
+    }
+
+    @Test fun oldQuadCompletesImmediatelyWhenLevelAndStill() {
         withHarness(oldQuadConfig()) { viewModel, engine, clock ->
             viewModel.start()
-            engine.emit(snapshot())
+            engine.emit(snapshot(horizontal = false))
             engine.emit(snapshot(horizontal = false))
             assertEquals(ChallengeInstruction.KEEP_PHONE_LEVEL, viewModel.uiState.value.instruction)
-
+            assertFalse(viewModel.uiState.value.completed)
             engine.emit(snapshot())
-            assertEquals(ChallengeInstruction.HOLD_EXCAVATION_POSITION, viewModel.uiState.value.instruction)
-            clock.now = 1_500_000_000L
-            engine.emit(snapshot(timestampNanos = clock.now))
-            assertEquals(0.5, viewModel.uiState.value.holdProgress, 1e-9)
-
-            clock.now = 1_600_000_000L
-            engine.emit(snapshot(horizontal = false))
-            assertEquals(0.0, viewModel.uiState.value.holdProgress, 0.0)
-
-            clock.now = 2_000_000_000L
-            engine.emit(snapshot())
-            clock.now = 5_000_000_000L
-            engine.emit(snapshot(timestampNanos = clock.now))
             assertTrue(viewModel.uiState.value.completed)
+            assertEquals(0L, clock.now)
         }
     }
 
-    @Test fun southLawnPrioritisesTurnGuidanceThenRequiresStillFinalLock() {
+    @Test fun southLawnCompletesImmediatelyAfterTheFinalTurningStarLights() {
         withHarness(southConfig()) { viewModel, engine, clock ->
             viewModel.start()
-            engine.emit(snapshot())
+            engine.emit(snapshot(headingDegrees = 340.0, rotationStill = false))
             engine.emit(snapshot(headingDegrees = 340.0, rotationStill = false))
             assertEquals(ChallengeInstruction.TURN_RIGHT, viewModel.uiState.value.instruction)
-
             engine.emit(snapshot(rotationStill = false))
             assertEquals(ChallengeInstruction.HOLD_STILL, viewModel.uiState.value.instruction)
-            assertEquals(0.0, viewModel.uiState.value.holdProgress, 0.0)
-
-            clock.now = 1_000_000_000L
+            assertFalse(viewModel.uiState.value.completed)
             engine.emit(snapshot())
-            assertEquals(ChallengeInstruction.HOLD_VIEWING_ANGLE, viewModel.uiState.value.instruction)
-            clock.now = 1_600_000_000L
-            engine.emit(snapshot(timestampNanos = clock.now))
-            assertEquals(0.5, viewModel.uiState.value.holdProgress, 1e-9)
-            clock.now = 2_200_000_000L
-            engine.emit(snapshot(timestampNanos = clock.now))
             assertTrue(viewModel.uiState.value.completed)
+            assertEquals(0L, clock.now)
         }
     }
 
@@ -204,8 +229,8 @@ class TreasureChallengeViewModelTest {
 
             engine.emit(snapshot())
             engine.emit(snapshot())
-            assertEquals(0.0, viewModel.uiState.value.holdProgress, 0.0)
-            assertEquals(ChallengeInstruction.HOLD_EXCAVATION_POSITION, viewModel.uiState.value.instruction)
+            assertTrue(viewModel.uiState.value.completed)
+            assertEquals(ChallengeInstruction.COMPLETED, viewModel.uiState.value.instruction)
         }
     }
 
@@ -248,32 +273,22 @@ class TreasureChallengeViewModelTest {
         }
     }
 
-    @Test fun microphoneUnavailableCannotCompleteAndRestartResetsHold() {
+    @Test fun microphoneUnavailableCannotCompleteAndValidSoundFinishesImmediately() {
         withHarness(toneToolConfig()) { model, engine, clock ->
             model.start()
             engine.emit(snapshot())
             engine.emit(snapshot())
-            clock.now = 2_000_000_000L
-            engine.emit(snapshot())
             assertFalse(model.uiState.value.completed)
             model.restart()
             assertTrue(engine.isStarted)
+            engine.emit(snapshot())
+            engine.emit(snapshot())
             assertFalse(model.uiState.value.completed)
-            engine.emit(snapshot())
-            engine.emit(snapshot())
             val sound = com.comp90018.app.sensors.audio.SoundLevelOutput(
                 decibels = -20.0, validity = SensorValidity.VALID, timestampNanos = clock.now)
             engine.emit(snapshot().copy(sound = sound))
-            clock.now += 500_000_000L
-            engine.emit(snapshot().copy(sound = sound))
-            assertFalse(model.uiState.value.completed)
-            engine.emit(snapshot())
-            clock.now += 1_000_000_000L
-            engine.emit(snapshot().copy(sound = sound))
-            assertFalse(model.uiState.value.completed)
-            clock.now += 1_000_000_000L
-            engine.emit(snapshot().copy(sound = sound))
             assertTrue(model.uiState.value.completed)
+            assertEquals(0L, clock.now)
         }
     }
 
@@ -285,16 +300,24 @@ class TreasureChallengeViewModelTest {
 
     private inline fun withHarness(
         config: com.comp90018.app.contextengine.challenge.RelicChallengeConfig,
+        simulationMode: Boolean = false,
         block: (TreasureChallengeViewModel, FakeDeviceContextEngine, FakeClock) -> Unit,
     ) {
         val engine = FakeDeviceContextEngine()
         val clock = FakeClock()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val simulationEngine = engine
         val viewModel = TreasureChallengeViewModel(
             initialConfig = config,
             engineFactory = { engine },
             timeSource = clock,
             scopeOverride = scope,
+            simulationSession = if (simulationMode) object : ChallengeSimulationSession {
+                override val engine = simulationEngine
+                @androidx.compose.runtime.Composable
+                override fun Controls(state: TreasureChallengeUiState, onPhotoCaptured: (String) -> Unit,
+                    onCompleteWithDebugSnapshot: (DeviceContextSnapshot) -> Unit) = Unit
+            } else null,
         )
         try {
             block(viewModel, engine, clock)
@@ -359,6 +382,7 @@ class TreasureChallengeViewModelTest {
                 timestampNanos = timestampNanos,
             ),
             rotation = RotationOutput(
+                angularVelocityMagnitude = if (rotationStill) .05 else .8,
                 classification = if (rotationStill) RotationState.STILL else RotationState.ROTATING,
                 validity = SensorValidity.VALID,
                 timestampNanos = timestampNanos,
@@ -371,11 +395,13 @@ class TreasureChallengeViewModelTest {
         ),
         motionStability = MotionStabilityOutput(
             motion = MotionOutput(
+                smoothedMagnitude = if (stationary) .05 else 1.5,
                 classification = if (stationary) MotionState.STATIONARY else MotionState.MOVING,
                 validity = SensorValidity.VALID,
                 timestampNanos = timestampNanos,
             ),
             stability = StabilityOutput(
+                variation = if (stable) .03 else .5,
                 classification = if (stable) StabilityState.STABLE else StabilityState.UNSTABLE,
                 validity = SensorValidity.VALID,
                 timestampNanos = timestampNanos,

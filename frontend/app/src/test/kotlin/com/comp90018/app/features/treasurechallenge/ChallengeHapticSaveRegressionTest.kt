@@ -5,7 +5,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChallengeHapticSaveRegressionTest {
-    @Test fun photoChallengeCompletionWaitsForSaveAndFailedRetryBeforeRevealAndHaptic() {
+    @Test fun taskCompletionRevealsAndVibratesBeforeSaveAndRetryNeverRepeatsFeedback() {
         val events = mutableListOf<TreasureHapticEvent>()
         val controller = TreasureHapticController(events::add).apply { enabled = true; foreground = true }
         val discovery = ChallengeDiscoverySave()
@@ -14,17 +14,22 @@ class ChallengeHapticSaveRegressionTest {
             TreasureHapticSave.collect("system_garden_glasshouse", false, controller,
                 { _, result -> callback = result }, done)
         }
-        discovery.onChallengeCompleted(save)
-        assertTrue(events.isEmpty())
-        assertFalse(canOpenTreasureReveal(true, discovery.status))
+        var reveals = 0
+        val ready = { reveals++; controller.challengeCompleted("system_garden_glasshouse", "task-1") }
+        discovery.onChallengeCompleted(save, ready)
+        discovery.onChallengeCompleted(save, ready)
+        assertEquals(1, reveals)
+        assertEquals(listOf(TreasureHapticEvent.Unlocked("system_garden_glasshouse")), events)
+        assertTrue(canOpenTreasureReveal(true))
         requireNotNull(callback)("offline")
-        assertTrue(events.isEmpty())
-        assertFalse(canOpenTreasureReveal(true, discovery.status))
+        assertEquals(1, events.size)
+        assertTrue(canOpenTreasureReveal(true))
         discovery.retry(save)
-        assertTrue(events.isEmpty())
+        assertEquals(1, events.size)
         requireNotNull(callback)(null)
         requireNotNull(callback)(null)
         assertEquals(listOf(TreasureHapticEvent.Unlocked("system_garden_glasshouse")), events)
-        assertTrue(canOpenTreasureReveal(true, discovery.status))
+        assertEquals(1, reveals)
+        assertTrue(canOpenTreasureReveal(true))
     }
 }

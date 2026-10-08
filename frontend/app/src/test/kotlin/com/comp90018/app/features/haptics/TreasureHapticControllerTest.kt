@@ -27,4 +27,27 @@ class TreasureHapticControllerTest {
         controller.nearby("a", 1.0)
         assertEquals(listOf(TreasureHapticEvent.Nearby("a")), events)
     }
+
+    @Test fun taskCompletionVibratesOncePerAttemptAndSuppressesTheLaterCollectionBuzz() {
+        controller.challengeCompleted("a", "task-1")
+        controller.challengeCompleted("a", "task-1")
+        controller.discoverySaved("a", null)
+        assertEquals(listOf(TreasureHapticEvent.Unlocked("a")), events)
+        controller.challengeCompleted("a", "task-2")
+        assertEquals(2, events.size)
+    }
+
+    @Test fun completedTasksRespectDisabledBackgroundAndEndedSessions() {
+        controller.enabled = false
+        controller.challengeCompleted("a", "disabled")
+        controller.enabled = true
+        controller.challengeCompleted("a", "disabled")
+        controller.foreground = false
+        controller.challengeCompleted("b", "background")
+        controller.foreground = true
+        controller.challengeCompleted("b", "background")
+        controller.endSession()
+        controller.challengeCompleted("c", "ended")
+        assertTrue(events.isEmpty())
+    }
 }

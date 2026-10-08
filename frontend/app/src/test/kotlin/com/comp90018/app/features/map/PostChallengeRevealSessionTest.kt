@@ -48,9 +48,9 @@ class PostChallengeRevealSessionTest {
         val relic = relic("union_lawn_lost_lake", "The Lost Lake Photograph", "Union Lawn", "treasure_postcard",
             RelicChallengeType.UNION_LAWN_PHOTO)
         val coordinator = PostChallengeRevealCoordinator()
-        coordinator.openAfterSave(relic, "content://local/first-photo")
+        coordinator.openOnCompletion(relic, "content://local/first-photo")
         val original = coordinator.session
-        coordinator.openAfterSave(relic, "content://local/duplicate-photo")
+        coordinator.openOnCompletion(relic, "content://local/duplicate-photo")
         assertTrue(original === coordinator.session)
         assertEquals("content://local/first-photo", coordinator.session?.capturedPhotoUri)
         coordinator.session?.continueToTreasure()

@@ -24,11 +24,11 @@ class TreasureChallengeUiTest {
                 )
             }
         }
-        rule.onNodeWithText("○ Valid GPS within this treasure's radius").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("In range").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Frame the lost glasshouse").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Enable microphone", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Take photo", substring = true).assertDoesNotExist()
-        rule.onNodeWithText("Phone horizontal", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Phone level", substring = true).assertDoesNotExist()
     }
 
     @Test fun audioShowsSoundConditionWithoutCameraOrCompassControls() {
@@ -43,9 +43,9 @@ class TreasureChallengeUiTest {
                 )
             }
         }
-        rule.onNodeWithText("○ Sound above threshold").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Sound detected").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Bring the melody to life").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Take photo", substring = true).assertDoesNotExist()
-        rule.onNodeWithText("Compass direction aligned", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Direction aligned", substring = true).assertDoesNotExist()
     }
 }

@@ -7,6 +7,21 @@ import org.junit.Test
 
 class MapDiscoveryLogicTest {
     @Test
+    fun replayRequiresValidPreciseLocationWithinTreasureRadius() {
+        val valid = com.comp90018.app.sensors.SensorValidity.VALID
+        assertTrue(canReplayTreasure(10.0, valid, true))
+        assertFalse(canReplayTreasure(10.1, valid, true))
+        assertTrue(canReplayTreasure(14.0, valid, true, 15.0))
+        assertFalse(canReplayTreasure(null, valid, true))
+        assertFalse(canReplayTreasure(Double.NaN, valid, true))
+        assertFalse(canReplayTreasure(-1.0, valid, true))
+        assertFalse(canReplayTreasure(0.0, valid, false))
+        for (invalid in com.comp90018.app.sensors.SensorValidity.entries.filter { it != valid }) {
+            assertFalse(canReplayTreasure(0.0, invalid, true))
+        }
+    }
+
+    @Test
     fun overviewShowsEveryTreasureEvenWhenUserIsOutsideCampus() {
         val outsideCampus = com.comp90018.app.sensors.location.GeoCoordinate(37.422, -122.084)
         val relics = listOf(

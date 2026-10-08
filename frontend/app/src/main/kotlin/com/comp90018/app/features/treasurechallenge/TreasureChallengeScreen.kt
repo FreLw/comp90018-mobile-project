@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CameraAlt
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,14 +29,22 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
 import com.comp90018.app.GothicTreasureFontFamily
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,8 +54,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,14 +68,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.comp90018.app.contextengine.challenge.ChallengeCondition
-import com.comp90018.app.contextengine.challenge.ChallengeInstruction
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.BuildConfig
 import com.comp90018.app.sensors.camera.CameraXCapture
-import java.util.Locale
-import kotlin.math.abs
 
 @Composable
 fun TreasureChallengeRoute(
@@ -76,31 +82,36 @@ fun TreasureChallengeRoute(
     debugSimulationEnabled: Boolean = false,
     challengeSessionId: String = "",
     onChallengeCompleted: ((String?) -> Unit) -> Unit,
-    onDiscoverySaved: (String?) -> Unit,
+    onDiscoveryReady: (String?, ChallengeDiscoverySave) -> Unit,
     onBack: () -> Unit,
+    onChallengeSatisfied: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var testPanelEnabled by remember(config.challengeId, challengeSessionId) {
         mutableStateOf(BuildConfig.DEBUG && debugSimulationEnabled)
     }
-    val simulation = remember(config.challengeId, challengeSessionId, testPanelEnabled) {
-        if (testPanelEnabled) ChallengeSimulationFactory.create(config) else null
-    }
     val viewModel: TreasureChallengeViewModel = viewModel(
         key = "treasure_challenge_${config.challengeId}_${preciseLocationEnabled}_${testPanelEnabled}_$challengeSessionId",
         factory = TreasureChallengeViewModel.factory(context, config, preciseLocationEnabled,
-            simulation?.let { session -> { _: kotlinx.coroutines.CoroutineScope -> session.engine } }),
+            simulationFactory = if (testPanelEnabled) { { ChallengeSimulationFactory.create(config) } } else null),
     )
+    // The retained ViewModel owns the simulator and engine across reopening and rotation.
+    val simulation = viewModel.simulationSession
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val discoverySave = remember(config.challengeId, challengeSessionId) { ChallengeDiscoverySave() }
+    val discoverySave = viewModel.discoverySave
 
     LaunchedEffect(config.challengeId, state.completed) {
-        if (state.completed) discoverySave.onChallengeCompleted(onChallengeCompleted)
-    }
-    LaunchedEffect(config.challengeId, state.completed, discoverySave.status) {
-        if (canOpenTreasureReveal(state.completed, discoverySave.status)) {
-            onDiscoverySaved(state.capturedPhotoUri)
+        if (canOpenTreasureReveal(state.completed)) {
+            if (discoverySave.status == DiscoverySaveStatus.WAITING) {
+                discoverySave.onChallengeCompleted(onChallengeCompleted) {
+                    onChallengeSatisfied(viewModel.completionId)
+                    onDiscoveryReady(state.capturedPhotoUri, discoverySave)
+                }
+            } else {
+                // Re-entering a retained completed task restores its page without repeating save or feedback.
+                onDiscoveryReady(state.capturedPhotoUri, discoverySave)
+            }
         }
     }
 
@@ -128,8 +139,9 @@ fun TreasureChallengeRoute(
         simulation = simulation,
         testPanelToggle = if (BuildConfig.DEBUG && !state.completed) {
             {
-                Button(onClick = { testPanelEnabled = !testPanelEnabled }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (testPanelEnabled) "Test ON · Use phone sensors" else "Test · Simulate sensors", style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = { testPanelEnabled = !testPanelEnabled },
+                    colors = ButtonDefaults.textButtonColors(contentColor = if (testPanelEnabled) QuestGold else QuestStone)) {
+                    Text(if (testPanelEnabled) "TEST •" else "TEST", fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }
         } else null,
@@ -170,118 +182,90 @@ fun TreasureChallengeScreen(
     onCompleteWithDebugSnapshot: (com.comp90018.app.contextengine.DeviceContextSnapshot) -> Unit = {},
     testPanelToggle: (@Composable () -> Unit)? = null,
 ) {
-    Scaffold(
-        containerColor = Color(0xFF142D25),
-        contentColor = Color(0xFFFFE6B1),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to map")
-                }
-                Text(state.title, fontFamily = GothicTreasureFontFamily,
-                    style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            }
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            QuestBackdrop(state, Modifier.fillMaxSize())
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (testPanelToggle != null || (simulation != null && !state.completed)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        testPanelToggle?.invoke()
-                        if (simulation != null && !state.completed) {
-                            simulation.Controls(
-                                state = state,
-                                onPhotoCaptured = onPhotoCaptured,
-                                onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
-                            )
-                        }
+    var emblemCenterInRoot by remember(state.challengeId) { mutableStateOf<Offset?>(null) }
+    var backdropTopLeftInRoot by remember(state.challengeId) { mutableStateOf(Offset.Zero) }
+    val fullscreenWater = state.challengeType == RelicChallengeType.WILSON_HALL_OBSERVATION
+    Box(Modifier.fillMaxSize().testTag("quest_screen").onGloballyPositioned { coordinates ->
+        if (fullscreenWater) backdropTopLeftInRoot = coordinates.localToRoot(Offset.Zero)
+    }) {
+        if (fullscreenWater) {
+            QuestBackdrop(state, Modifier.fillMaxSize(),
+                emblemCenter = emblemCenterInRoot?.minus(backdropTopLeftInRoot))
+        }
+        Scaffold(
+            containerColor = if (fullscreenWater) Color.Transparent else Color(0xFF142D25),
+            contentColor = Color(0xFFFFE6B1),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to map",
+                            modifier = Modifier.size(20.dp), tint = QuestParchment.copy(alpha = .75f))
                     }
+                    Spacer(Modifier.weight(1f))
+                    testPanelToggle?.invoke()
                 }
-                ChallengeExperience(state)
-                ChallengeStatusCard(state)
-                LinearProgressIndicator(
-                    progress = { state.holdProgress.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
-                    (state.actionReady || state.capturedPhotoUri != null)
+            },
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding).onGloballyPositioned { coordinates ->
+                if (!fullscreenWater) backdropTopLeftInRoot = coordinates.localToRoot(Offset.Zero)
+            }) {
+                if (!fullscreenWater) {
+                    QuestBackdrop(state, Modifier.fillMaxSize(),
+                        emblemCenter = emblemCenterInRoot?.minus(backdropTopLeftInRoot))
+                }
+                Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    UnionPhotoPanel(
-                        state = state,
-                        onPhotoCaptureStarted = onPhotoCaptureStarted,
-                        onPhotoCaptured = onPhotoCaptured,
-                        onCameraError = onCameraError,
-                    )
-                }
-                if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed) {
-                    MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
-                }
-                if (debugCalibrationInfo != null) {
-                    var showDiagnostics by remember { mutableStateOf(false) }
-                    androidx.compose.material3.TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
-                        Text(if (showDiagnostics) "Hide diagnostics" else "Developer diagnostics")
+                    AnimatedVisibility(visible = simulation != null && !state.completed,
+                        enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                        simulation?.Controls(
+                            state = state,
+                            onPhotoCaptured = onPhotoCaptured,
+                            onCompleteWithDebugSnapshot = onCompleteWithDebugSnapshot,
+                        )
                     }
-                    if (showDiagnostics) debugCalibrationInfo.invoke()
-                }
-                if (state.completed) {
-                    when (saveStatus) {
-                        DiscoverySaveStatus.WAITING, DiscoverySaveStatus.SAVING -> {
-                            CircularProgressIndicator()
-                            Text("Saving discovery…")
+                    ChallengeExperience(state, onEmblemCenterChanged = { emblemCenterInRoot = it })
+                    ChallengeStatusCard(state)
+                    if (state.cameraState != ChallengeCameraState.NOT_REQUIRED &&
+                        (state.actionReady || state.capturedPhotoUri != null)
+                    ) {
+                        UnionPhotoPanel(
+                            state = state,
+                            onPhotoCaptureStarted = onPhotoCaptureStarted,
+                            onPhotoCaptured = onPhotoCaptured,
+                            onCameraError = onCameraError,
+                        )
+                    }
+                    if (state.challengeType == RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL && !state.completed && simulation == null) {
+                        MicrophonePermissionPanel(onPermissionGranted = onMicPermissionGranted)
+                    }
+                    if (debugCalibrationInfo != null && simulation != null) {
+                        var showDiagnostics by remember { mutableStateOf(false) }
+                        androidx.compose.material3.TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
+                            Text(if (showDiagnostics) "Hide diagnostics" else "Developer diagnostics")
                         }
-                        DiscoverySaveStatus.SAVED -> Text("Discovery saved to your collection")
-                        DiscoverySaveStatus.FAILED -> {
-                            Text("Couldn't save discovery: ${saveError ?: "Please try again."}",
-                                color = MaterialTheme.colorScheme.error)
-                            Button(onClick = onRetrySave, modifier = Modifier.fillMaxWidth()) {
-                                Text("Retry Save")
+                        if (showDiagnostics) debugCalibrationInfo.invoke()
+                    }
+                    if (state.completed) {
+                        when (saveStatus) {
+                            DiscoverySaveStatus.WAITING, DiscoverySaveStatus.SAVING -> {
+                                CircularProgressIndicator()
+                                Text("Saving discovery…")
+                            }
+                            DiscoverySaveStatus.SAVED -> Text("Discovery saved to your collection")
+                            DiscoverySaveStatus.FAILED -> {
+                                Text("Couldn't save discovery: ${saveError ?: "Please try again."}",
+                                    color = MaterialTheme.colorScheme.error)
+                                Button(onClick = onRetrySave, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Retry Save")
+                                }
                             }
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChallengeStatusCard(state: TreasureChallengeUiState) {
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(),
-        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xCC203C30), contentColor = Color(0xFFFFE6B1))) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (state.completed) {
-                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Text(state.instructionText, style = MaterialTheme.typography.titleMedium, fontFamily = GothicTreasureFontFamily)
-            state.conditionStates.forEach { condition ->
-                Text("${if (condition.satisfied) "✓" else "○"} ${condition.condition.displayLabel()}",
-                    style = MaterialTheme.typography.bodyMedium)
-            }
-            if (state.instruction == ChallengeInstruction.TURN_LEFT ||
-                state.instruction == ChallengeInstruction.TURN_RIGHT
-            ) {
-                state.angularErrorDegrees?.let {
-                    Text(
-                        String.format(Locale.US, "%.0f° remaining", abs(it)),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
-            }
-            if (!state.completed && state.holdProgress > 0.0) {
-                Text(
-                    String.format(Locale.US, "%.0f%%", state.holdProgress * 100.0),
-                    style = MaterialTheme.typography.labelLarge,
-                )
             }
         }
     }
@@ -301,7 +285,10 @@ private fun MicrophonePermissionPanel(onPermissionGranted: () -> Unit) {
 
     if (hasMicPermission) return
 
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = Color(0xFF1B3A2F), contentColor = QuestParchment),
+        border = androidx.compose.foundation.BorderStroke(.7.dp, QuestGold.copy(alpha = .25f))) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -367,7 +354,10 @@ private fun UnionPhotoPanel(
         onDispose { cameraCapture.unbind() }
     }
 
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = Color(0xFF1B3A2F), contentColor = QuestParchment),
+        border = androidx.compose.foundation.BorderStroke(.7.dp, QuestGold.copy(alpha = .25f))) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AndroidView(
                 factory = { previewView },
@@ -402,7 +392,10 @@ private fun UnionPhotoPanel(
 private fun CapturedPhotoReveal(
     capturedPhotoUri: String,
 ) {
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = Color(0xFF1B3A2F), contentColor = QuestParchment),
+        border = androidx.compose.foundation.BorderStroke(.7.dp, QuestGold.copy(alpha = .25f))) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
                 AndroidView(
@@ -422,19 +415,9 @@ private fun CapturedPhotoReveal(
 
 internal fun RelicChallengeType.taskInstructions(): String = when (this) {
     RelicChallengeType.UNION_LAWN_PHOTO -> "Find the lost lake site, align with the configured compass direction, then take a photograph."
-    RelicChallengeType.WILSON_HALL_OBSERVATION -> "Observe the stone rosette from the configured direction. Keep your device steady without rotating for 3 seconds."
-    RelicChallengeType.OLD_QUAD_EXCAVATION -> "Excavate the fossil by holding your phone horizontal, stationary and stable for 3 seconds."
-    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "View the Atlas sculpture from the configured direction and hold steady until the angle locks."
+    RelicChallengeType.WILSON_HALL_OBSERVATION -> "Approach the rosette: water and floating stars turn to gold across the whole field. Guide the needle towards the star to awaken a spreading ripple. Four petals glow when you stop turning; the other four glow when movement and shake are still. Light all four stars to reveal the relic immediately."
+    RelicChallengeType.OLD_QUAD_EXCAVATION -> "Excavate the fossil by holding your phone horizontal, stationary and stable. Light every star to reveal the relic immediately."
+    RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "Approach Atlas and watch the vines turn to gold, from crown to root. Find the viewing direction, then remain perfectly still. Movement and shake share one stillness star; the orbit settles only when your phone stops turning. Light all four stars to reveal the relic immediately."
     RelicChallengeType.SYSTEM_GARDEN_GLASSHOUSE -> "Find the lost glasshouse site and take a photograph. No phone leveling or compass alignment is needed."
-    RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> "At the museum, enable the microphone and sustain sound above the configured threshold until the progress bar fills."
-}
-
-private fun ChallengeCondition.displayLabel(): String = when (this) {
-    ChallengeCondition.LOCATION_INSIDE -> "Valid GPS within this treasure's radius"
-    ChallengeCondition.PHONE_HORIZONTAL -> "Phone horizontal"
-    ChallengeCondition.HEADING_ALIGNED -> "Compass direction aligned"
-    ChallengeCondition.STATIONARY -> "Stationary"
-    ChallengeCondition.STABLE -> "Device stable"
-    ChallengeCondition.ROTATION_STILL -> "No rotation"
-    ChallengeCondition.SOUND_DETECTED -> "Sound above threshold"
+    RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> "At the museum, enable the microphone and make a sound above the configured threshold. Light both stars to reveal the relic immediately."
 }
