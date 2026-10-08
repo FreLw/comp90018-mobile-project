@@ -250,6 +250,8 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                             ?: complete("No active team hunt")
                     },
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
+                    onDebugUnlockHuntFragments = activeRoomHuntViewModel?.let { it::debugUnlockHuntFragments }
+                        ?: { _, complete -> complete("No active team hunt") },
                     onClaimCompletedHuntTreasure = { attempt, complete ->
                         activeRoomHuntViewModel?.let { model ->
                             hapticSession.teamClaims.claim(model, user.uid, attempt, complete)

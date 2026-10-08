@@ -221,6 +221,7 @@ fun MapScreen(
     huntMemberNames: Map<String, String> = emptyMap(),
     onCompleteActiveHuntTask: ((String?) -> Unit) -> Unit = { complete -> complete("No active team hunt") },
     onFindActiveHuntFragment: (String) -> Unit = {},
+    onDebugUnlockHuntFragments: (List<String>, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     requestedTreasureId: String? = null,
     onTreasureRequestConsumed: () -> Unit = {},
@@ -230,6 +231,8 @@ fun MapScreen(
     val context = LocalContext.current
     val teamHuntTarget = activeHuntTreasureId?.let { id -> treasures.firstOrNull { it.id == id } }
     val teamHuntActive = teamHuntTarget != null && activeHuntOwnerId != null
+    val fragmentHuntConfig = teamHuntTarget?.fragmentHuntConfig
+    val huntFragments = fragmentHuntConfig?.fragments.orEmpty()
     val teamHuntIsOwner = activeHuntOwnerId == currentUserId
     val teamHuntAllCompleted = teamHuntActive && activeHuntMemberIds.size in 2..4 &&
         activeHuntMemberIds.all { it in activeHuntCompletedMemberIds }
@@ -237,7 +240,7 @@ fun MapScreen(
         teamHuntActive, activeHuntMemberIds, activeHuntCompletedMemberIds,
         activeHuntClaimedMemberIds, currentUserId,
     ) && (teamHuntTarget?.id != SOUTH_LAWN_ATLAS_ID ||
-        SouthLawnFragments.all { it.id in activeHuntFoundFragmentIds })
+        (fragmentHuntConfig != null && huntFragments.all { it.id in activeHuntFoundFragmentIds }))
     val teamHuntAlreadyClaimed = teamHuntActive && currentUserId in activeHuntClaimedMemberIds
     val teamHuntTaskPendingForCurrentUser = TeamHuntTaskEligibility.isPendingFor(
         huntActive = teamHuntActive,
@@ -246,7 +249,7 @@ fun MapScreen(
         currentUserId = currentUserId,
     )
     val isSouthLawnFragmentHunt = teamHuntActive && teamHuntTarget.id == SOUTH_LAWN_ATLAS_ID &&
-        SouthLawnFragments.any { it.id !in activeHuntFoundFragmentIds }
+        (fragmentHuntConfig == null || huntFragments.any { it.id !in activeHuntFoundFragmentIds })
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
     var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
@@ -256,6 +259,8 @@ fun MapScreen(
     var challengeRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var compassRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var huntRevealRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
+    // A successful final claim can end the room session while this animation is running.
+    var atlasAssemblyRelic by remember(currentUserId) { mutableStateOf<MapRelic?>(null) }
     var huntStoryVisible by remember(activeHuntSessionId) { mutableStateOf(false) }
     var memberQuizRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var perspective by remember { mutableStateOf(MapPerspective.GOD) }
@@ -302,7 +307,10 @@ fun MapScreen(
     fun openHunt(relic: MapRelic, simulateChallenge: Boolean = false) {
         debugSimulationEnabled = simulateChallenge
         when (huntEntry(teamHuntActive, teamHuntTaskPendingForCurrentUser, teamHuntIsOwner, teamHuntCanClaim)) {
-            HuntEntry.CLAIM -> detailRelic = relic
+            HuntEntry.CLAIM -> {
+                if (relic.id == SOUTH_LAWN_ATLAS_ID) atlasAssemblyRelic = relic
+                else detailRelic = relic
+            }
             HuntEntry.WAITING -> selectedRelic = relic
             HuntEntry.MEMBER_QUIZ -> memberQuizRelic = relic
             HuntEntry.COMPASS -> compassRelic = relic
@@ -462,6 +470,25 @@ fun MapScreen(
         }
     }
 
+    atlasAssemblyRelic?.let { relic ->
+        SouthLawnAssemblyScreen(
+            onClaim = { complete ->
+                TreasureHapticSave.collectTeam(
+                    relic.id, hapticController, onCollectTreasure, onClaimCompletedHuntTreasure, complete,
+                )
+            },
+            onContinue = {
+                atlasAssemblyRelic = null
+                huntRevealRelic = relic
+                huntStoryVisible = false
+                selectedRelic = null
+                detailRelic = null
+            },
+            onBack = { atlasAssemblyRelic = null; selectedRelic = null; detailRelic = null },
+        )
+        return
+    }
+
     // South Lawn replaces the original viewing-angle challenge with a shared four-fragment
     // search. This branch happens after the common state/effect setup so the Compose call order
     // remains stable as a room starts or ends a hunt.
@@ -470,17 +497,19 @@ fun MapScreen(
             teammateLocations = teammateLocations,
             huntMemberNames = huntMemberNames,
             huntOwnerId = activeHuntOwnerId,
-            fragments = SouthLawnFragments,
+            fragments = huntFragments,
+            collectionRadiusMeters = fragmentHuntConfig?.collectionRadiusMeters,
             foundFragmentIds = activeHuntFoundFragmentIds,
             userLocation = userLocation,
             deviceHeading = deviceHeading,
             onFindFragment = onFindActiveHuntFragment,
+            onDebugUnlockFragments = onDebugUnlockHuntFragments,
         )
         return
     }
 
     if (teamHuntActive && teamHuntTarget.id == SOUTH_LAWN_ATLAS_ID &&
-        currentUserId in activeHuntClaimedMemberIds
+        currentUserId in activeHuntClaimedMemberIds && huntRevealRelic == null
     ) {
         SouthLawnClaimWaitingScreen(
             teammateLocations = teammateLocations,
@@ -709,7 +738,7 @@ fun MapScreen(
             confirmButton = {
                 Button(onClick = {
                     showTeamHuntClaimPrompt = false
-                    detailRelic = teamHuntTarget
+                    teamHuntTarget?.let { openHunt(it) }
                 }) { Text("Claim treasure") }
             },
             dismissButton = {
@@ -1146,22 +1175,26 @@ private fun SouthLawnFragmentHuntScreen(
     huntMemberNames: Map<String, String>,
     huntOwnerId: String?,
     fragments: List<TeamHuntFragment>,
+    collectionRadiusMeters: Double?,
     foundFragmentIds: List<String>,
     userLocation: LocationOutput,
     deviceHeading: Float,
     onFindFragment: (String) -> Unit,
+    onDebugUnlockFragments: (List<String>, (String?) -> Unit) -> Unit,
 ) {
     var selectedFragmentId by remember { mutableStateOf<String?>(null) }
+    var debugUnlocking by remember { mutableStateOf(false) }
+    var debugUnlockError by remember { mutableStateOf<String?>(null) }
     val selectedFragment = fragments.firstOrNull { it.id == selectedFragmentId }
     val currentLocation = LocationActionPolicy.actionableCoordinate(userLocation)
     val selectedDistance = selectedFragment?.let { fragment ->
         currentLocation?.let { LocationCalculator.distanceMeters(it, fragment.coordinate) }
     }
-    val canCollect = selectedFragment?.let { fragment ->
+    val canCollect = collectionRadiusMeters != null && selectedFragment?.let { fragment ->
         LocationActionPolicy.isWithinRadius(
             location = userLocation,
             target = fragment.coordinate,
-            radiusMeters = SOUTH_LAWN_FRAGMENT_RADIUS_METERS,
+            radiusMeters = collectionRadiusMeters,
         )
     } == true
 
@@ -1190,7 +1223,11 @@ private fun SouthLawnFragmentHuntScreen(
         ) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("South Lawn Atlas fragments", color = Ink, fontWeight = FontWeight.Bold)
-                Text("${foundFragmentIds.size.coerceAtMost(fragments.size)}/${fragments.size} fragments found", color = Brand)
+                if (collectionRadiusMeters == null) {
+                    Text("Fragment hunt unavailable. Check the treasure configuration in Firebase.", color = Muted)
+                } else {
+                    Text("${fragments.count { it.id in foundFragmentIds }}/${fragments.size} fragments found", color = Brand)
+                }
                 fragments.forEach { fragment ->
                     val found = fragment.id in foundFragmentIds
                     Text(
@@ -1198,6 +1235,22 @@ private fun SouthLawnFragmentHuntScreen(
                         color = if (found) Brand else Muted,
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+                if (BuildConfig.DEBUG) {
+                    Button(
+                        onClick = {
+                            debugUnlocking = true
+                            debugUnlockError = null
+                            onDebugUnlockFragments(fragments.map { it.id }) { error ->
+                                debugUnlocking = false
+                                debugUnlockError = error
+                            }
+                        },
+                        enabled = collectionRadiusMeters != null && !debugUnlocking,
+                    ) {
+                        Text(if (debugUnlocking) "Unlocking fragments…" else "Debug: Unlock all 4 fragments")
+                    }
+                    debugUnlockError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -1214,10 +1267,10 @@ private fun SouthLawnFragmentHuntScreen(
                     Text(selectedDistance.formatDistance() + " away", color = Muted)
                     Button(
                         onClick = { onFindFragment(fragment.id); selectedFragmentId = null },
-                        enabled = canCollect,
+                        enabled = canCollect && !debugUnlocking,
                         colors = ButtonDefaults.buttonColors(containerColor = Brand),
                     ) { Text("Collect fragment") }
-                    if (!canCollect) Text("Move within 8 m to collect this fragment.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    if (!canCollect) Text("Move within $collectionRadiusMeters m to collect this fragment.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -3080,34 +3133,93 @@ private fun renderHuntFragments(
                 .position(fragment.coordinate.toLatLng())
                 .title(fragment.title)
                 .snippet(if (found) "Found" else "Not found")
-                .icon(fragmentMarkerIcon(context, found))
-                .anchor(0.5f, 0.5f)
-                .alpha(if (found) 0.42f else 1f),
+                .icon(fragmentMarkerIcon(context, fragment.id, found))
+                .anchor(0.5f, 0.5f),
         )?.tag = "fragment:${fragment.id}"
     }
 }
 
-private fun fragmentMarkerIcon(context: Context, found: Boolean): BitmapDescriptor {
-    val size = (38f * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+private val fragmentArtworkBounds = android.util.LruCache<Int, android.graphics.Rect>(4)
+
+private fun fragmentMarkerIcon(context: Context, fragmentId: String, found: Boolean): BitmapDescriptor {
+    val artworkRes = when (fragmentId) {
+        "south_lawn_north_west" -> R.drawable.treasure_atlas_fragment_north_west
+        "south_lawn_north_east" -> R.drawable.treasure_atlas_fragment_north_east
+        "south_lawn_south_west" -> R.drawable.treasure_atlas_fragment_south_west
+        "south_lawn_south_east" -> R.drawable.treasure_atlas_fragment_south_east
+        else -> R.drawable.treasure_unknown
+    }
+    val artwork = treasureMarkerArtwork.get(artworkRes) ?: BitmapFactory.decodeResource(context.resources, artworkRes).also {
+        treasureMarkerArtwork.put(artworkRes, it)
+    }
+    val artworkBounds = fragmentArtworkBounds.get(artworkRes) ?: run {
+        val pixels = IntArray(artwork.width * artwork.height)
+        artwork.getPixels(pixels, 0, artwork.width, 0, 0, artwork.width, artwork.height)
+        var left = artwork.width
+        var top = artwork.height
+        var right = -1
+        var bottom = -1
+        for (y in 0 until artwork.height) {
+            for (x in 0 until artwork.width) {
+                // Near-transparent stray pixels in the south-west crop sit far outside
+                // the visible artwork and must not shift its apparent centre.
+                if (android.graphics.Color.alpha(pixels[y * artwork.width + x]) > 8) {
+                    left = minOf(left, x)
+                    top = minOf(top, y)
+                    right = maxOf(right, x)
+                    bottom = maxOf(bottom, y)
+                }
+            }
+        }
+        val bounds = if (right >= left && bottom >= top) {
+            android.graphics.Rect(left, top, right + 1, bottom + 1)
+        } else {
+            android.graphics.Rect(0, 0, artwork.width, artwork.height)
+        }
+        bounds.also { fragmentArtworkBounds.put(artworkRes, it) }
+    }
+    val density = context.resources.displayMetrics.density
+    val size = (56f * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (found) android.graphics.Color.rgb(102, 102, 102) else android.graphics.Color.rgb(102, 65, 175)
-    }
-    canvas.drawCircle(size / 2f, size / 2f, size * 0.43f, paint)
-    val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        strokeWidth = size * 0.08f
+    val center = size / 2f
+    val radius = size * 0.43f
+    // A softly shaded sphere keeps every fragment readable against the map.
+    canvas.drawCircle(center, center + size * 0.035f, radius + density, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(55, 45, 31, 19)
+    })
+    canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(
+            center - radius * 0.35f, center - radius * 0.4f, radius * 1.6f,
+            intArrayOf(
+                android.graphics.Color.rgb(255, 253, 245),
+                android.graphics.Color.rgb(244, 229, 202),
+                android.graphics.Color.rgb(193, 158, 105),
+            ),
+            floatArrayOf(0f, 0.65f, 1f), Shader.TileMode.CLAMP,
+        )
+    })
+    canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = if (found) android.graphics.Color.rgb(168, 112, 39) else android.graphics.Color.rgb(105, 87, 65)
         style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 1.5f * density
+    })
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        if (!found) colorFilter = PorterDuffColorFilter(android.graphics.Color.BLACK, PorterDuff.Mode.SRC_IN)
     }
-    if (found) {
-        canvas.drawLine(size * 0.27f, size * 0.51f, size * 0.44f, size * 0.67f, linePaint)
-        canvas.drawLine(size * 0.44f, size * 0.67f, size * 0.74f, size * 0.34f, linePaint)
-    } else {
-        canvas.drawLine(size * 0.31f, size * 0.36f, size * 0.69f, size * 0.64f, linePaint)
-        canvas.drawLine(size * 0.69f, size * 0.36f, size * 0.31f, size * 0.64f, linePaint)
-    }
+    val halfExtent = radius * 0.66f
+    val fit = halfExtent * 2f / maxOf(artworkBounds.width(), artworkBounds.height())
+    val halfWidth = artworkBounds.width() * fit / 2f
+    val halfHeight = artworkBounds.height() * fit / 2f
+    canvas.drawBitmap(artwork, artworkBounds, android.graphics.RectF(
+        center - halfWidth, center - halfHeight, center + halfWidth, center + halfHeight,
+    ), paint)
+    canvas.drawOval(android.graphics.RectF(
+        center - radius * 0.63f, center - radius * 0.78f,
+        center - radius * 0.08f, center - radius * 0.58f,
+    ), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(175, 255, 255, 255)
+    })
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 

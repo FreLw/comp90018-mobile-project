@@ -171,6 +171,15 @@
     {
       "documentId": "south_lawn_atlas",
       "data": {
+        "fragmentHunt": {
+          "collectionRadiusMeters": 8.0,
+          "fragments": [
+            { "id": "south_lawn_north_west", "title": "North-west fragment", "latitude": -37.798490, "longitude": 144.959940 },
+            { "id": "south_lawn_north_east", "title": "North-east fragment", "latitude": -37.798500, "longitude": 144.960570 },
+            { "id": "south_lawn_south_west", "title": "South-west fragment", "latitude": -37.798798087046684, "longitude": 144.95975336334854 },
+            { "id": "south_lawn_south_east", "title": "South-east fragment", "latitude": -37.798910, "longitude": 144.960530 }
+          ]
+        },
         "locationName": "South Lawn Car Park",
         "historicalImageCredit": "University of Melbourne; final image credit to be confirmed for the selected Atlas reference photograph.",
         "coordinateSource": "ESTIMATE: west-side arrival candidate from Google South Lawn/Baillieu place anchors plus official campus plan and west-Atlas description. Coordinate (-37.79868,144.95972) was estimated for the western pedestrian approach, NOT supplied by Google as an entrance POI. Exact portal, ground level and present access remain unverified.",
