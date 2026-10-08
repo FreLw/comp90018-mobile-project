@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import java.util.UUID
 
 fun interface MonotonicTimeSource {
     fun nowNanos(): Long
@@ -54,6 +55,9 @@ data class TreasureChallengeUiState(
     val active: Boolean = false,
     val latestSnapshot: DeviceContextSnapshot? = null,
     val conditionStates: List<ChallengeConditionState> = emptyList(),
+    val requiredHeadingDegrees: Double? = null,
+    val insideRadiusMeters: Double = 20.0,
+    val soundThresholdDecibels: Double? = null,
 )
 
 /**
@@ -65,11 +69,17 @@ class TreasureChallengeViewModel(
     engineFactory: (CoroutineScope) -> DeviceContextEngine,
     private val timeSource: MonotonicTimeSource,
     scopeOverride: CoroutineScope? = null,
+    val simulationSession: ChallengeSimulationSession? = null,
 ) : ViewModel() {
     private val collectionScope = scopeOverride ?: viewModelScope
     private val contextEngine = engineFactory(collectionScope)
-    private var config = initialConfig
-    private var evaluator = ChallengeRuleEvaluator(initialConfig)
+    // Catalogue hold times must not leave a task waiting after every visible star is satisfied.
+    private var config = initialConfig.copy(holdDurationNanos = 0L)
+    private var evaluator = ChallengeRuleEvaluator(config)
+    var completionId: String = UUID.randomUUID().toString()
+        private set
+    var discoverySave = ChallengeDiscoverySave()
+        private set
     private var collectionJob: Job? = null
     private var isActive = false
     private var photoOpportunityReady = false
@@ -115,8 +125,10 @@ class TreasureChallengeViewModel(
     fun activateChallenge(newConfig: RelicChallengeConfig) {
         val shouldStart = isActive
         stop()
-        config = newConfig
-        evaluator = ChallengeRuleEvaluator(newConfig)
+        config = newConfig.copy(holdDurationNanos = 0L)
+        evaluator = ChallengeRuleEvaluator(config)
+        discoverySave = ChallengeDiscoverySave()
+        completionId = UUID.randomUUID().toString()
         mutableUiState.value = initialUiState(newConfig)
         if (shouldStart) start()
     }
@@ -174,7 +186,7 @@ class TreasureChallengeViewModel(
 
     /**
      * Debug-only UI supplies a valid fake snapshot here.  Completion still uses the production
-     * evaluator: two distinct location readings are required, followed by the configured hold.
+     * evaluator: two distinct location readings and every required condition must pass.
      */
     fun completeWithDebugSnapshot(snapshot: DeviceContextSnapshot) {
         if (mutableUiState.value.completed) return
@@ -196,7 +208,15 @@ class TreasureChallengeViewModel(
         if (mutableUiState.value.completed) return
         // Once TAKE_PHOTO has legitimately been reached, preserve that opportunity through the
         // physical shutter interaction. Completion still comes only from the evaluator event.
-        if (photoOpportunityReady && config.photoActionRequired && !mutableUiState.value.completed) return
+        if (photoOpportunityReady && config.photoActionRequired && !mutableUiState.value.completed) {
+            // Keep the live illustration responsive while preserving the earned shutter opportunity.
+            mutableUiState.value = mutableUiState.value.copy(
+                latestSnapshot = snapshot,
+                angularErrorDegrees = snapshot.orientation.direction.angularErrorDegrees,
+            )
+            return
+        }
+        // TEST follows the same automatic completion path as live sensors.
         val progress = evaluator.evaluate(snapshot, timeSource.nowNanos())
         publish(progress, snapshot)
     }
@@ -245,19 +265,25 @@ class TreasureChallengeViewModel(
             config: RelicChallengeConfig,
             preciseLocationEnabled: Boolean = true,
             engineFactoryOverride: ((CoroutineScope) -> DeviceContextEngine)? = null,
+            simulationFactory: (() -> ChallengeSimulationSession?)? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = TreasureChallengeViewModel(
-                initialConfig = config,
-                engineFactory = engineFactoryOverride ?: { scope ->
-                    AndroidDeviceContextEngine(
-                        context = context.applicationContext,
-                        scope = scope,
-                        preciseLocationEnabled = preciseLocationEnabled,
-                    )
-                },
-                timeSource = MonotonicTimeSource(SystemClock::elapsedRealtimeNanos),
-            ) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val simulation = simulationFactory?.invoke()
+                return TreasureChallengeViewModel(
+                    initialConfig = config,
+                    engineFactory = simulation?.let { session -> { _: CoroutineScope -> session.engine } }
+                        ?: engineFactoryOverride ?: { scope ->
+                            AndroidDeviceContextEngine(
+                                context = context.applicationContext,
+                                scope = scope,
+                                preciseLocationEnabled = preciseLocationEnabled,
+                            )
+                        },
+                    timeSource = MonotonicTimeSource(SystemClock::elapsedRealtimeNanos),
+                    simulationSession = simulation,
+                ) as T
+            }
         }
     }
 }
@@ -267,6 +293,9 @@ private fun initialUiState(config: RelicChallengeConfig) = TreasureChallengeUiSt
     challengeType = config.type,
     title = config.type.title(),
     cameraState = if (config.photoActionRequired) ChallengeCameraState.LOCKED else ChallengeCameraState.NOT_REQUIRED,
+    requiredHeadingDegrees = config.requiredHeadingDegrees,
+    insideRadiusMeters = config.insideRadiusMeters,
+    soundThresholdDecibels = config.soundThresholdDecibels,
 )
 
 private fun RelicChallengeType.title(): String = when (this) {
@@ -278,14 +307,24 @@ private fun RelicChallengeType.title(): String = when (this) {
     RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> "Grainger Museum Tone-Tool"
 }
 
-private fun ChallengeInstruction.displayText(type: RelicChallengeType): String = when (this) {
+internal fun ChallengeInstruction.displayText(type: RelicChallengeType): String = when (this) {
     ChallengeInstruction.MOVE_CLOSER -> "Move closer"
     ChallengeInstruction.KEEP_PHONE_LEVEL -> "Keep your phone level"
     ChallengeInstruction.FIND_VIEWING_DIRECTION -> "Find the viewing direction"
     ChallengeInstruction.TURN_LEFT -> "Turn left"
     ChallengeInstruction.TURN_RIGHT -> "Turn right"
-    ChallengeInstruction.STOP_MOVING -> if (type == RelicChallengeType.OLD_QUAD_EXCAVATION) "Hold still" else "Stop moving"
-    ChallengeInstruction.HOLD_STILL -> if (type == RelicChallengeType.OLD_QUAD_EXCAVATION) "Hold still" else "Hold your phone steady"
+    ChallengeInstruction.STOP_MOVING -> when (type) {
+        RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "Remain perfectly still"
+        RelicChallengeType.WILSON_HALL_OBSERVATION -> "Remain perfectly still"
+        RelicChallengeType.OLD_QUAD_EXCAVATION -> "Hold still"
+        else -> "Stop moving"
+    }
+    ChallengeInstruction.HOLD_STILL -> when (type) {
+        RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE -> "Remain perfectly still"
+        RelicChallengeType.WILSON_HALL_OBSERVATION -> "Remain perfectly still"
+        RelicChallengeType.OLD_QUAD_EXCAVATION -> "Hold still"
+        else -> "Hold your phone steady"
+    }
     ChallengeInstruction.HOLD_ALIGNMENT -> "Hold this direction"
     ChallengeInstruction.HOLD_OBSERVATION -> "Keep observing"
     ChallengeInstruction.HOLD_EXCAVATION_POSITION -> "Excavating"

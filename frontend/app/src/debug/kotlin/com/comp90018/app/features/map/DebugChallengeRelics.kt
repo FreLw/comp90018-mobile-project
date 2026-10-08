@@ -14,32 +14,32 @@ internal fun debugChallengeRelics(): List<MapRelic> {
     return listOf(
         MapRelic(
             id = "union_lawn_lost_lake", name = "The Lost Lake Photograph", locationName = "Union Lawn",
-            coordinate = union, insideRadiusMeters = 25.0,
+            coordinate = union, insideRadiusMeters = 25.0, artworkKey = "treasure_postcard",
             challengeConfig = RelicChallengeConfigs.unionLawnPhoto("debug-union-lawn-photo", union, 25.0, 288.0),
         ),
         MapRelic(
             id = "wilson_hall_rosette", name = "Stone Rosette", locationName = "Wilson Hall",
-            coordinate = wilson, insideRadiusMeters = 20.0,
+            coordinate = wilson, insideRadiusMeters = 20.0, artworkKey = "treasure_rosette",
             challengeConfig = RelicChallengeConfigs.wilsonHallObservation("debug-wilson-hall-observation", wilson, 20.0, 197.0),
         ),
         MapRelic(
             id = "old_quad_fossil", name = "Ancient Fern Fossil", locationName = "Old Quad",
-            coordinate = quad, insideRadiusMeters = 18.0,
+            coordinate = quad, insideRadiusMeters = 18.0, artworkKey = "treasure_fern",
             challengeConfig = RelicChallengeConfigs.oldQuadExcavation("debug-old-quad-excavation", quad, 18.0),
         ),
         MapRelic(
             id = "south_lawn_atlas", name = "Atlas", locationName = "South Lawn",
-            coordinate = south, insideRadiusMeters = 15.0,
+            coordinate = south, insideRadiusMeters = 15.0, artworkKey = "treasure_atlas",
             challengeConfig = RelicChallengeConfigs.southLawnViewingAngle("debug-south-lawn-viewing-angle", south, 15.0, 88.0),
         ),
         MapRelic(
             id = "system_garden_glasshouse", name = "The Lost Glasshouse", locationName = "System Garden",
-            coordinate = garden, insideRadiusMeters = 22.0,
+            coordinate = garden, insideRadiusMeters = 22.0, artworkKey = "treasure_glasshouse",
             challengeConfig = RelicChallengeConfigs.systemGardenGlasshouse("debug-system-garden-glasshouse", garden, 22.0),
         ),
         MapRelic(
             id = "grainger_tone_tool", name = "Engraved Tone Tool", locationName = "Grainger Museum",
-            coordinate = grainger, insideRadiusMeters = 18.0,
+            coordinate = grainger, insideRadiusMeters = 18.0, artworkKey = "treasure_press",
             challengeConfig = RelicChallengeConfigs.graingerMuseumToneTool("debug-grainger-museum-tone-tool", grainger, 18.0),
         ),
     )

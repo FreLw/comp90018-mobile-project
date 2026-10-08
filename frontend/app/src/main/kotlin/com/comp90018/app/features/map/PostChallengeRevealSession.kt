@@ -3,15 +3,18 @@ package com.comp90018.app.features.map
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.comp90018.app.features.treasurechallenge.ChallengeDiscoverySave
 
 enum class PostChallengePage { PHOTO_HISTORY, TREASURE, STORY }
 
-/** Created only after discovery persistence succeeds. Contains no save action. */
+/** Opens on task completion while the collection save continues independently. */
 class PostChallengeRevealSession(
     val relic: MapRelic,
     val capturedPhotoUri: String?,
+    val discoverySave: ChallengeDiscoverySave? = null,
+    val onRetrySave: (() -> Unit)? = null,
 ) {
-    // Simplified photo tasks open the normal treasure reveal immediately after a confirmed save.
+    // Completed tasks open the normal treasure reveal immediately, including photo tasks.
     // The reusable historical-image panel remains available but is not part of task completion.
     var page by mutableStateOf(PostChallengePage.TREASURE)
         private set
@@ -27,13 +30,16 @@ class PostChallengeRevealSession(
     fun backToTreasure() { page = PostChallengePage.TREASURE }
 }
 
-/** Map-owned handoff; duplicate successful callbacks keep the original photo and session. */
+/** Map-owned handoff; duplicate completion callbacks keep the original photo and session. */
 class PostChallengeRevealCoordinator {
     var session by mutableStateOf<PostChallengeRevealSession?>(null)
         private set
 
-    fun openAfterSave(relic: MapRelic, capturedPhotoUri: String?) {
-        if (session == null) session = PostChallengeRevealSession(relic, capturedPhotoUri)
+    fun openOnCompletion(
+        relic: MapRelic, capturedPhotoUri: String?,
+        discoverySave: ChallengeDiscoverySave? = null, onRetrySave: (() -> Unit)? = null,
+    ) {
+        if (session == null) session = PostChallengeRevealSession(relic, capturedPhotoUri, discoverySave, onRetrySave)
     }
 
     fun clear() { session = null }
