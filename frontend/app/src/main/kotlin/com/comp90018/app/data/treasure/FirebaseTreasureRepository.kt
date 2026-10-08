@@ -7,6 +7,9 @@ import com.comp90018.app.contextengine.challenge.CalibrationStatus
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.map.CompassGateConfig
 import com.comp90018.app.features.map.MapRelic
+import com.comp90018.app.features.map.FragmentHuntConfig
+import com.comp90018.app.features.map.TeamHuntFragment
+import com.comp90018.app.features.map.SouthLawnFragmentIds
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -74,7 +77,28 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
         sortOrder = number("sortOrder")?.toInt() ?: Int.MAX_VALUE,
         compassGateConfig = parseCompassGateConfig(data.orEmpty()),
         challengeConfig = parseChallengeConfig(get("challenge") as? Map<*, *>, coordinate, insideRadiusMeters),
+        fragmentHuntConfig = parseFragmentHuntConfig(get("fragmentHunt") as? Map<*, *>),
     )
+}
+
+/** Reject the entire configuration if any piece is missing or invalid. */
+internal fun parseFragmentHuntConfig(fields: Map<*, *>?): FragmentHuntConfig? {
+    fields ?: return null
+    val radius = (fields["collectionRadiusMeters"] as? Number)?.toDouble()
+        ?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    val rawFragments = fields["fragments"] as? List<*> ?: return null
+    val fragments = rawFragments.map { raw ->
+        val fragment = raw as? Map<*, *> ?: return null
+        val id = (fragment["id"] as? String)?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val title = (fragment["title"] as? String)?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val latitude = (fragment["latitude"] as? Number)?.toDouble()
+            ?.takeIf { it.isFinite() && it in -90.0..90.0 } ?: return null
+        val longitude = (fragment["longitude"] as? Number)?.toDouble()
+            ?.takeIf { it.isFinite() && it in -180.0..180.0 } ?: return null
+        TeamHuntFragment(id, title, GeoCoordinate(latitude, longitude))
+    }
+    if (fragments.size != SouthLawnFragmentIds.size || fragments.map { it.id }.toSet() != SouthLawnFragmentIds) return null
+    return FragmentHuntConfig(fragments, radius)
 }
 
 /** Parses Firestore challenge data without manufacturing a challenge for a missing map. */

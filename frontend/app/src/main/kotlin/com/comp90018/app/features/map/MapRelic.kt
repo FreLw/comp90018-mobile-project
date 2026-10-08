@@ -29,6 +29,7 @@ data class MapRelic(
     val challengeConfig: RelicChallengeConfig? = null,
     val historicalImageResId: Int? = null,
     val compassGateConfig: CompassGateConfig = CompassGateConfig(),
+    val fragmentHuntConfig: FragmentHuntConfig? = null,
 ) {
     val treasureTypeLabel: String
         get() = treasureType

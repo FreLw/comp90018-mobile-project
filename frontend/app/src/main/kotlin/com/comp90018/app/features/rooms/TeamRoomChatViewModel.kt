@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import android.net.Uri
+import com.comp90018.app.BuildConfig
+import com.comp90018.app.features.map.SouthLawnFragmentIds
 
 data class TeamRoomChatUiState(
     val room: TeamRoom? = null,
@@ -153,6 +155,37 @@ class TeamRoomChatViewModel(
         repository.findHuntFragment(roomId, userId, fragmentId) { error ->
             mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
         }
+    }
+
+    /** Debug shortcut uses the normal shared-fragment transactions sequentially. */
+    fun debugUnlockHuntFragments(fragmentIds: List<String>, onComplete: (String?) -> Unit) {
+        if (!BuildConfig.DEBUG) {
+            onComplete("Available in Debug builds only")
+            return
+        }
+        if (fragmentIds.size != SouthLawnFragmentIds.size || fragmentIds.toSet() != SouthLawnFragmentIds) {
+            onComplete("Invalid fragment configuration")
+            return
+        }
+        if (mutableUiState.value.updatingTask) {
+            onComplete("A hunt update is already in progress")
+            return
+        }
+        mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
+        fun finish(error: String?) {
+            mutableUiState.value = mutableUiState.value.copy(updatingTask = false, error = error)
+            onComplete(error)
+        }
+        fun collectNext(index: Int) {
+            if (index == fragmentIds.size) {
+                finish(null)
+                return
+            }
+            repository.findHuntFragment(roomId, userId, fragmentIds[index]) { error ->
+                if (error != null) finish(error) else collectNext(index + 1)
+            }
+        }
+        collectNext(0)
     }
 
     fun claimCompletedHuntTreasure() = claimCompletedHuntTreasureWithConfirmation {}
