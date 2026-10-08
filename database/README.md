@@ -1,12 +1,12 @@
 # Shared treasure database
 
-Verified runtime export: treasures.json.
+Live Firestore snapshot: `treasures.json`, refreshed from `mobile-melbourne` / `(default)` on 2026-10-09 (Australia/Sydney). The export timestamp is stored in UTC as `exportedAt`; each document's cloud update time is recorded in `sourceUpdateTimes`.
 
 Contains only the six allowlisted treasure documents. No credentials or user/chat/room data are included.
 
-Map-assisted simulated GPS/heading values are stored for Union Lawn, Wilson Hall and South Lawn Atlas. calibrationStatus remains pending for later real-device/on-site testing.
+All fields were read from the six cloud documents without changing Firebase. All six `calibrationStatus` values remain `pending` for later real-device/on-site testing. This is a point-in-time snapshot, not automatic ongoing synchronization.
 
-prototypeImageUrl is intentionally removed; local artwork is selected through artworkKey.
+The current cloud documents do not contain `prototypeImageUrl`; local artwork is selected through `artworkKey`. Cloud field values are preserved in the snapshot rather than replaced with local estimates.
 
 To preview the four challenge configuration fixes for the Android app's current project:
 
