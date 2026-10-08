@@ -5,30 +5,77 @@ firebase-debug.*.log
 firestore-debug.log
 firestore-debug.*.log
 ui-debug.log
-/tests/firestore-rules/node_modules/
+
+# Dependencies and package-manager caches
+node_modules/
+.npm/
 
 # Local config
 local.properties
+google-services.json
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+secrets.properties
+keystore.properties
+service-account*.json
+service_account*.json
+*-service-account*.json
+*-firebase-adminsdk-*.json
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.aws/
 
 # Gradle cache
 .gradle/
-.gradle-room-check/
-.gradle-user/
-.gradle-user-home/
-.gradle-project-cache/
-.gradle-local/
-frontend/.gradle-verification/
+.gradle-*/
 .kotlin/
 build/
+*.apk
+*.aab
+*.dex
+*.class
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.coverage
+.coverage.*
+htmlcov/
+coverage/
 
 # Local build/test scratch data
 /tmp/
 /frontend/tmp/
+*.log
+*.log.*
+*.tmp
+*.swp
+*.swo
+*~
+hs_err_pid*.log
+replay_pid*.log
 
 # Local editor settings
 .idea/
 .vscode/
 *.iml
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 # Development screenshots
 /map_screenshot.png
