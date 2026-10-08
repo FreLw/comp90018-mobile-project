@@ -2,7 +2,9 @@
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
-/tests/firestore-rules/firestore-debug.log
+firestore-debug.log
+firestore-debug.*.log
+ui-debug.log
 /tests/firestore-rules/node_modules/
 
 # Local config
@@ -10,14 +12,24 @@ local.properties
 
 # Gradle cache
 .gradle/
+.gradle-room-check/
 .gradle-user/
+.gradle-user-home/
 .gradle-project-cache/
 .gradle-local/
 frontend/.gradle-verification/
+.kotlin/
+build/
 
 # Local build/test scratch data
 /tmp/
-.idea/claudeCodeEditorTabs.xml
-/.idea
-.idea/claudeCodeEditorTabs.xml
-/.idea
+/frontend/tmp/
+
+# Local editor settings
+.idea/
+.vscode/
+*.iml
+
+# Development screenshots
+/map_screenshot.png
+/map_screenshot2.png
