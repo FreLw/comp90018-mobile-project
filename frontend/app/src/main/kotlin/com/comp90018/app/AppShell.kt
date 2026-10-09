@@ -249,6 +249,10 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
                         activeRoomHuntViewModel?.completeHuntTaskWithConfirmation(complete)
                             ?: complete("No active team hunt")
                     },
+                    onDebugCompleteActiveHuntTask = { complete ->
+                        activeRoomHuntViewModel?.debugCompleteHuntTask(complete)
+                            ?: complete("No active team hunt")
+                    },
                     onFindActiveHuntFragment = activeRoomHuntViewModel?.let { it::findHuntFragment } ?: {},
                     onDebugUnlockHuntFragments = activeRoomHuntViewModel?.let { it::debugUnlockHuntFragments }
                         ?: { _, complete -> complete("No active team hunt") },

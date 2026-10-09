@@ -1,5 +1,35 @@
 # Shared treasure database
 
+## Member hunt quizzes
+
+The five regular team-hunt destinations now store their quizzes in
+`treasures/{treasureId}.memberQuiz.questions`. Each ordered question has `prompt`,
+`options` (an array of strings), and `correctAnswerIndex` (zero-based: 0 is A,
+1 is B). The initial 10 questions were migrated from the Android app and uploaded
+to `mobile-melbourne` on 2026-10-09; all five documents were read back and unrelated
+fields were verified unchanged. South Lawn continues to use its fragment hunt.
+
+The app reads quizzes through the existing live treasure catalogue. Editing this
+field in Firebase Console updates quiz content without rebuilding the app. Changing
+an open quiz resets its current question. Missing or malformed quizzes block the
+member task; there is no local question fallback. Question count follows the array
+length. Answers are still checked on the client and only completion is saved to the
+room; correct answers are readable by signed-in users. This migration does not add
+server-side answer validation.
+
+To preview or initialize missing quizzes in another copy of this app's Firebase
+project using the existing Firebase CLI login:
+
+```powershell
+python database/update-member-quizzes.py --project mobile-melbourne
+python database/update-member-quizzes.py --project mobile-melbourne --apply
+```
+
+The script preserves existing live quizzes, backs up documents under ignored
+`tmp/member-quiz-backups/`, writes only `memberQuiz` in an atomic batch with update
+time preconditions, and verifies saved quizzes and unrelated fields. The local
+`treasures.json` includes the migrated quiz data.
+
 Live Firestore snapshot: `treasures.json`, refreshed from `mobile-melbourne` / `(default)` on 2026-10-09 (Australia/Sydney). The export timestamp is stored in UTC as `exportedAt`; each document's cloud update time is recorded in `sourceUpdateTimes`.
 
 Contains only the six allowlisted treasure documents. No credentials or user/chat/room data are included.

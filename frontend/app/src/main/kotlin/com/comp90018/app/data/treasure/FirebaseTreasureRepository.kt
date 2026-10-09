@@ -6,6 +6,7 @@ import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules
 import com.comp90018.app.contextengine.challenge.CalibrationStatus
 import com.comp90018.app.data.social.Subscription
 import com.comp90018.app.features.map.CompassGateConfig
+import com.comp90018.app.features.map.MemberHuntQuestion
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.FragmentHuntConfig
 import com.comp90018.app.features.map.TeamHuntFragment
@@ -78,6 +79,7 @@ private fun DocumentSnapshot.toMapRelic(): MapRelic? {
         compassGateConfig = parseCompassGateConfig(data.orEmpty()),
         challengeConfig = parseChallengeConfig(get("challenge") as? Map<*, *>, coordinate, insideRadiusMeters),
         fragmentHuntConfig = parseFragmentHuntConfig(get("fragmentHunt") as? Map<*, *>),
+        memberQuizQuestions = parseMemberQuizQuestions(get("memberQuiz") as? Map<*, *>),
     )
 }
 
@@ -158,4 +160,23 @@ internal fun parseCompassGateConfig(fields: Map<String, Any>): CompassGateConfig
         huntReadyRadiusMeters = validNumber("huntReadyRadiusMeters", defaults.huntReadyRadiusMeters) { it > 0.0 },
         compassAlignmentToleranceDegrees = validNumber("compassAlignmentToleranceDegrees", defaults.compassAlignmentToleranceDegrees) { it in 0.0..180.0 },
     )
+}
+
+/** Reject the entire quiz when any question is malformed; never bypass a missing task. */
+internal fun parseMemberQuizQuestions(fields: Map<*, *>?): List<MemberHuntQuestion> {
+    val rawQuestions = fields?.get("questions") as? List<*> ?: return emptyList()
+    if (rawQuestions.isEmpty()) return emptyList()
+    return rawQuestions.map { raw ->
+        val question = raw as? Map<*, *> ?: return emptyList()
+        val prompt = (question["prompt"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return emptyList()
+        val rawOptions = question["options"] as? List<*> ?: return emptyList()
+        val options = rawOptions.map { option ->
+            (option as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
+        }
+        if (options.size !in 2..26) return emptyList()
+        val answer = (question["correctAnswerIndex"] as? Number)?.toDouble() ?: return emptyList()
+        if (!answer.isFinite() || answer % 1.0 != 0.0 || answer < 0 || answer >= options.size) return emptyList()
+        MemberHuntQuestion(prompt, options, answer.toInt())
+    }
 }

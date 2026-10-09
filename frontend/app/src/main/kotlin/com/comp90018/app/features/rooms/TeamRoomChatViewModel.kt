@@ -137,6 +137,28 @@ class TeamRoomChatViewModel(
 
     fun completeHuntTask() = completeHuntTaskWithConfirmation {}
 
+    /** Debug-only bypass for this user's task; shared fragments retain their normal workflow. */
+    fun debugCompleteHuntTask(onComplete: (String?) -> Unit) {
+        if (!BuildConfig.DEBUG) {
+            onComplete("Available in Debug builds only")
+            return
+        }
+        val room = mutableUiState.value.room
+        if (room == null || room.taskStatus != "hunting" || userId !in room.memberIds) {
+            onComplete("No active team hunt")
+            return
+        }
+        if (userId in room.taskCompletedMemberIds) {
+            onComplete(null)
+            return
+        }
+        if (room.taskId == "south_lawn_atlas") {
+            debugUnlockHuntFragments(SouthLawnFragmentIds.toList(), onComplete)
+        } else {
+            completeHuntTaskWithConfirmation(onComplete)
+        }
+    }
+
     fun completeHuntTaskWithConfirmation(onComplete: (String?) -> Unit) {
         if (mutableUiState.value.updatingTask) {
             onComplete("A hunt update is already in progress")

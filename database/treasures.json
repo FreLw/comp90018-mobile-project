@@ -63,7 +63,31 @@
         "artworkKey": "treasure_postcard",
         "longitude": 144.9619444,
         "historicalImageCredit": "University of Melbourne historical material; final image credit to be confirmed when the chosen archive image is uploaded.",
-        "revealRadiusMeters": 50.0
+        "revealRadiusMeters": 50.0,
+        "memberQuiz": {
+          "questions": [
+            {
+              "prompt": "What occupied the site of today's Union Lawn before it became a lawn?",
+              "options": [
+                "A botanical garden",
+                "An ornamental lake",
+                "A railway platform",
+                "A sports oval"
+              ],
+              "correctAnswerIndex": 1
+            },
+            {
+              "prompt": "What began the filling of the lake in the 1930s?",
+              "options": [
+                "Construction of the New Chemistry Building",
+                "Construction of Wilson Hall",
+                "Creation of the System Garden",
+                "Construction of the Grainger Museum"
+              ],
+              "correctAnswerIndex": 0
+            }
+          ]
+        }
       }
     },
     {
@@ -114,7 +138,31 @@
         "title": "The Surviving Stone Rosette",
         "sourceTitle": "Wilson Hall, 1956 — Constructing Change: the evolving Parkville campus",
         "radarRadiusMeters": 100.0,
-        "treasureType": "Architectural Fragment"
+        "treasureType": "Architectural Fragment",
+        "memberQuiz": {
+          "questions": [
+            {
+              "prompt": "When was the original Wilson Hall completed?",
+              "options": [
+                "1856",
+                "1882",
+                "1938",
+                "1956"
+              ],
+              "correctAnswerIndex": 1
+            },
+            {
+              "prompt": "What was the original Wilson Hall built to host?",
+              "options": [
+                "Examinations and degree ceremonies",
+                "Botanical lectures and plant displays",
+                "Student accommodation and dining",
+                "Musical instrument workshops"
+              ],
+              "correctAnswerIndex": 0
+            }
+          ]
+        }
       }
     },
     {
@@ -165,7 +213,31 @@
         "nearbyRadiusMeters": 55.0,
         "insideRadiusMeters": 18.0,
         "sourceTitle": "Towards a glass monument — Old Quad, University of Melbourne",
-        "lastUpdated": "2026-09-28T17:48:57.653Z"
+        "lastUpdated": "2026-09-28T17:48:57.653Z",
+        "memberQuiz": {
+          "questions": [
+            {
+              "prompt": "What do the drawings behind Towards a glass monument depict?",
+              "options": [
+                "Mesozoic ferns fossilised in sandstone",
+                "Birds native to the Parkville campus",
+                "The original University gardens",
+                "Early University buildings"
+              ],
+              "correctAnswerIndex": 0
+            },
+            {
+              "prompt": "Which artists created the original fern drawings?",
+              "options": [
+                "Tom Nicholson and Geoffrey Wallace",
+                "Arthur Bartholomew and Ludwig Becker",
+                "Frederick McCoy and Edward La Trobe Bateman",
+                "Percy Grainger and Burnett Cross"
+              ],
+              "correctAnswerIndex": 1
+            }
+          ]
+        }
       }
     },
     {
@@ -174,10 +246,30 @@
         "fragmentHunt": {
           "collectionRadiusMeters": 8.0,
           "fragments": [
-            { "id": "south_lawn_north_west", "title": "North-west fragment", "latitude": -37.798490, "longitude": 144.959940 },
-            { "id": "south_lawn_north_east", "title": "North-east fragment", "latitude": -37.798500, "longitude": 144.960570 },
-            { "id": "south_lawn_south_west", "title": "South-west fragment", "latitude": -37.798798087046684, "longitude": 144.95975336334854 },
-            { "id": "south_lawn_south_east", "title": "South-east fragment", "latitude": -37.798910, "longitude": 144.960530 }
+            {
+              "id": "south_lawn_north_west",
+              "title": "North-west fragment",
+              "latitude": -37.79849,
+              "longitude": 144.95994
+            },
+            {
+              "id": "south_lawn_north_east",
+              "title": "North-east fragment",
+              "latitude": -37.7985,
+              "longitude": 144.96057
+            },
+            {
+              "id": "south_lawn_south_west",
+              "title": "South-west fragment",
+              "latitude": -37.798798087046684,
+              "longitude": 144.95975336334854
+            },
+            {
+              "id": "south_lawn_south_east",
+              "title": "South-east fragment",
+              "latitude": -37.79891,
+              "longitude": 144.96053
+            }
           ]
         },
         "locationName": "South Lawn Car Park",
@@ -276,7 +368,31 @@
         "nearbyRadiusMeters": 65.0,
         "locationName": "System Garden",
         "historicalStory": "The System Garden was established in 1856 as a teaching garden arranged to help students compare plant groups. Its central tower was originally the potting shed for a distinctive octagonal conservatory. The glasshouse itself was dismantled in 1916, leaving the tower as the surviving trace of the earlier structure.",
-        "schemaVersion": 5.0
+        "schemaVersion": 5.0,
+        "memberQuiz": {
+          "questions": [
+            {
+              "prompt": "In which year was the System Garden established?",
+              "options": [
+                "1826",
+                "1856",
+                "1882",
+                "1916"
+              ],
+              "correctAnswerIndex": 1
+            },
+            {
+              "prompt": "What was the surviving central tower originally used as?",
+              "options": [
+                "A classroom for botany students",
+                "A potting shed for an octagonal conservatory",
+                "A water tower for the campus",
+                "An entrance gate to the garden"
+              ],
+              "correctAnswerIndex": 1
+            }
+          ]
+        }
       }
     },
     {
@@ -327,7 +443,31 @@
         "latitude": -37.7973,
         "sourceUrl": "https://omeka.cloud.unimelb.edu.au/grainger/items/show/91",
         "treasureType": "Experimental Instrument Miniature",
-        "compassAlignmentToleranceDegrees": 25
+        "compassAlignmentToleranceDegrees": 25,
+        "memberQuiz": {
+          "questions": [
+            {
+              "prompt": "Who made the Kangaroo-pouch tone-tool in 1952?",
+              "options": [
+                "Percy Grainger and Burnett Cross",
+                "Percy Grainger and Arthur Bartholomew",
+                "Burnett Cross and Ludwig Becker",
+                "Frederick McCoy and Edward La Trobe Bateman"
+              ],
+              "correctAnswerIndex": 0
+            },
+            {
+              "prompt": "Which components were part of the Kangaroo-pouch tone-tool?",
+              "options": [
+                "Glass lenses and water pipes",
+                "Paper music rolls and sine-wave oscillators",
+                "Piano keys and brass bells",
+                "Stone fragments and wooden flutes"
+              ],
+              "correctAnswerIndex": 1
+            }
+          ]
+        }
       }
     }
   ]

@@ -89,6 +89,11 @@ is why ViewModels can be unit-tested with fake repositories.
 ### Map and treasure hunt
 
 - `MapScreen.kt` coordinates map, selected treasure and hunt screens.
+- `MemberHuntQuizViewModel.kt` owns member quiz progress, answer checks, arrival
+  eligibility, submission and error state. The Compose quiz observes its immutable
+  `StateFlow` and forwards events. Completion uses the existing team-room action
+  through `TeamRoomChatViewModel` and `TeamRoomRepository`; the quiz ViewModel has
+  no Firebase SDK dependency. Quiz content comes from the shared treasure repository.
 - `MapDiscoveryLogic.kt` contains the distance bands and readiness conditions;
   it is pure logic and is covered by unit tests.
 - `DeviceEnvironment.kt` contains the shared emulator-location policy.

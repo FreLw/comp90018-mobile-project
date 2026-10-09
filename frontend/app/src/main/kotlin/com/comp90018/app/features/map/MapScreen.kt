@@ -220,6 +220,7 @@ fun MapScreen(
     teammateLocations: List<TeamHuntLocation> = emptyList(),
     huntMemberNames: Map<String, String> = emptyMap(),
     onCompleteActiveHuntTask: ((String?) -> Unit) -> Unit = { complete -> complete("No active team hunt") },
+    onDebugCompleteActiveHuntTask: ((String?) -> Unit) -> Unit = { complete -> complete("No active team hunt") },
     onFindActiveHuntFragment: (String) -> Unit = {},
     onDebugUnlockHuntFragments: (List<String>, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
     onClaimCompletedHuntTreasure: (TreasureHapticAttempt?, (String?) -> Unit) -> Unit = { _, complete -> complete("No active team hunt") },
@@ -437,6 +438,7 @@ fun MapScreen(
         detailRelic = detailRelic?.let { detail -> resolvedTreasures.firstOrNull { it.id == detail.id } }
         challengeRelic = challengeRelic?.let { challenge -> resolvedTreasures.firstOrNull { it.id == challenge.id } }
         compassRelic = compassRelic?.let { compass -> resolvedTreasures.firstOrNull { it.id == compass.id } }
+        memberQuizRelic = memberQuizRelic?.let { quiz -> resolvedTreasures.firstOrNull { it.id == quiz.id } }
     }
     LaunchedEffect(visibleRelics) {
         selectedRelic = selectedRelic?.takeIf { selected -> visibleRelics.any { it.id == selected.id } }
@@ -492,19 +494,32 @@ fun MapScreen(
     // South Lawn replaces the original viewing-angle challenge with a shared four-fragment
     // search. This branch happens after the common state/effect setup so the Compose call order
     // remains stable as a room starts or ends a hunt.
-    if (isSouthLawnFragmentHunt) {
-        SouthLawnFragmentHuntScreen(
-            teammateLocations = teammateLocations,
-            huntMemberNames = huntMemberNames,
-            huntOwnerId = activeHuntOwnerId,
-            fragments = huntFragments,
-            collectionRadiusMeters = fragmentHuntConfig?.collectionRadiusMeters,
-            foundFragmentIds = activeHuntFoundFragmentIds,
-            userLocation = userLocation,
-            deviceHeading = deviceHeading,
-            onFindFragment = onFindActiveHuntFragment,
-            onDebugUnlockFragments = onDebugUnlockHuntFragments,
-        )
+    if (isSouthLawnFragmentHunt && debugTaskRelic == null) {
+        Box(Modifier.fillMaxSize()) {
+            SouthLawnFragmentHuntScreen(
+                teammateLocations = teammateLocations,
+                huntMemberNames = huntMemberNames,
+                huntOwnerId = activeHuntOwnerId,
+                fragments = huntFragments,
+                collectionRadiusMeters = fragmentHuntConfig?.collectionRadiusMeters,
+                foundFragmentIds = activeHuntFoundFragmentIds,
+                userLocation = userLocation,
+                deviceHeading = deviceHeading,
+                onFindFragment = onFindActiveHuntFragment,
+                onDebugUnlockFragments = onDebugUnlockHuntFragments,
+            )
+            if (BuildConfig.DEBUG) {
+                DebugChallengeLauncher(
+                    relics = debugTasks,
+                    onLaunch = { relic -> debugTaskSession += 1; debugTaskRelic = relic },
+                    teamTaskLabel = "Complete shared fragment task",
+                    canCompleteTeamTask = fragmentHuntConfig != null && teamHuntTaskPendingForCurrentUser,
+                    huntSessionKey = activeHuntSessionId,
+                    onCompleteTeamTask = onDebugCompleteActiveHuntTask,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                )
+            }
+        }
         return
     }
 
@@ -569,12 +584,9 @@ fun MapScreen(
             // check. Re-reading only the live GPS fix here can lock the questions after arrival
             // when the map is using a simulated or last-known coordinate.
             locationOutput = teamHuntLocationOutput,
-            onCompleted = { complete ->
-                onCompleteActiveHuntTask { error ->
-                    if (error == null) memberQuizRelic = null
-                    complete(error)
-                }
-            },
+            quizSessionKey = "${currentUserId}:${activeHuntSessionId}:${relic.id}",
+            onCompleted = onCompleteActiveHuntTask,
+            onFinished = { memberQuizRelic = null },
             onBack = { memberQuizRelic = null },
         )
         return
@@ -840,6 +852,15 @@ fun MapScreen(
                     debugTaskSession += 1
                     debugTaskRelic = relic
                 },
+                teamTaskLabel = when {
+                    !teamHuntActive -> "No active team task"
+                    !teamHuntTaskPendingForCurrentUser -> "My team task is complete"
+                    teamHuntIsOwner -> "Complete my owner task"
+                    else -> "Complete my member task"
+                },
+                canCompleteTeamTask = teamHuntTaskPendingForCurrentUser,
+                huntSessionKey = activeHuntSessionId,
+                onCompleteTeamTask = onDebugCompleteActiveHuntTask,
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
         }
@@ -975,110 +996,6 @@ private fun TeamHuntArrivalDialog(
     )
 }
 
-private data class MemberHuntQuestion(
-    val prompt: String,
-    val options: List<String>,
-    val correctAnswerIndex: Int,
-)
-
-private val MEMBER_HUNT_QUESTIONS = mapOf(
-    "union_lawn_lost_lake" to listOf(
-        MemberHuntQuestion(
-            prompt = "What occupied the site of today's Union Lawn before it became a lawn?",
-            options = listOf("A botanical garden", "An ornamental lake", "A railway platform", "A sports oval"),
-            correctAnswerIndex = 1,
-        ),
-        MemberHuntQuestion(
-            prompt = "What began the filling of the lake in the 1930s?",
-            options = listOf(
-                "Construction of the New Chemistry Building",
-                "Construction of Wilson Hall",
-                "Creation of the System Garden",
-                "Construction of the Grainger Museum",
-            ),
-            correctAnswerIndex = 0,
-        ),
-    ),
-    "wilson_hall_rosette" to listOf(
-        MemberHuntQuestion(
-            prompt = "When was the original Wilson Hall completed?",
-            options = listOf("1856", "1882", "1938", "1956"),
-            correctAnswerIndex = 1,
-        ),
-        MemberHuntQuestion(
-            prompt = "What was the original Wilson Hall built to host?",
-            options = listOf(
-                "Examinations and degree ceremonies",
-                "Botanical lectures and plant displays",
-                "Student accommodation and dining",
-                "Musical instrument workshops",
-            ),
-            correctAnswerIndex = 0,
-        ),
-    ),
-    "old_quad_fossil" to listOf(
-        MemberHuntQuestion(
-            prompt = "What do the drawings behind Towards a glass monument depict?",
-            options = listOf(
-                "Mesozoic ferns fossilised in sandstone",
-                "Birds native to the Parkville campus",
-                "The original University gardens",
-                "Early University buildings",
-            ),
-            correctAnswerIndex = 0,
-        ),
-        MemberHuntQuestion(
-            prompt = "Which artists created the original fern drawings?",
-            options = listOf(
-                "Tom Nicholson and Geoffrey Wallace",
-                "Arthur Bartholomew and Ludwig Becker",
-                "Frederick McCoy and Edward La Trobe Bateman",
-                "Percy Grainger and Burnett Cross",
-            ),
-            correctAnswerIndex = 1,
-        ),
-    ),
-    "system_garden_glasshouse" to listOf(
-        MemberHuntQuestion(
-            prompt = "In which year was the System Garden established?",
-            options = listOf("1826", "1856", "1882", "1916"),
-            correctAnswerIndex = 1,
-        ),
-        MemberHuntQuestion(
-            prompt = "What was the surviving central tower originally used as?",
-            options = listOf(
-                "A classroom for botany students",
-                "A potting shed for an octagonal conservatory",
-                "A water tower for the campus",
-                "An entrance gate to the garden",
-            ),
-            correctAnswerIndex = 1,
-        ),
-    ),
-    "grainger_tone_tool" to listOf(
-        MemberHuntQuestion(
-            prompt = "Who made the Kangaroo-pouch tone-tool in 1952?",
-            options = listOf(
-                "Percy Grainger and Burnett Cross",
-                "Percy Grainger and Arthur Bartholomew",
-                "Burnett Cross and Ludwig Becker",
-                "Frederick McCoy and Edward La Trobe Bateman",
-            ),
-            correctAnswerIndex = 0,
-        ),
-        MemberHuntQuestion(
-            prompt = "Which components were part of the Kangaroo-pouch tone-tool?",
-            options = listOf(
-                "Glass lenses and water pipes",
-                "Paper music rolls and sine-wave oscillators",
-                "Piano keys and brass bells",
-                "Stone fragments and wooden flutes",
-            ),
-            correctAnswerIndex = 1,
-        ),
-    ),
-)
-
 @Composable
 private fun TeamHuntStatusScreen(message: String, onStartTask: (() -> Unit)?, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1096,59 +1013,69 @@ private fun TeamHuntStatusScreen(message: String, onStartTask: (() -> Unit)?, on
 private fun MemberHuntQuiz(
     relic: MapRelic,
     locationOutput: LocationOutput,
+    quizSessionKey: String,
     onCompleted: ((String?) -> Unit) -> Unit,
+    onFinished: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var questionIndex by remember(relic.id) { mutableIntStateOf(0) }
-    var incorrect by remember(relic.id) { mutableStateOf(false) }
-    var submitting by remember(relic.id) { mutableStateOf(false) }
-    var completionError by remember(relic.id) { mutableStateOf<String?>(null) }
-    val closeEnough = locationOutput.distanceToTargetMeters?.let { it <= relic.insideRadiusMeters } == true
-    val questions = MEMBER_HUNT_QUESTIONS[relic.id].orEmpty()
+    val latestCompletion by rememberUpdatedState(onCompleted)
+    val quizViewModel: MemberHuntQuizViewModel = viewModel(
+        key = "member-quiz:$quizSessionKey",
+        factory = MemberHuntQuizViewModel.factory { complete -> latestCompletion(complete) },
+    )
+    val state by quizViewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(quizViewModel, relic.memberQuizQuestions) {
+        quizViewModel.updateQuestions(relic.memberQuizQuestions)
+    }
+    LaunchedEffect(quizViewModel, locationOutput.distanceToTargetMeters, relic.insideRadiusMeters) {
+        quizViewModel.updateLocation(locationOutput.distanceToTargetMeters, relic.insideRadiusMeters)
+    }
+    LaunchedEffect(state.completed) {
+        if (state.completed) onFinished()
+    }
     Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Team hunt checkpoint", style = MaterialTheme.typography.headlineSmall, color = Ink, fontWeight = FontWeight.Bold)
         Text(relic.name, color = Brand, fontWeight = FontWeight.Medium)
-        if (!closeEnough) {
-            Text("Reach the treasure location to unlock your two questions.", color = Muted)
+        if (!state.closeEnough) {
+            Text("Reach the treasure location to unlock your questions.", color = Muted)
             locationOutput.distanceToTargetMeters?.let { Text("${it.formatDistance()} away", color = Ink) }
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
-        } else if (questions.isEmpty()) {
+        } else if (state.questions.isEmpty()) {
             Text("No questions are available for this destination yet.", color = Muted)
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
         } else {
-            Text("Question ${questionIndex + 1} of 2", color = Muted)
-            Text(questions[questionIndex].prompt, style = MaterialTheme.typography.titleLarge, color = Ink)
-            questions[questionIndex].options.forEachIndexed { index, option ->
-                OutlinedButton(onClick = {
-                    if (index == questions[questionIndex].correctAnswerIndex) {
-                        incorrect = false
-                        if (questionIndex == questions.lastIndex) {
-                            submitting = true
-                            completionError = null
-                            onCompleted { error -> submitting = false; completionError = error }
-                        } else questionIndex += 1
-                    } else {
-                        incorrect = true
-                    }
-                }, enabled = !submitting, modifier = Modifier.fillMaxWidth()) {
+            Text("Question ${state.questionIndex + 1} of ${state.questions.size}", color = Muted)
+            Text(requireNotNull(state.currentQuestion).prompt, style = MaterialTheme.typography.titleLarge, color = Ink)
+            requireNotNull(state.currentQuestion).options.forEachIndexed { index, option ->
+                OutlinedButton(onClick = { quizViewModel.answer(index) }, enabled = state.canAnswer, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         "${'A' + index}. $option",
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-            if (incorrect) Text("Not quite — try again.", color = RelicRed)
-            if (submitting) Text("Saving your task progress...", color = Muted)
-            completionError?.let { Text(it, color = RelicRed) }
-            OutlinedButton(onClick = onBack, enabled = !submitting, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
+            if (state.incorrect) Text("Not quite — try again.", color = RelicRed)
+            if (state.submitting) Text("Saving your task progress...", color = Muted)
+            state.completionError?.let { Text(it, color = RelicRed) }
+            OutlinedButton(onClick = onBack, enabled = !state.submitting, modifier = Modifier.fillMaxWidth()) { Text("Back to map") }
         }
     }
 }
 
 @Composable
-private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) -> Unit, modifier: Modifier = Modifier) {
-    if (relics.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
+private fun DebugChallengeLauncher(
+    relics: List<MapRelic>,
+    onLaunch: (MapRelic) -> Unit,
+    teamTaskLabel: String,
+    canCompleteTeamTask: Boolean,
+    huntSessionKey: String?,
+    onCompleteTeamTask: ((String?) -> Unit) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!BuildConfig.DEBUG) return
+    var expanded by remember(huntSessionKey) { mutableStateOf(false) }
+    var completing by remember(huntSessionKey) { mutableStateOf(false) }
+    var completionError by remember(huntSessionKey) { mutableStateOf<String?>(null) }
     Box(modifier) {
         Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.96f), shadowElevation = 4.dp) {
             TextButton(onClick = { expanded = true }) {
@@ -1157,9 +1084,29 @@ private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) 
                 Text("task", color = Brand, fontWeight = FontWeight.SemiBold)
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { if (!completing) expanded = false }) {
             relics.forEach { relic ->
-                DropdownMenuItem(text = { Text(relic.locationName) }, onClick = { expanded = false; onLaunch(relic) })
+                DropdownMenuItem(
+                    text = { Text(relic.locationName) },
+                    enabled = !completing,
+                    onClick = { expanded = false; completionError = null; onLaunch(relic) },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(if (completing) "Completing team task..." else teamTaskLabel) },
+                enabled = canCompleteTeamTask && !completing,
+                onClick = {
+                    completing = true
+                    completionError = null
+                    onCompleteTeamTask { error ->
+                        completing = false
+                        completionError = error
+                        if (error == null) expanded = false
+                    }
+                },
+            )
+            completionError?.let { message ->
+                Text(message, color = RelicRed, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
     }

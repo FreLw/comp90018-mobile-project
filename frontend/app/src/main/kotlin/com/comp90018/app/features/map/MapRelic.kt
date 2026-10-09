@@ -30,6 +30,7 @@ data class MapRelic(
     val historicalImageResId: Int? = null,
     val compassGateConfig: CompassGateConfig = CompassGateConfig(),
     val fragmentHuntConfig: FragmentHuntConfig? = null,
+    val memberQuizQuestions: List<MemberHuntQuestion> = emptyList(),
 ) {
     val treasureTypeLabel: String
         get() = treasureType
@@ -37,3 +38,10 @@ data class MapRelic(
             .filter { it.isNotBlank() }
             .joinToString(" ") { word -> word.replaceFirstChar(Char::uppercase) }
 }
+
+/** Shared quiz content; correct answers are readable by signed-in clients. */
+data class MemberHuntQuestion(
+    val prompt: String,
+    val options: List<String>,
+    val correctAnswerIndex: Int,
+)
