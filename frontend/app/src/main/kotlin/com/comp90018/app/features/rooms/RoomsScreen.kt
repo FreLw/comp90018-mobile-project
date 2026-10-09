@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -510,7 +511,9 @@ private fun MockTeamRoomScreen(roomId: String, profile: UserProfile?, onDismiss:
         Spacer(Modifier.height(8.dp))
         Card(Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(messages) { message -> Text(message, color = Ink) }
+                items(messages) { message ->
+                    SelectionContainer { Text(message, color = Ink) }
+                }
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -557,7 +560,9 @@ private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: Us
                 Image(painterResource(sticker.drawableRes), sticker.name, Modifier.size(112.dp))
             } else {
                 Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (mine) Brand else BrandSoft)) {
-                    Text(if (message.imageUrl.isNotBlank()) "[Img]" else message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+                    SelectionContainer {
+                        Text(if (message.imageUrl.isNotBlank()) "[Img]" else message.text, Modifier.padding(14.dp), color = if (mine) Color.White else Ink)
+                    }
                 }
             }
             formatMessageTimestamp(message.sentAtMillis)?.let { timestamp ->

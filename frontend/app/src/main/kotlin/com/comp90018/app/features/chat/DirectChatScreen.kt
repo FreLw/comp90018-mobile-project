@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Person
@@ -96,11 +97,13 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
                 )
             } else {
                 Surface(color = if (mine) Brand else BrandSoft, shape = RoundedCornerShape(18.dp)) {
-                    Text(
-                        text = if (msg.messageType == ChatMessageTypes.Image || msg.imageUrl.isNotBlank()) "[Img]" else msg.text,
-                        modifier = Modifier.padding(14.dp),
-                        color = if (mine) Color.White else Ink,
-                    )
+                    SelectionContainer {
+                        Text(
+                            text = if (msg.messageType == ChatMessageTypes.Image || msg.imageUrl.isNotBlank()) "[Img]" else msg.text,
+                            modifier = Modifier.padding(14.dp),
+                            color = if (mine) Color.White else Ink,
+                        )
+                    }
                 }
             }
         }
