@@ -1,5 +1,7 @@
 package com.comp90018.app.features.map
 
+import com.comp90018.app.features.map.compass.oracleStarCount
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -1,5 +1,7 @@
 package com.comp90018.app.features.map
 
+import com.comp90018.app.features.map.compass.TreasureCompassGate
+
 /*
  * Checks the compass gate presentation and the distance/heading conditions that expose task entry.
  * Run these device/Compose checks when changing the corresponding interface or interaction contract.

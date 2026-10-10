@@ -46,7 +46,7 @@ import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.social.FriendRequestStatus
 import com.comp90018.app.data.social.IncomingFriendRequest
 import com.comp90018.app.data.social.OutgoingFriendRequest
-import com.comp90018.app.features.profile.ProfileAvatar
+import com.comp90018.app.ui.components.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.ui.components.EmptyState
 import com.google.firebase.firestore.FirebaseFirestore

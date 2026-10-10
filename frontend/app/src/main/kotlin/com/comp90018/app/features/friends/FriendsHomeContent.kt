@@ -58,7 +58,7 @@ import com.comp90018.app.RelicRed
 import com.comp90018.app.data.chat.ChatMessageTypes
 import com.comp90018.app.data.social.DirectChatSummary
 import com.comp90018.app.data.social.FriendSummary
-import com.comp90018.app.features.profile.ProfileAvatar
+import com.comp90018.app.ui.components.ProfileAvatar
 import com.comp90018.app.features.profile.UserProfile
 import com.comp90018.app.ui.components.treasureStickerFor
 

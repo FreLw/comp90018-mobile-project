@@ -1,5 +1,8 @@
 package com.comp90018.app.features.map
 
+import com.comp90018.app.features.map.rendering.isCompactTreasureArea
+import com.comp90018.app.features.map.rendering.recommendedInitialRelic
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

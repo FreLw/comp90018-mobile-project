@@ -23,7 +23,7 @@ those readings and conditions into motion, colour, and visual emphasis.
 | --- | --- |
 | Global colour and typography | [AppTheme.kt](../app/src/main/kotlin/com/comp90018/app/AppTheme.kt) |
 | Bottom navigation | [AppNavigation.kt](../app/src/main/kotlin/com/comp90018/app/navigation/AppNavigation.kt) |
-| Pre-task compass gate | `TreasureCompassGate` and `DivineCompassVisual` in [MapScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/map/MapScreen.kt) |
+| Pre-task compass gate | `TreasureCompassGate` and `DivineCompassVisual` in [TreasureCompassGate.kt](../app/src/main/kotlin/com/comp90018/app/features/map/compass/TreasureCompassGate.kt) |
 | Green-task page structure | [TreasureChallengeScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/TreasureChallengeScreen.kt) and [ChallengeExperience.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/ChallengeExperience.kt) |
 | South Lawn vines/stars/Atlas | [SouthLawnArtwork.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/SouthLawnArtwork.kt) |
 | Wilson flowers/water/pointer | [WilsonHallArtwork.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/WilsonHallArtwork.kt) and [WilsonFieldDynamics.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/WilsonFieldDynamics.kt) |
@@ -116,7 +116,7 @@ into the discovery layout so the artwork does not resize or jump during that han
 | --- | --- |
 | [RoomMemberProfileViewModel.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/RoomMemberProfileViewModel.kt) | Provides a teammate profile and relationship status for the room-member detail interface. Coordinates friend-request actions and exposes a direct-room ID for starting a private conversation. |
 | [RoomPlazaScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/RoomPlazaScreen.kt) | Renders public-room browsing and the decorative room seals. RoomDiamond draws the flat compass/laurel emblem and occupied-seat accents used by room cards. |
-| [RoomsScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/RoomsScreen.kt) | Coordinates room entry, public browsing, team chat, member profiles, and room settings. Also renders shared-hunt controls, destination selection, and South Lawn fragment progress. |
+| [RoomsScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/RoomsScreen.kt) | Selects room entry, demo or active chat. Pages and controls live in the entry/chat/hunt/members/settings/demo subdirectories; see the [directory guide](ui-directory-guide.md). |
 | [RoomsViewModel.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/RoomsViewModel.kt) | Owns room membership, public-room browsing, create/join inputs, and operation errors. The entry and plaza screens observe this state and invoke its actions. |
 | [TeamRoomChatViewModel.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/TeamRoomChatViewModel.kt) | Combines one room, its members, messages, and cooperative-hunt progress for the UI. All room/hunt mutations use repository callbacks, including completion and claim confirmation. |
 | [UnreadRoomMessagesViewModel.kt](../app/src/main/kotlin/com/comp90018/app/features/rooms/UnreadRoomMessagesViewModel.kt) | Provides the team-message unread count for the Rooms bottom-tab badge. Its shell-owned subscription keeps the badge current while another tab is selected. |
@@ -127,7 +127,7 @@ into the discovery layout so the artwork does not resize or jump during that han
 
 | File | Responsibility |
 | --- | --- |
-| [ProfileScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/profile/ProfileScreen.kt) | Renders the profile overview, editable details, avatar, settings, and About content. Local page/form state controls presentation; supplied callbacks save changes and sign the user out. |
+| [ProfileScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/profile/ProfileScreen.kt) | Selects profile overview, editing and settings pages. The overview/edit/settings subdirectories own their contents; the shared avatar lives in ui/components. See the [directory guide](ui-directory-guide.md). |
 | [UserProfile.kt](../app/src/main/kotlin/com/comp90018/app/features/profile/UserProfile.kt) | Defines profile details and preferences consumed by profile and signed-in screens. Settings also control location precision, notifications, sound effects, and haptic feedback. |
 
 ### Treasure catalogue and collection
@@ -156,7 +156,7 @@ into the discovery layout so the artwork does not resize or jump during that han
 | [LocationActionPolicy.kt](../app/src/main/kotlin/com/comp90018/app/features/map/LocationActionPolicy.kt) | Separates coordinates that may be displayed from fixes that may enable hunt actions. Fallback or stale positions can inform the map without granting treasure completion. |
 | [MapDiscoveryLogic.kt](../app/src/main/kotlin/com/comp90018/app/features/map/MapDiscoveryLogic.kt) | Contains the map distance bands, direction captions, compass readiness, and visibility policies. Pure helpers keep presentation decisions reusable and testable without rendering a map. |
 | [MapRelic.kt](../app/src/main/kotlin/com/comp90018/app/features/map/MapRelic.kt) | Defines the treasure content shared by map, catalogue, rooms, discovery, and story screens. Carries text, coordinates, artwork keys, and challenge/fragment configuration loaded from the catalogue. |
-| [MapScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/map/MapScreen.kt) | Coordinates map selection, solo/team hunt entry, compass gates, challenges, and discovery/story pages. Also contains Google Maps rendering, marker artwork, legacy hunt panels, and map-specific sensor bindings. |
+| [MapScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/map/MapScreen.kt) | Connects map inputs and hunt actions. Route selection, ordinary map layout, Google Maps rendering, compass, team, detail, sensor and debug code live in named subdirectories; see the [directory guide](ui-directory-guide.md). |
 | [PostChallengeRevealScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/map/PostChallengeRevealScreen.kt) | Renders the post-challenge treasure, optional photo-history, and story views. Uses a retained reveal session so save status and the captured-photo/artwork handoff stay consistent. |
 | [PostChallengeRevealSession.kt](../app/src/main/kotlin/com/comp90018/app/features/map/PostChallengeRevealSession.kt) | Keeps one discovery handoff, its page, captured photo, save status, and artwork geometry. The coordinator reuses the existing session when repeated completion callbacks arrive. |
 | [SouthLawnAssemblyScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/map/SouthLawnAssemblyScreen.kt) | Animates four Atlas fragments into the complete treasure before the team claim. Uses the original untrimmed quadrants so the assembled image matches the full Atlas artwork. |
@@ -275,7 +275,6 @@ into the discovery layout so the artwork does not resize or jump during that han
 | File | Responsibility |
 | --- | --- |
 | [kotlin/com/comp90018/app/features/map/DebugChallengeRelics.kt](../app/src/debug/kotlin/com/comp90018/app/features/map/DebugChallengeRelics.kt) | Supplies the six locally configured treasures used by the map task-preview launcher. These fixtures allow artwork/interaction previews without loading or modifying the cloud catalogue. |
-| [kotlin/com/comp90018/app/features/rooms/RoomPreviewFixtures.kt](../app/src/debug/kotlin/com/comp90018/app/features/rooms/RoomPreviewFixtures.kt) | Supplies local room fixtures for development-only room previews. Keep preview content here so it is excluded from the release implementation. |
 | [kotlin/com/comp90018/app/features/treasurechallenge/ChallengeSimulationFactory.kt](../app/src/debug/kotlin/com/comp90018/app/features/treasurechallenge/ChallengeSimulationFactory.kt) | Builds the continuous TEST sliders, calibration panel, and fake sensor engine for task previews. Slider values feed the production evaluator; edit control layout and simulated measurements here. |
 
 ### Release counterparts
@@ -285,7 +284,6 @@ into the discovery layout so the artwork does not resize or jump during that han
 | File | Responsibility |
 | --- | --- |
 | [kotlin/com/comp90018/app/features/map/DebugChallengeRelics.kt](../app/src/release/kotlin/com/comp90018/app/features/map/DebugChallengeRelics.kt) | Provides the release counterpart of the map preview catalogue. Returns no development-only challenge fixtures. |
-| [kotlin/com/comp90018/app/features/rooms/RoomPreviewFixtures.kt](../app/src/release/kotlin/com/comp90018/app/features/rooms/RoomPreviewFixtures.kt) | Provides the release counterpart of development room fixtures. Keeps the shared call sites available without exposing the debug room-preview content. |
 | [kotlin/com/comp90018/app/features/treasurechallenge/ChallengeSimulationFactory.kt](../app/src/release/kotlin/com/comp90018/app/features/treasurechallenge/ChallengeSimulationFactory.kt) | Provides the release counterpart of task simulation controls. The factory supplies no simulator and the calibration panel renders no debug interface. |
 
 ### Device and Compose UI checks

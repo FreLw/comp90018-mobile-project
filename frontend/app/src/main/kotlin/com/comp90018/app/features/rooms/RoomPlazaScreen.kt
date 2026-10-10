@@ -42,10 +42,7 @@ import com.comp90018.app.data.rooms.TeamRoom
 /** Displays joinable public rooms and connects browse/join actions to RoomsViewModel. */
 @Composable
 internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onBack: () -> Unit) {
-    val previewRooms = remember { roomPreviewFixtures() }
-    var previewEnabled by remember { mutableStateOf(previewRooms.isNotEmpty()) }
-    val rooms = (if (previewEnabled) previewRooms else state.publicRooms)
-        .sortedBy { it.memberIds.size >= it.maxMembers }
+    val rooms = state.publicRooms.sortedBy { it.memberIds.size >= it.maxMembers }
     var selectedRoomId by remember { mutableStateOf<String?>(null) }
     DisposableEffect(viewModel) {
         viewModel.startBrowsing()
@@ -61,22 +58,10 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
                 Text("Find fellow explorers", color = Muted)
             }
         }
-        if (previewRooms.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Preview 10 sample rooms", color = Ink, style = MaterialTheme.typography.titleSmall)
-                    Text("Sample rooms are for preview only.", color = Muted, style = MaterialTheme.typography.bodySmall)
-                }
-                Switch(checked = previewEnabled, onCheckedChange = {
-                    previewEnabled = it
-                    selectedRoomId = null
-                })
-            }
-        }
         Text("Open rooms first · Ash-gray rooms are full", color = Muted, style = MaterialTheme.typography.bodySmall)
         when {
-            !previewEnabled && state.browsingLoading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Brand) }
-            !previewEnabled && state.browsingError != null -> Column { Text(state.browsingError, color = MaterialTheme.colorScheme.error)
+            state.browsingLoading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Brand) }
+            state.browsingError != null -> Column { Text(state.browsingError, color = MaterialTheme.colorScheme.error)
                 TextButton(onClick = { viewModel.stopBrowsing(); viewModel.startBrowsing() }) { Text("Retry") } }
             rooms.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text("No public rooms yet. Create one and invite others to join.", color = Muted, textAlign = TextAlign.Center) }
             else -> LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f),
@@ -126,14 +111,13 @@ internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onB
                 if (room != null) {
                     RoomDiamond(room, Modifier.align(Alignment.CenterHorizontally).size(160.dp))
                     Text(room.description.ifBlank { "Explore together and discover treasures around campus." })
-                    Text(if (previewEnabled) "Members ${room.memberIds.size}/${room.maxMembers} · Preview only"
-                        else "Members ${room.memberIds.size}/${room.maxMembers} · No host approval needed", color = Muted)
+                    Text("Members ${room.memberIds.size}/${room.maxMembers} · No host approval needed", color = Muted)
                     if (room.taskTitle.isNotBlank()) Text("Destination: ${room.taskTitle}")
                 } else Text("This room may have closed or now require a Room ID to join.")
                 state.actionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             } },
-            confirmButton = { Button(enabled = !previewEnabled && room != null && room.memberIds.size < room.maxMembers && !state.working,
-                onClick = { room?.let(viewModel::joinPublicRoom) }) { Text(if (previewEnabled) "Preview only" else if (state.working) "Joining…" else if (room != null && room.memberIds.size >= room.maxMembers) "Room full" else "Join room") } },
+            confirmButton = { Button(enabled = room != null && room.memberIds.size < room.maxMembers && !state.working,
+                onClick = { room?.let(viewModel::joinPublicRoom) }) { Text(if (state.working) "Joining…" else if (room != null && room.memberIds.size >= room.maxMembers) "Room full" else "Join room") } },
             dismissButton = { TextButton(enabled = !state.working, onClick = { selectedRoomId = null }) { Text("Back to plaza") } })
     }
 }

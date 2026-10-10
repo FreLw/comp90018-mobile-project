@@ -1,5 +1,7 @@
 package com.comp90018.app.features.rooms
 
+import com.comp90018.app.features.rooms.hunt.ActiveHuntHeader
+
 /*
  * Checks feedback for confirmed room treasure claims through the real UI entry point.
  * Run these device/Compose checks when changing the corresponding interface or interaction contract.

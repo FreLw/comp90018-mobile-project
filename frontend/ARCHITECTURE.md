@@ -88,7 +88,10 @@ is why ViewModels can be unit-tested with fake repositories.
 
 ### Map and treasure hunt
 
-- `MapScreen.kt` coordinates map, selected treasure and hunt screens.
+- `MapScreen.kt` connects map inputs and actions. Its `route/` files own page
+  selection, `components/` owns ordinary map presentation, `rendering/` wraps
+  Google Maps, and `compass/`, `team/`, `detail/`, `sensors/`, `debug/` contain
+  the corresponding UI and bindings. Original state keys and route order are preserved.
 - `MemberHuntQuizViewModel.kt` owns member quiz progress, answer checks, arrival
   eligibility, submission and error state. The Compose quiz observes its immutable
   `StateFlow` and forwards events. Completion uses the existing team-room action
@@ -108,7 +111,8 @@ within 10 m + facing treasure + phone level → ready to continue
 
 ### Team rooms
 
-- `RoomsScreen.kt` renders room entry, team chat and room details.
+- `RoomsScreen.kt` selects room entry, demo or active chat. The `entry/`,
+  `chat/`, `hunt/`, `members/`, `settings/` and `demo/` directories own those pages.
 - `RoomsViewModel.kt` owns membership/create/join state.
 - `TeamRoomChatViewModel.kt` owns one active room and shared hunt progress.
 - `data/rooms/` owns `TeamRoom` models and Firebase persistence.
@@ -144,3 +148,10 @@ shape changes, update and deploy the matching rules with the application code.
 Comments should explain a constraint or a non-obvious decision—for example,
 why a Firebase write is atomic or why pending snapshots are ignored. Comments
 should not repeat a function name or narrate straightforward Compose layout.
+
+## UI editing locations
+
+See [UI directory and maintenance guide](docs/ui-directory-guide.md) for the
+Map, Rooms and Profile file map, shared avatar component, and retained legacy
+code. `ProfileScreen.kt` selects pages in `overview/`, `edit/` and `settings/`;
+`edit/ProfileSaveActions.kt` owns the existing avatar-upload/profile-save sequence.

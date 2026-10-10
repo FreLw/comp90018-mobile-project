@@ -29,7 +29,7 @@ import com.comp90018.app.data.chat.ChatMessage
 import com.comp90018.app.data.chat.ChatMessageTypes
 import com.comp90018.app.data.chat.FirebaseChatRepository
 import com.comp90018.app.data.treasure.FirebaseTreasureCollectionRepository
-import com.comp90018.app.features.profile.ProfileAvatar
+import com.comp90018.app.ui.components.ProfileAvatar
 import com.comp90018.app.features.treasure.TreasureCollectionViewModel
 import com.comp90018.app.ui.components.ChatComposer
 import com.comp90018.app.ui.components.formatMessageTimestamp
