@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Separates coordinates that may be displayed from fixes that may enable hunt actions.
+ * Fallback or stale positions can inform the map without granting treasure completion.
+ */
+
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator

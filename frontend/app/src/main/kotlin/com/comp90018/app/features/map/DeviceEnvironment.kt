@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Centralizes emulator detection used by map and signed-in location presentation.
+ * Keeps emulator-specific display policy consistent between UI entry points.
+ */
+
 import android.os.Build
 import java.util.Locale
 

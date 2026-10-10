@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Connects haptic preferences and foreground/background lifecycle to the shared feedback session.
+ * AppShell installs this binding once for the signed-in interface.
+ */
+
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect

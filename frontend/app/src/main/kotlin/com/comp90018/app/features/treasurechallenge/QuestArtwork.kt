@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Draws shared living backgrounds and the camera, fern, glasshouse, and gramophone emblems.
+ * Maps visual sensor signals and condition states to motion, gold fill, ripples, and engraved ornaments.
+ */
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
@@ -15,6 +20,7 @@ import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import kotlin.math.*
 
+// Shared green-task visual tokens: active gold, parchment text, inactive grey, and forest background.
 internal val QuestGold = Color(0xFFE7BF70)
 internal val QuestParchment = Color(0xFFF5E5BB)
 internal val QuestStone = Color(0xFF7F9285)
@@ -26,6 +32,7 @@ private data class ArtworkMotion(
     val instability: Float, val rotation: Float, val sound: Float, val proximity: Float,
 )
 
+/** Smooths normalized sensor inputs so drawing changes follow the device without abrupt jumps. */
 @Composable
 private fun artworkMotion(state: TreasureChallengeUiState): ArtworkMotion {
     val values = QuestVisualSignals.from(state)
@@ -38,6 +45,7 @@ private fun artworkMotion(state: TreasureChallengeUiState): ArtworkMotion {
     )
 }
 
+/** Supplies a slow looping clock for living artwork even when device readings stay unchanged. */
 @Composable
 private fun ambientPhase(): Float {
     val transition = rememberInfiniteTransition(label = "living_engraving")
@@ -136,6 +144,10 @@ internal fun QuestBackdrop(
     }
 }
 
+/**
+ * Selects the task emblem and blends evaluated conditions into gold accents and sensor-driven
+ * movement.
+ */
 @Composable
 internal fun QuestEmblem(state: TreasureChallengeUiState, modifier: Modifier = Modifier) {
     if (state.challengeType == RelicChallengeType.WILSON_HALL_OBSERVATION) {
@@ -206,6 +218,7 @@ internal fun QuestEmblem(state: TreasureChallengeUiState, modifier: Modifier = M
     }
 }
 
+/** Starts a new expanding camera-centred ripple when one lake prerequisite becomes satisfied. */
 @Composable
 private fun lakeConditionRipple(state: TreasureChallengeUiState, condition: ChallengeCondition): Float {
     val satisfied = state.conditionLit(condition)
@@ -304,6 +317,7 @@ private fun DrawScope.drawOrnament(phase: Float, state: TreasureChallengeUiState
     }
 }
 
+/** Draws the camera engraving and clips the rising distance-linked gold fill to its silhouette. */
 private fun DrawScope.drawLakeCamera(m: ArtworkMotion, phase: Float, goldWater: Float, aligned: Color, shutter: Color) {
     rotate(m.heading * .035f + m.roll * .14f, Offset.Zero) {
         val body = Path().apply {
@@ -372,6 +386,7 @@ private fun DrawScope.drawLakeCamera(m: ArtworkMotion, phase: Float, goldWater: 
     }
 }
 
+/** Draws the fossil/fern emblem with posture and stillness-linked visual accents. */
 private fun DrawScope.drawFernFossil(m: ArtworkMotion, phase: Float, progress: Float,
     nearby: Color, level: Color, still: Color, steady: Color) {
     val slab = Path().apply {
@@ -421,6 +436,7 @@ private fun DrawScope.drawFernFossil(m: ArtworkMotion, phase: Float, progress: F
     drawArc(QuestGold, -90f, progress * 360f, false, Offset(-80f, -80f), Size(160f, 160f), style = Stroke(1.2f))
 }
 
+/** Draws the tower/glasshouse emblem and its proximity/photo accents. */
 private fun DrawScope.drawGlasshouse(m: ArtworkMotion, phase: Float, nearby: Color, shutter: Color) {
     val building = Path().apply {
         moveTo(-71f, 72f); lineTo(-71f, -11f); lineTo(-43f, -35f); lineTo(-43f, -45f)
@@ -477,6 +493,7 @@ private fun DrawScope.drawGlasshouse(m: ArtworkMotion, phase: Float, nearby: Col
     drawPath(diamond(marker, 93f, 4f), nearby)
 }
 
+/** Draws the gramophone with sound-linked motion and the configured audible threshold cue. */
 private fun DrawScope.drawGramophone(m: ArtworkMotion, phase: Float, progress: Float, nearby: Color, audible: Color, threshold: Float) {
     val horn = Path().apply {
         moveTo(-18f, 28f); cubicTo(-31f, -2f, -37f, -16f, -65f, -41f)

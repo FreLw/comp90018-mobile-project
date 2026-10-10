@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Checks that the Compose/lifecycle binding applies preferences and cancels feedback at the correct time.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf

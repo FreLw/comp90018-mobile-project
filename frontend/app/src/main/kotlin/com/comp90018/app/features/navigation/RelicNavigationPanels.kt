@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Renders the destination card, resonance description, and arrival/start-hunt action.
+ * Edit panel hierarchy, captions, and button styling here.
+ */
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,6 +40,7 @@ import com.comp90018.app.RelicGold
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+/** Displays destination identity, current distance, and the Stop Navigation action. */
 @Composable
 internal fun RelicNavigationTargetPanel(
     name: String,
@@ -76,6 +82,7 @@ internal fun RelicNavigationTargetPanel(
     }
 }
 
+/** Presents compass strength and location readiness, enabling Start Hunt only after confirmed arrival. */
 @Composable
 internal fun RelicNavigationResonancePanel(
     state: RelicNavigationUiState,

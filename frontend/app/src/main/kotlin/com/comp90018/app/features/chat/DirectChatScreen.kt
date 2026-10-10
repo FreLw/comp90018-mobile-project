@@ -1,5 +1,10 @@
 package com.comp90018.app.features.chat
 
+/*
+ * Renders one direct conversation, its message bubbles, header, and composer.
+ * Connects the room ViewModel to UI callbacks and collection-backed treasure stickers.
+ */
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +35,7 @@ import com.comp90018.app.ui.components.formatMessageTimestamp
 import com.comp90018.app.ui.components.treasureStickerFor
 import com.google.firebase.firestore.FirebaseFirestore
 
+/** Collects room and sticker-ownership state, renders the conversation, and binds composer actions. */
 @Composable
 fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: String, friendUid: String, title: String, currentUsername: String, currentAvatarUrl: String, onBack: () -> Unit, onViewFriend: (() -> Unit)? = null) {
     val repository = remember(firestore) { FirebaseChatRepository(firestore) }
@@ -77,6 +83,7 @@ fun DirectChatScreen(firestore: FirebaseFirestore, roomId: String, currentUid: S
     }
 }
 
+/** Chooses message alignment and content presentation for the current sender and message type. */
 @Composable private fun ChatMessageRow(msg: ChatMessage, uid: String, title: String, myName: String, myAvatar: String) {
     val mine = msg.senderId == uid; val name = msg.senderName.ifBlank { if (mine) myName.ifBlank { "You" } else title }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {

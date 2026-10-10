@@ -1,5 +1,10 @@
 package com.comp90018.app.features.profile
 
+/*
+ * Defines profile details and preferences consumed by profile and signed-in screens.
+ * Settings also control location precision, notifications, sound effects, and haptic feedback.
+ */
+
 data class ProfileExtras(
     val phone: String = "",
     val department: String = "",

@@ -1,5 +1,10 @@
 package com.comp90018.app
 
+/*
+ * Owns the signed-in layout, bottom tabs, and navigation shared between features.
+ * Creates shared profile, catalogue, collection, room, location, and feedback state before rendering a tab.
+ */
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -59,6 +64,8 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
     var requestedMapTreasureId by remember { mutableStateOf<String?>(null) }
     var navigationTreasureId by remember { mutableStateOf<String?>(null) }
     var requestedHuntTreasureId by remember { mutableStateOf<String?>(null) }
+    // Create shared subscriptions at signed-in shell scope so data loads immediately after login,
+    // including before the user opens Map or any other feature tab.
     val profileRepository = remember(firestore) { FirebaseProfileRepository(firestore) }
     val appShellViewModel: AppShellViewModel = viewModel(
         key = "app_shell_${user.uid}",
@@ -154,6 +161,7 @@ fun AppShell(user: FirebaseUser, firestore: FirebaseFirestore, onLogout: () -> U
         }
     }
 
+    // The shell owns the bottom bar and common content bounds; each selected feature draws inside them.
     Scaffold(
         containerColor = Background,
         bottomBar = {

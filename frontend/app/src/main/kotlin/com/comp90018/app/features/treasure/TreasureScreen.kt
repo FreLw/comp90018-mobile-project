@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasure
 
+/*
+ * Renders the treasure route catalogue and discovered/undiscovered lore detail pages.
+ * Edit cards, detail sections, and navigation-entry presentation here; Map owns the live hunt flow.
+ */
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -97,6 +102,7 @@ fun TreasureScreen(
     }
 }
 
+/** Displays catalogue loading/error status and the retry action. */
 @Composable
 private fun CatalogStateCard(
     message: String,
@@ -117,6 +123,7 @@ private fun CatalogStateCard(
     }
 }
 
+/** Lays out the ordered treasure cards and marks which treasures have been collected. */
 @Composable
 private fun HuntRoute(
     treasures: List<MapRelic>,
@@ -147,6 +154,7 @@ private fun HuntRoute(
     }
 }
 
+/** Renders one route entry with discovered/undiscovered artwork and its detail action. */
 @Composable
 private fun TreasureRouteCard(
     treasure: MapRelic,
@@ -191,6 +199,7 @@ private fun TreasureRouteCard(
     }
 }
 
+/** Displays selected treasure lore, artwork, and its available navigation/map actions. */
 @Composable
 private fun TreasureRouteDetail(
     treasure: MapRelic,

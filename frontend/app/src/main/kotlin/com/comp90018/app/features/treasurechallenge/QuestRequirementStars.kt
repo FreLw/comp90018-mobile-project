@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Displays completion conditions as animated grey-to-gold stars and readable labels.
+ * South Lawn and Wilson keep every condition in one row; combined stillness occupies one star.
+ */
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -25,6 +30,7 @@ import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import kotlin.math.*
 
+/** Renders the current task instruction and one star for each evaluator-provided condition. */
 @Composable
 internal fun ChallengeStatusCard(state: TreasureChallengeUiState) {
     val isAtlas = state.challengeType == RelicChallengeType.SOUTH_LAWN_VIEWING_ANGLE
@@ -39,6 +45,8 @@ internal fun ChallengeStatusCard(state: TreasureChallengeUiState) {
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(state.instructionText, fontFamily = GothicTreasureFontFamily, fontSize = 22.sp,
                 lineHeight = 26.sp, textAlign = TextAlign.Center)
+            // South Lawn/Wilson use a single row; other tasks wrap after three conditions. The evaluator supplies
+            // combined stillness as one condition, so motion and shake are represented by one star.
             state.conditionStates.chunked(if (compactRow) state.conditionStates.size.coerceAtLeast(1) else 3).forEach { row ->
                 Row(Modifier.fillMaxWidth().testTag("quest_condition_row"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEach { condition ->
@@ -63,6 +71,7 @@ internal fun ChallengeStatusCard(state: TreasureChallengeUiState) {
     }
 }
 
+/** Animates a condition from inactive grey to glowing gold when the evaluator marks it satisfied. */
 @Composable
 private fun QuestConditionStar(lit: Boolean, label: String) {
     val light by animateFloatAsState(if (lit) 1f else 0f, tween(650), label = "requirement_star")

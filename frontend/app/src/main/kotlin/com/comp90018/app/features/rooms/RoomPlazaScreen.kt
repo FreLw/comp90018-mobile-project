@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Renders public-room browsing and the decorative room seals.
+ * RoomDiamond draws the flat compass/laurel emblem and occupied-seat accents used by room cards.
+ */
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -34,6 +39,7 @@ import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 import com.comp90018.app.data.rooms.TeamRoom
 
+/** Displays joinable public rooms and connects browse/join actions to RoomsViewModel. */
 @Composable
 internal fun RoomPlazaScreen(state: RoomsUiState, viewModel: RoomsViewModel, onBack: () -> Unit) {
     val previewRooms = remember { roomPreviewFixtures() }

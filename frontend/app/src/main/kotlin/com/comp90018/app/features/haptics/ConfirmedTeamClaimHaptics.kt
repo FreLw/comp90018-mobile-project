@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Adds success feedback to confirmed team-claim transactions.
+ * Session generations and attempt tokens prevent late callbacks from vibrating for a different hunt.
+ */
+
 import com.comp90018.app.data.rooms.TeamRoom
 import com.comp90018.app.features.rooms.TeamRoomChatViewModel
 

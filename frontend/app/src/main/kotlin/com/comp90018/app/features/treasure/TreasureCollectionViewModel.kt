@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasure
 
+/*
+ * Provides collected treasure IDs and the state of an in-flight collection write.
+ * UI callbacks use the write result for retry/error presentation and confirmed collection updates.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.social.Subscription
@@ -8,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Collected IDs, loading failures, and the treasure currently being saved. */
 data class TreasureCollectionUiState(
     val discoveredIds: Set<String> = emptySet(),
     val loading: Boolean = true,

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Decorates collection and team-claim callbacks with confirmed feedback handling.
+ * Forwards persistence errors unchanged so the existing UI can still show and retry failed saves.
+ */
+
 /** Decorates existing persistence, forwarding its result without altering collection behavior. */
 object TreasureHapticSave {
     fun collect(

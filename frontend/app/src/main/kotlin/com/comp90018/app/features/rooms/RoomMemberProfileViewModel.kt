@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Provides a teammate profile and relationship status for the room-member detail interface.
+ * Coordinates friend-request actions and exposes a direct-room ID for starting a private conversation.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.profile.ProfileRepository
@@ -11,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Teammate details, relationship actions, and a pending direct-chat destination. */
 data class RoomMemberProfileUiState(
     val profile: UserProfile? = null,
     val friendship: FriendshipStatus? = null,

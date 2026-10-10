@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Renders the discovery artwork, completion heading, collection status, and story action.
+ * Photo-task arrival reuses the measured logo rectangle; story opening animates the artwork into the book.
+ */
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode

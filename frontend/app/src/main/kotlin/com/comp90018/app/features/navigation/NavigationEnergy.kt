@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Maps distance and heading to compass energy, captions, and guiding-trail timing.
+ * Includes deterministic test coordinates for continuous navigation-slider previews.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.DirectionProcessor
 import kotlin.math.abs

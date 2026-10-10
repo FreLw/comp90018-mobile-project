@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Filters shared teammate locations before the map renders them.
+ * Applies hunt/session membership, owner availability, and freshness requirements to shared positions.
+ */
+
 import com.comp90018.app.data.rooms.TeamRoom
 import com.comp90018.app.data.rooms.TeamHuntLocation
 import com.comp90018.app.sensors.location.GeoCoordinate

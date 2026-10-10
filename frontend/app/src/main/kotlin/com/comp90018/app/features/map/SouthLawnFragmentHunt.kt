@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Defines South Lawn fragment IDs, coordinates, and shared fragment-hunt configuration.
+ * These IDs connect the map markers and assembly interface to persisted team progress.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 
 /** Shared locations for the two-player South Lawn Atlas reconstruction hunt. */

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Supplies the six locally configured treasures used by the map task-preview launcher.
+ * These fixtures allow artwork/interaction previews without loading or modifying the cloud catalogue.
+ */
+
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfigs
 import com.comp90018.app.sensors.location.GeoCoordinate
 

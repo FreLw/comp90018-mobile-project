@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Provides the direct-message unread count used by the Friends tab badge.
+ * Keeps its subscription active for the signed-in shell rather than only while the Friends page is visible.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.social.SocialRepository

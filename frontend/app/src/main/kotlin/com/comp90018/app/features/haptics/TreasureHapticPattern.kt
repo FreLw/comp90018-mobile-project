@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Defines waveform timings and amplitudes for treasure feedback.
+ * Edit these patterns to change the feel of a feedback event while preserving controller policy.
+ */
+
 /** -1 requests the device default amplitude when amplitude control is unavailable. */
 data class TreasureHapticPattern(val timings: LongArray, val amplitudes: IntArray) {
     companion object {

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Draws the flat compass-rosette instrument used by the navigation interface.
+ * The ring shows distance strength; petals and the arrival sweep provide separate visual cues.
+ */
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState

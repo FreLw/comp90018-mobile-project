@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Provides the team-message unread count for the Rooms bottom-tab badge.
+ * Its shell-owned subscription keeps the badge current while another tab is selected.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.rooms.TeamRoomRepository

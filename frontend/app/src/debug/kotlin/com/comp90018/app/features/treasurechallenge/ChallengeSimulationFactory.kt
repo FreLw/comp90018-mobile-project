@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Builds the continuous TEST sliders, calibration panel, and fake sensor engine for task previews.
+ * Slider values feed the production evaluator; edit control layout and simulated measurements here.
+ */
+
 import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -119,6 +124,7 @@ data class DebugContextControls(
     val stabilityVariation: Double? = null,
     val rotationRadiansPerSecond: Double? = null,
 ) {
+    /** Converts control values into the same timestamped sensor contract used by the live task. */
     fun snapshot(config: RelicChallengeConfig, timestampNanos: Long): DeviceContextSnapshot {
         val coordinate = GeoCoordinate(
             config.targetLocation.latitude + distanceMeters / 111_000.0,
@@ -232,12 +238,14 @@ private class DebugChallengeSimulationSession(private val config: RelicChallenge
         headingDegrees = config.requiredHeadingDegrees ?: 0.0,
     ))
 
+    /** Renders presets and continuous sliders; every change flows through the task's normal evaluator. */
     @Composable
     override fun Controls(
         state: TreasureChallengeUiState,
         onPhotoCaptured: (String) -> Unit,
         onCompleteWithDebugSnapshot: (DeviceContextSnapshot) -> Unit,
     ) {
+        // Repeated timestamped snapshots exercise GPS confirmation and keep the artwork responsive.
         LaunchedEffect(this, controls, state.completed) {
             while (!state.completed) {
                 if (engine.isStarted) engine.emit(controls.snapshot(config, SystemClock.elapsedRealtimeNanos()))

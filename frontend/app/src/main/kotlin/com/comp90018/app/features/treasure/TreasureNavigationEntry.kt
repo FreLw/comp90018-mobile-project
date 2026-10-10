@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasure
 
+/*
+ * Derives the treasure-detail navigation action and distance caption from available location data.
+ * This is entry presentation; confirmed arrival and physical challenge eligibility remain separate.
+ */
+
 import java.util.Locale
 import kotlin.math.round
 

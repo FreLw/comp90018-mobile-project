@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine.challenge
 
+/*
+ * Supplies default rule configurations for the six treasure challenges.
+ * Actual catalogue configurations are validated before use; visual appearance is defined in treasurechallenge.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 
 /**

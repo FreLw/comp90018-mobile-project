@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Determines whether reliable proximity data should trigger arrival feedback.
+ * This feedback policy is independent of the rules enabling Start Hunt or completing a challenge.
+ */
+
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.location.*
 

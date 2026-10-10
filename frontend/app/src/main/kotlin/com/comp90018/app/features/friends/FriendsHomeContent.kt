@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Renders the Friends header, Chats/Contacts selector, and list-card layouts.
+ * Edit conversation previews, unread indicators, and empty-list presentation in this file.
+ */
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -169,6 +174,7 @@ private fun FriendsTabSelector(selectedTab: FriendsListTab, onSelected: (Friends
     }
 }
 
+/** Combines contact identity with conversation preview, timestamp, and unread presentation. */
 @Composable
 private fun FriendListCard(friend: FriendSummary, chat: DirectChatSummary?, onOpenChat: () -> Unit) {
     val hasUnreadMessages = friend.unreadCount > 0
@@ -198,6 +204,7 @@ private fun FriendListCard(friend: FriendSummary, chat: DirectChatSummary?, onOp
     }
 }
 
+/** Formats the last-message content shown beneath a conversation title. */
 @Composable
 private fun LastMessagePreview(chat: DirectChatSummary) {
     val sticker = treasureStickerFor(chat.lastMessageTreasureId)

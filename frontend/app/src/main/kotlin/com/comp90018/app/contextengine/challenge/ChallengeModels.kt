@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine.challenge
 
+/*
+ * Defines task types, required conditions, instructions, configuration, and evaluator progress.
+ * These contracts connect rule evaluation to the stars, captions, and camera states shown by the UI.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 
 enum class RelicChallengeType {

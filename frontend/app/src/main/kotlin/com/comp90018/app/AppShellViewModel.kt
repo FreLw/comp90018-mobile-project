@@ -1,5 +1,10 @@
 package com.comp90018.app
 
+/*
+ * Provides the current profile and settings to the signed-in interface.
+ * Initializes new profiles immediately and exposes profile failures for retry, independently of the selected tab.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.profile.ProfileRepository
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Profile/settings and retryable errors observed by the application shell. */
 data class AppShellUiState(
     val profile: UserProfile? = null,
     val profileError: String? = null,

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Confirms navigation arrival using distinct reliable location samples.
+ * Arrival enables starting a hunt; it does not complete the subsequent treasure challenge.
+ */
+
 internal data class RelicArrivalSample(
     val hasActionableLocation: Boolean = false,
     val distanceMeters: Double? = null,

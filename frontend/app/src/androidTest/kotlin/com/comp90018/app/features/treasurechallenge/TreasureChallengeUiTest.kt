@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Checks challenge state presentation and sensor/completion interactions using controllable device context.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText

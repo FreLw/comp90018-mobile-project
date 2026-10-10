@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Renders a friend profile and its chat/removal actions.
+ * Displays profile-loading and action errors supplied by FriendProfileViewModel.
+ */
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,6 +24,10 @@ import com.comp90018.app.data.profile.FirebaseProfileRepository
 import com.comp90018.app.data.social.FriendSummary
 import com.google.firebase.firestore.FirebaseFirestore
 
+/**
+ * Displays a selected friend and delegates conversation/removal actions while presenting profile
+ * errors.
+ */
 @Composable
 fun FriendProfileScreen(
     firestore: FirebaseFirestore,

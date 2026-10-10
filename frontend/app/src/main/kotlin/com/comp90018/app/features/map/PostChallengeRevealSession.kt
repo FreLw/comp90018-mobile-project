@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Keeps one discovery handoff, its page, captured photo, save status, and artwork geometry.
+ * The coordinator reuses the existing session when repeated completion callbacks arrive.
+ */
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue

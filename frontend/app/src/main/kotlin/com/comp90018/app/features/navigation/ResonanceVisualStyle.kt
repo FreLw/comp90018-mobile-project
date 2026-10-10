@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Maps resonance strength to rosette activation and guiding-thread visual emphasis.
+ * These values style the drawing; they do not grant arrival or challenge completion.
+ */
+
 internal data class RosetteActivation(val arcAlpha: Float, val activePetals: Int)
 
 internal fun rosetteActivation(progress: Float, stage: RelicResonanceStage): RosetteActivation {

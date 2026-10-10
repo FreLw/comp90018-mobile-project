@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Calculates the geographic positions of the animated guiding-thread glints.
+ * Visual geometry travels from treasure toward explorer; it does not determine arrival or task completion.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 import kotlin.math.asin
 import kotlin.math.atan2

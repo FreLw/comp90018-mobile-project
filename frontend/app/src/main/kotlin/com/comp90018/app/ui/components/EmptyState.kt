@@ -1,5 +1,10 @@
 package com.comp90018.app.ui.components
 
+/*
+ * Displays a reusable icon, title, and explanation when a feature has no content.
+ * Use this component to keep empty-list layouts consistent between screens.
+ */
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +22,7 @@ import com.comp90018.app.BrandSoft
 import com.comp90018.app.Ink
 import com.comp90018.app.Muted
 
+/** Places a decorative icon above the title and explanation for an empty feature view. */
 @Composable
 fun EmptyState(icon: ImageVector, title: String, subtitle: String) = Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 42.dp), horizontalAlignment = Alignment.CenterHorizontally) {

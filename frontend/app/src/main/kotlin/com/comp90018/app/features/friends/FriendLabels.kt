@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Formats names and profile labels used by friend-related screens.
+ * Also identifies legacy starter contacts so they can be excluded from live friend and chat lists.
+ */
+
 import com.comp90018.app.data.social.FriendSummary
 
 internal val FriendSummary.displayLabel: String

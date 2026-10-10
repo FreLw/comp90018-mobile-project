@@ -1,10 +1,15 @@
+<!-- Declares the client entry point and capabilities used by interactive treasure tasks. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network access loads the map, catalogue, profiles, and chat data. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Enables proximity/completion feedback controlled by the haptic preference. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Camera, microphone, and location still need the matching runtime permission flows in the UI. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Optional hardware declarations allow installation even when a task sensor is unavailable. -->
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
@@ -13,9 +18,11 @@
         android:label="COMP90018"
         android:supportsRtl="true"
         android:theme="@style/Theme.Comp90018">
+        <!-- Gradle substitutes the local Maps key; the UI does not hard-code it. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}" />
+        <!-- The launcher hosts Compose; adjustResize makes room for the keyboard in forms and chat. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

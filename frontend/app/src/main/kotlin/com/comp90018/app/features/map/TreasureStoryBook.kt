@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Renders the vintage paged story book, parchment surfaces, archive image, and insertion animation.
+ * Splits long story text into leaves while preserving all paragraphs and allowing leaf scrolling.
+ */
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Canvas
@@ -68,6 +73,7 @@ private fun bookLeaves(relic: MapRelic): List<Folio> = buildList {
     chapter("Notes & provenance", references)
 }
 
+/** Renders the paged chronicle, archive leaf, and collection action for the discovered treasure. */
 @Composable
 internal fun TreasureStoryPanel(
     relic: MapRelic,
@@ -175,6 +181,10 @@ internal fun TreasureStoryPanel(
     }
 }
 
+/**
+ * Styles scrollable leaf text so long stories remain readable on small screens and larger font
+ * settings.
+ */
 @Composable
 private fun BookBody(text: String, centered: Boolean = false) {
     Text(text, color = BookInk, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal,
@@ -182,6 +192,7 @@ private fun BookBody(text: String, centered: Boolean = false) {
         modifier = Modifier.fillMaxWidth())
 }
 
+/** Draws the reusable paper background and border used by the story leaves. */
 @Composable
 internal fun Parchment(modifier: Modifier = Modifier) {
     Canvas(modifier) {

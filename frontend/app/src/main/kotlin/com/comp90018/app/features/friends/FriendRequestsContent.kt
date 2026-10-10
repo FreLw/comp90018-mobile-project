@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Renders incoming/outgoing request history and incoming-request profile previews.
+ * Request-card layout lives here; accept/decline actions are supplied by the parent feature.
+ */
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -96,6 +101,7 @@ internal fun FriendRequestsContent(
     }
 }
 
+/** Shows the recipient and current status of a previously sent friend request. */
 @Composable
 private fun OutgoingFriendRequestCard(
     request: OutgoingFriendRequest,

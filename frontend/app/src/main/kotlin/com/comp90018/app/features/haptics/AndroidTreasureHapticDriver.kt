@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Adapts treasure feedback events to the Android vibration hardware.
+ * Uses supported waveform APIs and safely tolerates unavailable vibration capabilities.
+ */
+
 import android.content.Context
 import android.os.VibrationEffect
 import android.os.Vibrator

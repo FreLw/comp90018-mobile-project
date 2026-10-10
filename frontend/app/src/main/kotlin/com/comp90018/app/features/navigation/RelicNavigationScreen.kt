@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Renders target-focused map guidance, compass/resonance panels, and movable debug controls.
+ * Coordinates location, orientation, arrival confirmation, and guiding-thread animation for one target.
+ */
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -266,6 +271,7 @@ fun RelicNavigationScreen(
     }
 }
 
+/** Keeps the development controls movable so they do not obscure the guidance artwork. */
 @Composable
 private fun DraggableTestControl(content: @Composable () -> Unit) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }

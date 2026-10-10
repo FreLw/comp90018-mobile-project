@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Coordinates map selection, solo/team hunt entry, compass gates, challenges, and discovery/story pages.
+ * Also contains Google Maps rendering, marker artwork, legacy hunt panels, and map-specific sensor bindings.
+ */
+
 import com.comp90018.app.data.rooms.TeamHuntLocation
 import com.comp90018.app.features.navigation.NavigationMapUpdateGate
 import com.comp90018.app.features.navigation.guidingThreadStyle
@@ -252,6 +257,7 @@ fun MapScreen(
         (fragmentHuntConfig == null || huntFragments.any { it.id !in activeHuntFoundFragmentIds })
     // An active team hunt locks the solo catalogue to its shared target.
     val resolvedTreasures = if (teamHuntActive) listOf(requireNotNull(teamHuntTarget)) else treasures
+    // These selections represent the map-owned pages. A hunt-session change resets its transient routes.
     var selectedRelic by remember(activeHuntSessionId) { mutableStateOf<MapRelic?>(null) }
     var treasureSheetExpanded by remember(selectedRelic?.id) { mutableStateOf(false) }
     BackHandler(enabled = selectedRelic != null && treasureSheetExpanded) { treasureSheetExpanded = false }
@@ -470,6 +476,7 @@ fun MapScreen(
         }
     }
 
+    // Render a full-screen hunt route before the normal map; the first matching branch owns this frame.
     atlasAssemblyRelic?.let { relic ->
         SouthLawnAssemblyScreen(
             onClaim = { complete ->
@@ -917,6 +924,7 @@ fun MapScreen(
     }
 }
 
+/** Offers the location-triggered team-task entry while preserving acknowledgement across visits. */
 @Composable
 private fun TeamHuntArrivalDialog(
     isOwner: Boolean,
@@ -1079,6 +1087,7 @@ private val MEMBER_HUNT_QUESTIONS = mapOf(
     ),
 )
 
+/** Explains a team hunt state with optional task entry and a return action. */
 @Composable
 private fun TeamHuntStatusScreen(message: String, onStartTask: (() -> Unit)?, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1145,6 +1154,7 @@ private fun MemberHuntQuiz(
     }
 }
 
+/** Lists local task previews available from the debug map interface. */
 @Composable
 private fun DebugChallengeLauncher(relics: List<MapRelic>, onLaunch: (MapRelic) -> Unit, modifier: Modifier = Modifier) {
     if (relics.isEmpty()) return
@@ -1171,6 +1181,7 @@ internal fun saveRelicDiscovery(
     onComplete: (String?) -> Unit,
 ) = onCollectTreasure(relic.id, onComplete)
 
+/** Renders shared fragment markers and the find-fragment interaction for the Atlas hunt. */
 @Composable
 private fun SouthLawnFragmentHuntScreen(
     teammateLocations: List<TeamHuntLocation>,
@@ -1314,6 +1325,10 @@ private fun SouthLawnClaimWaitingScreen(
     }
 }
 
+/**
+ * Bridges the Android MapView into Compose, owns map lifecycle, and updates scene/marker/thread
+ * overlays.
+ */
 @Composable
 internal fun GoogleMapView(
     relics: List<MapRelic>,
@@ -1722,6 +1737,7 @@ private fun PerspectiveOption(label: String, selected: Boolean, onClick: () -> U
     }
 }
 
+/** Provides the map debug distance slider without changing the live location source. */
 @Composable
 internal fun DistanceSimulationControl(
     distance: Double?,
@@ -1745,6 +1761,7 @@ internal fun DistanceSimulationControl(
     }
 }
 
+/** Provides the map debug heading slider used to preview directional presentation. */
 @Composable
 internal fun HeadingSimulationControl(
     headingDegrees: Double?,
@@ -1813,6 +1830,7 @@ private fun StaleLocationBadge(modifier: Modifier = Modifier) {
     }
 }
 
+/** Explains required location access and launches the Android permission request. */
 @Composable
 private fun LocationPermissionPrompt(onPermissionGranted: () -> Unit, modifier: Modifier = Modifier) {
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -1862,6 +1880,10 @@ private val REAL_SENSOR_HUNT_TYPES = setOf(
     RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL,
 )
 
+/**
+ * Renders the pre-task compass and distance/heading indicators; both conditions enable the
+ * departure animation and task entry.
+ */
 @Composable
 internal fun TreasureCompassGate(
     relic: MapRelic,
@@ -1898,6 +1920,7 @@ internal fun TreasureCompassGate(
     val nearTreasure = readiness.nearTreasure
     val facingTreasure = readiness.facingTreasure
     val allReady = readiness.allReady
+    // Distance and heading gate entry only. The physical task remains responsible for completion and saving.
     fun continueToChallenge() {
         if (!allReady || leaving) return
         leaving = true
@@ -2020,12 +2043,14 @@ internal fun TreasureCompassGate(
     }
 }
 
+/** Styles one continuous sensor-preview slider and its current numeric reading. */
 @Composable
 private fun SensorTestSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, unit: String, color: Color, onChange: (Float) -> Unit) {
     Text("$label  ${String.format(Locale.US, "%.1f", value)}$unit", color = Ink, style = MaterialTheme.typography.labelMedium)
     Slider(value = value, onValueChange = onChange, valueRange = range, colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = color, activeTrackColor = color))
 }
 
+/** Draws the animated compass, decorative orbit, and distance-linked stars for the gate. */
 @Composable
 private fun DivineCompassVisual(
     readiness: HuntReadiness,
@@ -2149,6 +2174,7 @@ internal fun oracleStarCount(distanceMeters: Double?, huntReadyRadiusMeters: Dou
     kotlin.math.floor((((huntReadyRadiusMeters + 20.0) - it) / 20.0).coerceIn(0.0, 1.0) * 10.0).toInt()
 } ?: 0
 
+/** Renders one compass requirement with an animated light, caption, and current reading. */
 @Composable
 private fun OracleLamp(title: String, hint: String, detail: String, lit: Boolean, proximity: Float, color: Color, modifier: Modifier) {
     val glow by animateFloatAsState(if (lit) 1f else proximity * 0.55f, tween(450), label = "lantern_brightness")
@@ -2210,6 +2236,7 @@ private fun OracleLamp(title: String, hint: String, detail: String, lit: Boolean
     }
 }
 
+/** Coordinates detail/search/dig/found/story presentation and its collection callbacks. */
 @Composable
 private fun TreasureDetailScreen(
     relic: MapRelic,
@@ -2367,6 +2394,7 @@ private fun TreasureDetailScreen(
 
 private enum class TreasureHuntStage { DETAILS, SEARCHING, READY_TO_DIG, FOUND, STORY }
 
+/** Displays the selected treasure summary and expandable detail affordance on the map. */
 @Composable
 private fun TreasurePeekHeader(
     relic: MapRelic,
@@ -2439,6 +2467,7 @@ private fun TreasurePeekHeader(
     }
 }
 
+/** Renders treasure facts and the actions available from the detail stage. */
 @Composable
 private fun TreasureInformationPanel(
     relic: MapRelic,
@@ -2518,6 +2547,7 @@ private fun HuntFactCard(title: String, value: String, color: Color, modifier: M
     }
 }
 
+/** Presents the staged search illustration used by the legacy hunt flow. */
 @Composable
 private fun TreasureSearchPanel(
     searchStep: Int,
@@ -2807,6 +2837,7 @@ fun HuntScanPanel(
     }
 }
 
+/** Draws the live scan instrument from distance, direction, motion, and posture readings. */
 @Composable
 private fun RelicScannerVisual(
     acceleration: Float,
@@ -2894,6 +2925,7 @@ private fun ScannerReading(label: String, value: String) {
     }
 }
 
+/** Draws the looping treasure-chest feedback illustration used in hunt panels. */
 @Composable
 private fun AnimatedTreasureChest(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "treasure_chest")
@@ -2919,6 +2951,7 @@ private fun AnimatedTreasureChest(modifier: Modifier = Modifier) {
     )
 }
 
+/** Draws the looping radar sweep used while searching for a treasure. */
 @Composable
 private fun RadarAnimation(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "treasure_radar")
@@ -2968,6 +3001,7 @@ private fun TreasureSilhouette(relic: MapRelic, discovered: Boolean, modifier: M
     TreasurePrototypeImage(relic = relic, discovered = discovered, modifier = modifier)
 }
 
+/** Presents found treasure artwork and the action that opens its story. */
 @Composable
 private fun TreasureFoundPanel(relic: MapRelic, onViewStory: () -> Unit) {
     Column(
@@ -3006,6 +3040,7 @@ private fun DetailTextRow(title: String, subtitle: String) {
     androidx.compose.material3.HorizontalDivider(color = BrandSoft)
 }
 
+/** Collects rotation-vector heading for map presentation and unregisters the listener on disposal. */
 @Composable
 internal fun rememberDeviceHeading(): Float {
     val context = LocalContext.current
@@ -3092,6 +3127,7 @@ private fun MapLifecycle(mapView: MapView) {
     }
 }
 
+/** Creates treasure markers for the current scene; the caller owns clearing the previous scene. */
 private fun renderRelics(
     context: Context,
     map: GoogleMap,
@@ -3122,6 +3158,7 @@ private fun renderRelics(
     return markers
 }
 
+/** Creates shared Atlas fragment markers with artwork matching each fragment's found state. */
 private fun renderHuntFragments(
     context: Context,
     map: GoogleMap,
@@ -3143,6 +3180,7 @@ private fun renderHuntFragments(
 
 private val fragmentArtworkBounds = android.util.LruCache<Int, android.graphics.Rect>(4)
 
+/** Builds the bitmap artwork used by an individual Atlas-fragment map marker. */
 private fun fragmentMarkerIcon(context: Context, fragmentId: String, found: Boolean): BitmapDescriptor {
     val artworkRes = when (fragmentId) {
         "south_lawn_north_west" -> R.drawable.treasure_atlas_fragment_north_west
@@ -3296,6 +3334,7 @@ private const val MAX_INITIAL_TREASURE_AREA_SPAN_METERS = 3_000.0
 private val treasureMarkerIcons = android.util.LruCache<String, BitmapDescriptor>(96)
 private val treasureMarkerArtwork = android.util.LruCache<Int, Bitmap>(8)
 
+/** Builds the selected/available treasure marker bitmap at the requested presentation size. */
 private fun questMarkerIcon(
     context: Context,
     relic: MapRelic,
@@ -3340,6 +3379,7 @@ private fun questMarkerIcon(
     return BitmapDescriptorFactory.fromBitmap(bitmap).also { treasureMarkerIcons.put(key, it) }
 }
 
+/** Builds the explorer location-marker bitmap used by the map. */
 private fun currentLocationIcon(
     context: Context,
     dotColor: Int = android.graphics.Color.rgb(217, 84, 53),
@@ -3386,6 +3426,7 @@ private fun currentLocationIcon(
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
+/** Fits the map viewport to catalogue coordinates and an optional explorer position. */
 private fun moveCameraToCampus(map: GoogleMap, coordinates: List<GeoCoordinate>, currentLocation: GeoCoordinate?) {
     val points = buildList {
         addAll(coordinates)
@@ -3405,6 +3446,7 @@ private fun moveCameraToCampus(map: GoogleMap, coordinates: List<GeoCoordinate>,
     map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 120))
 }
 
+/** Frames the treasure area without forcing a full-campus overview. */
 private fun moveCameraToTreasureArea(
     map: GoogleMap,
     relics: List<MapRelic>,

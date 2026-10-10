@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Stores target-local debug distance/heading inputs and synthetic GPS fix identity.
+ * Only changed slider values create new evidence, so recomposition cannot falsely confirm arrival.
+ */
+
 /** Local debug evidence; only changed slider values create fixes, never recompositions. */
 internal data class RelicNavigationSimulation(
     val distanceMeters: Double? = null,

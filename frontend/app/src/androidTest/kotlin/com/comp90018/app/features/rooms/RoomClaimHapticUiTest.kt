@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Checks feedback for confirmed room treasure claims through the real UI entry point.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue

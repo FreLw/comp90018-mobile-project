@@ -1,5 +1,10 @@
 package com.comp90018.app.features.auth
 
+/*
+ * Renders the login/register form and validates user-entered credentials.
+ * Layout and field styling live here; AuthViewModel performs the submitted authentication action.
+ */
+
 import android.util.Patterns
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +38,7 @@ import com.comp90018.app.RelicGold
 import com.comp90018.app.data.auth.AuthRepository
 import com.comp90018.app.ui.components.AppTextField
 
+/** Binds the authentication form to its ViewModel and presents field-validation/submission errors. */
 @Composable
 fun AuthScreen(repository: AuthRepository) {
     val viewModel: AuthViewModel = viewModel(factory = AuthViewModel.factory(repository))
@@ -60,6 +66,7 @@ fun AuthScreen(repository: AuthRepository) {
     }
 }
 
+/** Returns the inline error shown before an invalid email/password reaches authentication. */
 private fun validateCredentials(email: String, password: String): String? = when {
     email.isBlank() || password.isBlank() -> "Enter your email and password"
     !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> "Enter a valid email address"

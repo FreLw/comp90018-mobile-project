@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Coordinates the Friends home, request history, finder, profile, and direct-chat views.
+ * Collects shared friend state and connects child screens to the correct social actions.
+ */
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut

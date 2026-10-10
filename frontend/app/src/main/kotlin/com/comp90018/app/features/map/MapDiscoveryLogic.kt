@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Contains the map distance bands, direction captions, compass readiness, and visibility policies.
+ * Pure helpers keep presentation decisions reusable and testable without rendering a map.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 import com.comp90018.app.sensors.location.LocationCalculator
 import kotlin.math.abs

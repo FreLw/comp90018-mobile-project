@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Combines one room, its members, messages, and cooperative-hunt progress for the UI.
+ * All room/hunt mutations use repository callbacks, including completion and claim confirmation.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.chat.ChatMessage
@@ -14,6 +19,7 @@ import android.net.Uri
 import com.comp90018.app.BuildConfig
 import com.comp90018.app.features.map.SouthLawnFragmentIds
 
+/** Room/member/message data plus draft and operation status observed by the team interface. */
 data class TeamRoomChatUiState(
     val room: TeamRoom? = null,
     val messages: List<ChatMessage> = emptyList(),
@@ -108,6 +114,7 @@ class TeamRoomChatViewModel(
         }
     }
 
+    /** Persists the selected treasure and reports errors to the room hunt controls. */
     fun selectDestination(taskId: String, taskTitle: String) {
         if (mutableUiState.value.updatingTask) return
         mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)
@@ -116,6 +123,7 @@ class TeamRoomChatViewModel(
         }
     }
 
+    /** Starts the shared hunt and invokes navigation only after the repository confirms success. */
     fun startHunt(onStarted: () -> Unit) {
         val state = mutableUiState.value
         if (state.updatingTask || state.room?.creatorId != userId || state.room.memberIds.size < 2 || state.room.taskId.isBlank()) return
@@ -137,6 +145,7 @@ class TeamRoomChatViewModel(
 
     fun completeHuntTask() = completeHuntTaskWithConfirmation {}
 
+    /** Reports the task transaction result so map UI can close the task only after success. */
     fun completeHuntTaskWithConfirmation(onComplete: (String?) -> Unit) {
         if (mutableUiState.value.updatingTask) {
             onComplete("A hunt update is already in progress")
@@ -149,6 +158,7 @@ class TeamRoomChatViewModel(
         }
     }
 
+    /** Writes one shared Atlas-fragment discovery and presents any transaction failure in room state. */
     fun findHuntFragment(fragmentId: String) {
         if (mutableUiState.value.updatingTask) return
         mutableUiState.value = mutableUiState.value.copy(updatingTask = true, error = null)

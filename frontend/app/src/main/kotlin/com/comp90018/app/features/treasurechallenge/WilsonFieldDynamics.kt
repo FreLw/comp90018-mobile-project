@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Calculates seeded flower drift and which floating water stars the distance fill reaches.
+ * Independent seeds give each small flower its own movement channels.
+ */
+
 import kotlin.math.floor
 
 internal data class RosetteDrift(val x: Float, val y: Float, val spin: Float, val pulse: Float)

@@ -1,5 +1,10 @@
 package com.comp90018.app.sensors.camera
 
+/*
+ * Binds CameraX preview/capture to the visible lifecycle and returns captured photo URIs.
+ * The photo UI owns permission prompts, filtering, and animation; this adapter owns the camera operations.
+ */
+
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri

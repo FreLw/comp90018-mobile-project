@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine
 
+/*
+ * Defines the combined sensor input read by task rules and visual-signal conversion.
+ * Contains validity and timing metadata as well as the measurements used by the artwork.
+ */
+
 import com.comp90018.app.sensors.MotionState
 import com.comp90018.app.sensors.MotionStabilityOutput
 import com.comp90018.app.sensors.RotationState

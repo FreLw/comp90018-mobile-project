@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Loads the selected friend profile and tracks the remove-friend action.
+ * Supplies loading/error state while delegating persistence to the profile repository and removal callback.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.profile.ProfileRepository
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Selected profile, failure text, and pending removal state for friend details. */
 data class FriendProfileUiState(
     val profile: UserProfile? = null,
     val error: String? = null,

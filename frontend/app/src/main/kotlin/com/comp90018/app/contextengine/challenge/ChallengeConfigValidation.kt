@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine.challenge
 
+/*
+ * Checks that each challenge configuration contains its required task rules.
+ * Invalid catalogue rules must not open a task whose UI could suggest an unattainable completion.
+ */
+
 /** Reject incomplete or contradictory catalogue rules rather than silently weakening a task. */
 fun RelicChallengeConfig.hasRequiredTaskRules(): Boolean {
     val noMotion = !requiresStationary && !requiresStability && !requiresRotationStill && !requiresHorizontal

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.chat
 
+/*
+ * Maintains a direct conversation, its draft, message subscription, and send failures.
+ * Visibility controls read acknowledgements; confirmed writes determine when the draft is cleared.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.chat.ChatMessage
@@ -10,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import android.net.Uri
 
+/** Messages, draft, send status, and errors observed by one conversation. */
 data class DirectChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val input: String = "",
@@ -69,6 +75,7 @@ class DirectChatViewModel(
             )
         }
     }
+    /** Uploads a selected image through the repository and exposes send errors to the conversation UI. */
     fun sendImage(uri: Uri) {
         if (mutableUiState.value.sending) return
         mutableUiState.value = mutableUiState.value.copy(error = null, sending = true)

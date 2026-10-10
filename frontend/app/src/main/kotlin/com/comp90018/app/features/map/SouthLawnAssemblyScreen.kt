@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Animates four Atlas fragments into the complete treasure before the team claim.
+ * Uses the original untrimmed quadrants so the assembled image matches the full Atlas artwork.
+ */
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable

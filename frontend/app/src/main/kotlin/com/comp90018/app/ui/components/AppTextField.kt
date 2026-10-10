@@ -1,5 +1,10 @@
 package com.comp90018.app.ui.components
 
+/*
+ * Supplies the shared rounded input-field appearance used by forms.
+ * The caller owns the value; this component controls keyboard options, password masking, and field styling.
+ */
+
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -16,6 +21,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.comp90018.app.Brand
 
+/** Styles a caller-owned form value; input changes are returned through onValueChange. */
 @Composable
 fun AppTextField(
     label: String,

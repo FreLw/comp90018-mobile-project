@@ -1,3 +1,4 @@
+// Resolves frontend plugins/dependencies and includes the single Android application module.
 pluginManagement {
 	repositories {
 		google()

@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine
 
+/*
+ * Provides controllable context snapshots for task previews, debug sliders, and tests.
+ * Emits the same output contract as the Android engine so presentation and rules can be exercised together.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

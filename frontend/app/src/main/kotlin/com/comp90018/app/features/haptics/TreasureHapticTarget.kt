@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Selects the active or nearest eligible treasure for proximity feedback.
+ * Uses raw location evidence without changing map visibility or hunt eligibility.
+ */
+
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.sensors.location.LocationCalculator
 import com.comp90018.app.sensors.location.LocationOutput

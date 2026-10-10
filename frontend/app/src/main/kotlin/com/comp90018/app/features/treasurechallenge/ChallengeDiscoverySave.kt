@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Tracks one asynchronous collection save after a task completes.
+ * Discovery navigation and completion feedback begin immediately; failed persistence remains retryable.
+ */
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue

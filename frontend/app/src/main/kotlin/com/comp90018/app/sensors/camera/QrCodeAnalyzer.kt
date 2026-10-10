@@ -1,5 +1,10 @@
 package com.comp90018.app.sensors.camera
 
+/*
+ * Decodes QR values from camera frames when an analysis callback is configured.
+ * This camera analysis helper is separate from the photo-task logo and reveal animations.
+ */
+
 import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis

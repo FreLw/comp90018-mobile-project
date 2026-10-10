@@ -1,12 +1,17 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Converts valid sensor readings into bounded values used by task illustrations and captions.
+ * Visual normalization and proximity fill are presentation values, separate from completion thresholds.
+ */
+
 import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.sensors.DirectionProcessor
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.location.LocationCalculator
 
-/** A bounded presentation of live readings. Only evaluator conditions can illuminate the artwork. */
+/** Bounded live readings drive continuous artwork effects; evaluator conditions determine completion stars. */
 internal data class QuestVisualSignals(
     val headingError: Float = 0f,
     val roll: Float = 0f,
@@ -41,6 +46,8 @@ internal data class QuestVisualSignals(
             val db = snapshot.sound.decibels.finiteOrNull().takeIf { snapshot.sound.validity == SensorValidity.VALID }
             fun reading(value: Double?, valid: SensorValidity, limit: Double): Float =
                 if (valid == SensorValidity.VALID) (value.finiteOrNull() ?: 0.0).coerceIn(-limit, limit).toFloat() else 0f
+            // Normalize valid readings for drawing intensity. These clamps tune appearance; completion thresholds
+            // remain in ChallengeRuleEvaluator and ChallengePoise.
             return QuestVisualSignals(
                 headingError = (error ?: 0.0).coerceIn(-180.0, 180.0).toFloat(),
                 roll = reading(attitude.rollDegrees, attitude.validity, 45.0),

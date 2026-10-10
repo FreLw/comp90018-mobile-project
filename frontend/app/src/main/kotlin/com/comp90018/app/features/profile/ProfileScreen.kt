@@ -1,5 +1,10 @@
 package com.comp90018.app.features.profile
 
+/*
+ * Renders the profile overview, editable details, avatar, settings, and About content.
+ * Local page/form state controls presentation; supplied callbacks save changes and sign the user out.
+ */
+
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,6 +50,7 @@ import java.net.URL
 
 private enum class ProfilePage { Overview, Edit, Settings }
 
+/** Switches profile overview/edit/settings pages and supplies their save/logout actions. */
 @Composable
 fun ProfileScreen(
     userUid: String,
@@ -87,6 +93,7 @@ fun ProfileScreen(
     }
 }
 
+/** Builds the avatar, identity, details, and entry actions shown on the Profile tab. */
 @Composable
 private fun ProfileOverview(
     userEmail: String,
@@ -159,6 +166,7 @@ private fun ProfileOverview(
     }
 }
 
+/** Keeps editable form values locally and submits one profile update through the supplied callback. */
 @Composable
 private fun EditProfileScreen(
     userUid: String,
@@ -312,6 +320,7 @@ private fun GenderDropdown(gender: String, onGenderChanged: (String) -> Unit) {
     }
 }
 
+/** Renders preference switches and save status for the current profile settings. */
 @Composable
 private fun SettingsScreen(
     userUid: String,
@@ -368,6 +377,7 @@ private fun ProfileDetail(label: String, value: String) {
     }
 }
 
+/** Loads the avatar source with a fallback inside the shared circular avatar layout. */
 @Composable
 internal fun ProfileAvatar(source: String, fallback: String, size: Dp) {
     val context = LocalContext.current

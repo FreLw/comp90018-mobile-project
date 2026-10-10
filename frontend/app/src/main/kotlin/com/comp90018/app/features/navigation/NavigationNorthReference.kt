@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Converts magnetic device headings into the true-north reference used by GPS bearings.
+ * Caches geographic declination so heading animation does not repeatedly recreate the geomagnetic model.
+ */
+
 import android.hardware.GeomagneticField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember

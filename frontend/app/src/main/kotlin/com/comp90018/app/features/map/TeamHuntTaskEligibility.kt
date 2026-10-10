@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Determines whether the current teammate should perform a task, wait, or claim the treasure.
+ * One policy keeps map prompts and hunt entry points aligned with shared completion state.
+ */
+
 /**
  * Decides whether the explorer using this device still needs to do their part of a team
  * hunt. Keeping this separate from the UI ensures every entry point uses the same completion

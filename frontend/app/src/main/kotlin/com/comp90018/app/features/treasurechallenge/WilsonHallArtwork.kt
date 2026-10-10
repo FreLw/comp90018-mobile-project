@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Draws the rosette, independent small flowers, heading pointer, and full-screen distance-lit water.
+ * Turn and combined stillness each light four petals; heading alignment triggers an expanding ripple.
+ */
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -26,6 +31,7 @@ private fun rosetteTime(): Float {
         infiniteRepeatable(tween(120000, easing = LinearEasing)), label = "independent_flower_paths").value
 }
 
+/** Restarts an expanding alignment ripple whenever the heading condition becomes satisfied. */
 @Composable
 private fun headingResonance(state: TreasureChallengeUiState): Float {
     val aligned = state.conditionLit(ChallengeCondition.HEADING_ALIGNED)
@@ -37,6 +43,7 @@ private fun headingResonance(state: TreasureChallengeUiState): Float {
     return ripple.value
 }
 
+/** Fills full-screen water with gold according to distance and illuminates reached floating stars. */
 @Composable
 internal fun WilsonHallBackdrop(
     state: TreasureChallengeUiState,
@@ -154,6 +161,7 @@ internal fun WilsonHallBackdrop(
 
 private data class WaterStarLight(val gold: Float, val ripple: Float)
 
+/** Tracks each water star illumination so a newly reached star can flash and emit its own ripple. */
 @Composable
 private fun rosetteWaterStarLights(state: TreasureChallengeUiState, proximity: Float): List<WaterStarLight> =
     RosetteWaterStars.mapIndexed { index, star ->
@@ -167,6 +175,10 @@ private fun rosetteWaterStarLights(state: TreasureChallengeUiState, proximity: F
         WaterStarLight(gold, ripple.value)
     }
 
+/**
+ * Draws independently animated flowers and a heading pointer, with separate turn/stillness petal
+ * groups.
+ */
 @Composable
 internal fun WilsonHallEmblem(state: TreasureChallengeUiState, modifier: Modifier) {
     val signals = QuestVisualSignals.from(state)
@@ -195,6 +207,7 @@ internal fun WilsonHallEmblem(state: TreasureChallengeUiState, modifier: Modifie
         ChallengeCondition.STILLNESS, ChallengeCondition.ROTATION_STILL).associateWith {
         animateFloatAsState(if (state.conditionLit(it)) 1f else 0f, tween(650), label = "rosette_" + it.name).value
     }
+    // The eight main petals encode two different requirements: four for turn and four for combined stillness.
     val turnPetals = if (state.conditionLit(ChallengeCondition.ROTATION_STILL)) 4 else 0
     val stillPetals = if (state.conditionLit(ChallengeCondition.STILLNESS)) 4 else 0
     Canvas(modifier.testTag("quest_emblem").semantics {
@@ -296,6 +309,7 @@ internal fun WilsonHallEmblem(state: TreasureChallengeUiState, modifier: Modifie
     }
 }
 
+/** Draws continuous ambient ripples around the current emblem centre across the whole background. */
 private fun DrawScope.drawFullScreenRosetteWater(seconds: Float, origin: Offset, ink: Color) {
     val spacing = 25.dp.toPx()
     repeat(ceil(size.height / spacing).toInt() + 1) { row ->

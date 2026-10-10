@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Renders friend search results, candidate profiles, and the request composer.
+ * The local page selection chooses the view; FriendFinderViewModel owns search and social actions.
+ */
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +42,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 
+/** Switches between search results, the selected candidate profile, and the request composer. */
 @Composable
 fun FriendFinder(
     user: FirebaseUser,
@@ -121,6 +127,7 @@ fun FriendFinder(
 
 private enum class FinderPage { Search, Profile, Request }
 
+/** Presents one search match with profile navigation and its current add-friend availability. */
 @Composable
 private fun CandidateRow(candidate: SearchUser, isFriend: Boolean, requestSent: Boolean, onViewProfile: () -> Unit, onAdd: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onViewProfile), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -150,6 +157,7 @@ private fun CandidateRow(candidate: SearchUser, isFriend: Boolean, requestSent: 
     }
 }
 
+/** Presents candidate details and relationship-dependent friend/chat actions. */
 @Composable
 private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiState, viewModel: FriendFinderViewModel) {
     Column(
@@ -190,6 +198,7 @@ private fun FriendCandidateProfile(target: SearchUser, state: FriendFinderUiStat
     }
 }
 
+/** Collects the introduction message before sending a request to the selected candidate. */
 @Composable
 private fun FriendRequestComposer(
     target: SearchUser,
