@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Renders the post-challenge treasure, optional photo-history, and story views.
+ * Uses a retained reveal session so save status and the captured-photo/artwork handoff stay consistent.
+ */
+
 import android.net.Uri
 import android.widget.ImageView
 import androidx.compose.animation.Crossfade
@@ -35,6 +40,7 @@ import com.comp90018.app.features.treasure.TreasurePrototypeImage
 import com.comp90018.app.features.treasurechallenge.DiscoverySaveStatus
 import kotlinx.coroutines.delay
 
+/** Routes the retained reveal session to treasure, photo-history, or story presentation. */
 @Composable
 fun PostChallengeRevealScreen(session: PostChallengeRevealSession, onReturnToMap: () -> Unit) {
     when (session.page) {
@@ -52,6 +58,7 @@ fun PostChallengeRevealScreen(session: PostChallengeRevealSession, onReturnToMap
     }
 }
 
+/** Displays the captured photograph alongside the archive scene before continuing to the treasure. */
 @Composable
 private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onReturnToMap: () -> Unit) {
     val photoUri = session.capturedPhotoUri ?: return
@@ -111,6 +118,7 @@ private fun UnionPhotoHistoryReveal(session: PostChallengeRevealSession, onRetur
     }
 }
 
+/** Binds discovery actions and collection retry state to the retained post-challenge session. */
 @Composable
 private fun TreasureRevealPanel(session: PostChallengeRevealSession, onReturnToMap: () -> Unit) {
     TreasureDiscoveryReveal(session.relic, session::viewStory, onReturnToMap,

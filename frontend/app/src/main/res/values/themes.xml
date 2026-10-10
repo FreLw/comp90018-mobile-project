@@ -1,4 +1,5 @@
 <resources>
+    <!-- Android window/status-bar defaults. Compose colours and typography live in AppTheme.kt. -->
     <style name="Theme.Comp90018" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>

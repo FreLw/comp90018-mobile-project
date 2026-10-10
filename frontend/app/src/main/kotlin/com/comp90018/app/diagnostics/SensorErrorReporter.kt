@@ -1,5 +1,10 @@
 package com.comp90018.app.diagnostics
 
+/*
+ * Publishes sensor failures for the app-wide snackbar interface.
+ * Hardware adapters report here instead of displaying their own feature-specific error dialogs.
+ */
+
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow

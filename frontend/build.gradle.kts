@@ -1,3 +1,4 @@
+// Declares plugin versions shared by the Android frontend build.
 plugins {
 	id("com.android.application") version "9.3.3" apply false
 	id("com.google.gms.google-services") version "4.5.0" apply false

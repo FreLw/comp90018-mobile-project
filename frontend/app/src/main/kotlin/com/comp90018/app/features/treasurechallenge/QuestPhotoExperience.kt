@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Implements Union Lawn and System Garden camera entry, permission, preview, shutter, and logo morph.
+ * Keeps the shutter outside the emblem slot and passes the final logo bounds to the discovery transition.
+ */
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -96,6 +101,8 @@ internal fun QuestPhotoExperience(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+    // A successful camera tap replaces the emblem slot with the preview; a captured photo keeps that slot
+    // visible while its artwork develops, even after the live camera is unbound.
     val showViewfinder = (cameraOpened && hasCameraPermission) || state.capturedPhotoUri != null
     val cameraCapture = remember(context) { CameraXCapture(context.applicationContext) }
     val previewView = remember(context) {
@@ -211,6 +218,10 @@ internal fun QuestPhotoExperience(
     )
 }
 
+/**
+ * Morphs the live/frozen sepia frame into its final artwork and reports the exact logo rectangle
+ * for handoff.
+ */
 @Composable
 private fun QuestPhotoViewfinder(
     state: TreasureChallengeUiState,
@@ -244,6 +255,7 @@ private fun QuestPhotoViewfinder(
     BoxWithConstraints(modifier.testTag(style.tag("viewfinder")), contentAlignment = Alignment.Center) {
         val logoSize = minOf(maxWidth, maxHeight)
         val p = morph.value
+        // The first phase reshapes/tilts the frame; the overlapping second phase fades the photograph into the logo.
         val shape = (p / .65f).coerceIn(0f, 1f)
         val blend = ((p - .25f) / .6f).coerceIn(0f, 1f)
         // Fit the frozen photograph to its own relic artwork as the two layers blend.

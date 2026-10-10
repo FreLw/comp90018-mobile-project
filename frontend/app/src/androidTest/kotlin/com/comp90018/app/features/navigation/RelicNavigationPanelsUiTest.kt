@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Checks guidance-panel captions, resonance presentation, and the arrival/start-hunt action.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme

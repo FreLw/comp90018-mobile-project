@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Draws the Atlas/globe emblem, elegant figure, distance-gilded vines, and rotating cross stars.
+ * Combined motion/shake drives agitation; heading and turn conditions control their own gold accents.
+ */
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
@@ -14,6 +19,10 @@ import com.comp90018.app.contextengine.challenge.ChallengeCondition
 import com.comp90018.app.contextengine.challenge.ChallengePoise
 import kotlin.math.*
 
+/**
+ * Maps distance to gilded vines and applies independent heading, stillness, and turn accents to
+ * the Atlas.
+ */
 @Composable
 internal fun SouthLawnEmblem(state: TreasureChallengeUiState, modifier: Modifier = Modifier) {
     val signals = QuestVisualSignals.from(state)

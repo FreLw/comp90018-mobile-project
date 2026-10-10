@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasure
 
+/*
+ * Provides the shared treasure catalogue, loading state, and retryable loading errors.
+ * The shell shares this catalogue with map, collection, room, and navigation interfaces.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.social.Subscription
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Catalogue treasures and loading/error presentation shared by the signed-in screens. */
 data class TreasureCatalogUiState(
     val treasures: List<MapRelic> = emptyList(),
     val loading: Boolean = true,

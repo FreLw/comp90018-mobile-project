@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Combines the context engine and rule evaluator into task, camera, condition-star, and completion state.
+ * Preserves earned photo readiness and stores the completed artwork handoff while the UI animates.
+ */
+
 import android.content.Context
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
@@ -42,6 +47,8 @@ enum class ChallengeCameraState {
     ERROR,
 }
 
+// This is the screen contract: condition states light stars, actionReady unlocks the shutter,
+// and latestSnapshot supplies continuous readings for the living artwork.
 data class TreasureChallengeUiState(
     val challengeId: String,
     val challengeType: RelicChallengeType,
@@ -95,6 +102,7 @@ class TreasureChallengeViewModel(
     private val mutableUiState = MutableStateFlow(initialUiState(initialConfig))
     val uiState: StateFlow<TreasureChallengeUiState> = mutableUiState.asStateFlow()
 
+    /** Configures the active treasure target and subscribes to device context while the task is visible. */
     fun start() {
         if (isActive) return
         // A completed physical challenge survives a temporary Activity stop while discovery saves.
@@ -111,6 +119,7 @@ class TreasureChallengeViewModel(
         contextEngine.start()
     }
 
+    /** Stops hardware collection while retaining an already completed task for save/reveal continuity. */
     fun stop() {
         val completedState = mutableUiState.value.takeIf { it.completed }
         collectionJob?.cancel()
@@ -142,6 +151,7 @@ class TreasureChallengeViewModel(
         if (shouldStart) start()
     }
 
+    /** Enters capture state only after the task has unlocked a photo opportunity. */
     fun onPhotoCaptureStarted() {
         if (!mutableUiState.value.actionReady || mutableUiState.value.completed) return
         mutableUiState.value = mutableUiState.value.copy(
@@ -150,6 +160,7 @@ class TreasureChallengeViewModel(
         )
     }
 
+    /** Records the completed visual handoff so navigation can reuse the same developed logo geometry. */
     fun finishPhotoReveal(arrival: PhotoRevealArrival? = null) {
         val state = mutableUiState.value
         if (state.completed && state.capturedPhotoUri != null && config.type.photoRevealStyle() != null) {
@@ -158,6 +169,10 @@ class TreasureChallengeViewModel(
         }
     }
 
+    /**
+     * Accepts a successful capture and sends the photo event to the evaluator using the earned
+     * ready snapshot.
+     */
     fun onPhotoCaptured(uri: String) {
         if (!photoOpportunityReady || mutableUiState.value.cameraState != ChallengeCameraState.CAPTURING ||
             mutableUiState.value.completed) return
@@ -238,6 +253,10 @@ class TreasureChallengeViewModel(
         publish(progress, snapshot)
     }
 
+    /**
+     * Converts evaluator progress into instruction, condition-star, camera, and completion state
+     * for the screen.
+     */
     private fun publish(progress: ChallengeProgress, snapshot: DeviceContextSnapshot) {
         if (progress.actionReady && config.photoActionRequired) {
             photoOpportunityReady = true

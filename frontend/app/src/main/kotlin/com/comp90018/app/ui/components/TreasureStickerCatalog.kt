@@ -1,5 +1,10 @@
 package com.comp90018.app.ui.components
 
+/*
+ * Maps collectible treasure IDs to the names and drawable resources used by chat stickers.
+ * Update this catalogue when adding or changing a sticker shown in the picker and message bubbles.
+ */
+
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
 import com.comp90018.app.R

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Provides search results and the selected candidate for the add-friend flow.
+ * Tracks relationship/request state and exposes a direct-room ID when the user opens a conversation.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.social.FriendshipStatus
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Search input/results and candidate relationship/action state for the add-friend interface. */
 data class FriendFinderUiState(
     val query: String = "",
     val results: List<SearchUser> = emptyList(),

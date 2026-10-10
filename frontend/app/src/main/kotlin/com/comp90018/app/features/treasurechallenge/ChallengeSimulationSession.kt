@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Defines the debug-control UI and fake context-engine contract shared by build types.
+ * The real simulator is supplied by src/debug; production rule evaluation still determines completion.
+ */
+
 import androidx.compose.runtime.Composable
 import com.comp90018.app.contextengine.DeviceContextSnapshot
 import com.comp90018.app.contextengine.DeviceContextEngine

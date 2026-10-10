@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Coordinates treasure proximity/completion feedback and suppresses duplicate vibrations.
+ * Tracks attempts across UI navigation and respects session closure, preferences, and lifecycle cancellation.
+ */
+
 /** One instance per signed-in exploration session; UI navigation never resets these sets. */
 class TreasureHapticController(
     private val driver: TreasureHapticDriver,

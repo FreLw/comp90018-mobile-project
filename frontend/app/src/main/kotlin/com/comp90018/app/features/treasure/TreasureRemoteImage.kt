@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasure
 
+/*
+ * Supplies shared treasure/archive image components and drawable-key mappings.
+ * Handles remote-image caching and local fallbacks for map, collection, discovery, and story screens.
+ */
+
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
@@ -63,6 +68,7 @@ fun RemoteTreasureImage(
     }
 }
 
+/** Chooses revealed or unknown artwork and applies the shared image layout for treasure presentation. */
 @Composable
 fun TreasurePrototypeImage(
     relic: MapRelic,

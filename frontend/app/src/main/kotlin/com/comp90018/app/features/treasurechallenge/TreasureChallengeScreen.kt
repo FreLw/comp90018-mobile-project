@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Connects task lifecycle, simulation, completion/save callbacks, and the green-task interface.
+ * Photo tasks retain the logo while text exits and the background blends into the discovery page.
+ */
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,6 +81,10 @@ import com.comp90018.app.BuildConfig
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.TreasureDiscoveryReveal
 
+/**
+ * Binds lifecycle, ViewModel, TEST controls, immediate feedback/save, and the final discovery
+ * callback.
+ */
 @Composable
 fun TreasureChallengeRoute(
     config: RelicChallengeConfig,
@@ -104,6 +113,7 @@ fun TreasureChallengeRoute(
     val simulation = viewModel.simulationSession
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val discoverySave = viewModel.discoverySave
+    // Physical completion starts saving and feedback immediately; photo navigation waits for the visual handoff.
     val photoRevealPending = state.challengeType.photoRevealStyle() != null &&
         state.capturedPhotoUri != null && !viewModel.photoRevealFinished
 
@@ -173,6 +183,7 @@ fun TreasureChallengeRoute(
     )
 }
 
+/** Renders the green task and its photo-to-discovery transition while preserving the measured logo. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TreasureChallengeScreen(
@@ -200,6 +211,7 @@ fun TreasureChallengeScreen(
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var logoBounds by remember(state.challengeId) { mutableStateOf<Rect?>(null) }
     var photoArrival by remember(state.challengeId) { mutableStateOf<PhotoRevealArrival?>(null) }
+    // This second transition keeps the developed logo fixed, moves task text away, and warms the page to yellow.
     val departure = remember(state.challengeId) { Animatable(0f) }
     val transitioning = photoArrival != null
     val exit = (departure.value / .42f).coerceIn(0f, 1f)
@@ -269,6 +281,7 @@ fun TreasureChallengeScreen(
                                 val bounds = logoBounds
                                 val style = state.challengeType.photoRevealStyle()
                                 if (photoArrival == null && bounds != null && style != null) {
+                                    // Convert root measurements to page-local bounds so the discovery logo has the same position and size.
                                     val arrival = PhotoRevealArrival(bounds.translate(-pageOrigin), style.artworkResId)
                                     if (revealRelic != null) photoArrival = arrival else onPhotoRevealFinished(arrival)
                                 }
@@ -332,6 +345,7 @@ fun TreasureChallengeScreen(
     }
 }
 
+/** Offers runtime microphone access before a real sound challenge can read its environment. */
 @Composable
 private fun MicrophonePermissionPanel(onPermissionGranted: () -> Unit) {
     val context = LocalContext.current
@@ -367,6 +381,7 @@ private fun MicrophonePermissionPanel(onPermissionGranted: () -> Unit) {
     }
 }
 
+/** Instruction copy rendered inside the shared How to play parchment scroll. */
 internal fun RelicChallengeType.taskInstructions(): String = when (this) {
     RelicChallengeType.UNION_LAWN_PHOTO -> "Approach the lost lake site: golden water rises through the camera as the distance falls. Align with the compass direction to light the other half of the ring. Once both halves glow, tap the camera and allow camera access. Frame the scene in sepia, then press the button beneath the frame. Your photograph tilts and blends into a keepsake of the lost lake."
     RelicChallengeType.WILSON_HALL_OBSERVATION -> "Approach the rosette: water and floating stars turn to gold across the whole field. Guide the needle towards the star to awaken a spreading ripple. Four petals glow when you stop turning; the other four glow when movement and shake are still. Light all four stars to reveal the relic immediately."

@@ -22,6 +22,9 @@ adapter/service`. Feature screens do not directly invoke Firebase services or
 Firestore/Storage APIs. See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete
 package tree, naming convention, data flow, and presentation talking points.
 
+For UI editing locations, source responsibilities, and visual assets, see the
+[Frontend and UI code guide](docs/ui-code-guide.md).
+
 ## Run in Android Studio
 
 1. Complete the Firebase setup in the repository [README](../README.md),

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Owns room membership, public-room browsing, create/join inputs, and operation errors.
+ * The entry and plaza screens observe this state and invoke its actions.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.rooms.TeamRoom
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Membership, browse results, entry fields, and errors shown by room-entry and plaza screens. */
 data class RoomsUiState(
     val publicRooms: List<TeamRoom> = emptyList(),
     val browsingLoading: Boolean = false,

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.friends
 
+/*
+ * Combines friend, chat-summary, and request subscriptions into the Friends UI state.
+ * Owns accept/decline/remove actions and the selected conversation target.
+ */
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.comp90018.app.data.social.DirectChatSummary
@@ -14,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class ChatTarget(val roomId: String, val friend: FriendSummary)
 
+/** Contacts, chat summaries, request history, and selected conversation for the Friends interface. */
 data class FriendsUiState(
     val friends: List<FriendSummary> = emptyList(),
     val recentChats: List<DirectChatSummary> = emptyList(),

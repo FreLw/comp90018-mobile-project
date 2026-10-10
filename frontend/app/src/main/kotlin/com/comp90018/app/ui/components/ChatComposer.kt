@@ -1,5 +1,10 @@
 package com.comp90018.app.ui.components
 
+/*
+ * Renders the shared message input, send action, emoji tray, and treasure-sticker picker.
+ * The caller sends messages; local state only controls which accessory tray is visible.
+ */
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -25,6 +30,7 @@ import com.comp90018.app.R
 
 private val commonEmojis = listOf("\uD83D\uDE00", "\uD83D\uDE01", "\uD83D\uDE02", "\uD83D\uDE0A", "\uD83D\uDE0D", "\uD83E\uDD70", "\uD83D\uDE0E", "\uD83E\uDD14", "\uD83D\uDE2D", "\uD83D\uDE21", "\uD83D\uDC4D", "\uD83D\uDC4E", "\uD83D\uDC4F", "\uD83C\uDF89", "\u2764\uFE0F", "\uD83D\uDD25")
 
+/** Combines a caller-owned draft with local emoji/sticker trays and an optional send button. */
 @Composable
 fun ChatComposer(
     value: String,
@@ -97,6 +103,7 @@ fun ChatComposer(
     }
 }
 
+/** Shows collectible stickers and enables selection only for treasure IDs owned by the user. */
 @Composable
 private fun TreasureStickerPicker(
     ownedTreasureIds: Set<String>,

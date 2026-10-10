@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine.challenge
 
+/*
+ * Combines valid motion/shake measurements into stillness and normalizes turn movement.
+ * The same scoring drives South Lawn/Wilson condition checks and their visual agitation.
+ */
+
 import com.comp90018.app.contextengine.DeviceContextSnapshot
 import com.comp90018.app.sensors.SensorConfig
 import com.comp90018.app.sensors.SensorValidity
@@ -8,7 +13,10 @@ import com.comp90018.app.sensors.SensorValidity
 internal object ChallengePoise {
     private val thresholds = SensorConfig()
 
-    // Both terms are nonnegative: one quiet sensor cannot cancel movement in the other.
+    /**
+     * Adds normalized motion and shake into one score; at or below one satisfies combined stillness.
+     * Both terms are nonnegative, so one quiet sensor cannot cancel movement in the other.
+     */
     fun stillnessScore(snapshot: DeviceContextSnapshot): Double? {
         val motion = snapshot.motionStability.motion
         val shake = snapshot.motionStability.stability

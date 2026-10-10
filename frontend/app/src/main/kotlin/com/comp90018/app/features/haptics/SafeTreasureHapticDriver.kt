@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Protects vibration calls behind a capability-aware hardware boundary.
+ * Lets UI feedback policies be tested without requiring a physical Android vibrator.
+ */
+
 /** Small hardware boundary for testing unavailable/unsupported devices without Android mocks. */
 interface TreasureVibrationDevice {
     fun hasVibrator(): Boolean

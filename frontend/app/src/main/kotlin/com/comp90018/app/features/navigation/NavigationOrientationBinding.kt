@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Connects the visible navigation screen lifecycle to orientation collection.
+ * Clears stopped output before resuming so the UI does not reuse an old heading.
+ */
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Checks the inline scroll, living sensor artwork, TEST controls, condition stars, and automatic discovery feedback.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import android.graphics.Bitmap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface

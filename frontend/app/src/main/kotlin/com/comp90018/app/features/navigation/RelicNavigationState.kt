@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Defines navigation stages, direction hints, thresholds, and the state rendered by guidance UI.
+ * Combines presentation inputs while keeping arrival confirmation and challenge eligibility separate.
+ */
+
 import com.comp90018.app.sensors.DirectionProcessor
 import kotlin.math.abs
 

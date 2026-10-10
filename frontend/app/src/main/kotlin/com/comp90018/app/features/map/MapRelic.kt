@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Defines the treasure content shared by map, catalogue, rooms, discovery, and story screens.
+ * Carries text, coordinates, artwork keys, and challenge/fragment configuration loaded from the catalogue.
+ */
+
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.sensors.location.GeoCoordinate
 

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.haptics
 
+/*
+ * Retains the feedback controller across screen changes and activity recreation.
+ * Owns preference/lifecycle updates and closes the controller when the signed-in session is cleared.
+ */
+
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.getValue

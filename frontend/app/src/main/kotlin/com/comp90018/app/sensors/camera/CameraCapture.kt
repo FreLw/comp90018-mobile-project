@@ -1,5 +1,10 @@
 package com.comp90018.app.sensors.camera
 
+/*
+ * Defines preview binding, photo capture, and camera cleanup for the task interface.
+ * UI callers receive a captured URI or an error without owning CameraX implementation details.
+ */
+
 import android.net.Uri
 import androidx.camera.view.PreviewView
 import androidx.lifecycle.LifecycleOwner

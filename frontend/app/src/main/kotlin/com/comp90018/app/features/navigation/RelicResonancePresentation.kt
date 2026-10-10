@@ -1,10 +1,19 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Chooses arrival status, helper text, and resonance-stage labels for guidance panels.
+ * Keeps loading/location explanations consistent with whether the hunt action is available.
+ */
+
 internal data class RelicArrivalPresentation(
     val stateDescription: String,
     val showBeginHunt: Boolean,
 )
 
+/**
+ * Chooses the arrival caption/action from confirmation and location readiness rather than
+ * distance alone.
+ */
 internal fun relicArrivalPresentation(
     state: RelicNavigationUiState,
     animationComplete: Boolean,

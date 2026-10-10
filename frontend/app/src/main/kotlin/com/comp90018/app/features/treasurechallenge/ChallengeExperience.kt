@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Builds the common green-task composition: title, emblem slot, measurements, and field guide.
+ * Photo tasks replace the emblem slot; departure progress moves the title up and lower content down.
+ */
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -23,6 +28,7 @@ import com.comp90018.app.GothicTreasureFontFamily
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.sensors.SensorValidity
 
+/** Display titles above the emblem; the catalogue's treasure names are kept separately. */
 internal fun RelicChallengeType.questTitle(): String = when (this) {
     RelicChallengeType.UNION_LAWN_PHOTO -> "Capture the lost lake"
     RelicChallengeType.WILSON_HALL_OBSERVATION -> "Awaken the rosette"
@@ -32,6 +38,10 @@ internal fun RelicChallengeType.questTitle(): String = when (this) {
     RelicChallengeType.GRAINGER_MUSEUM_TONE_TOOL -> "Bring the melody to life"
 }
 
+/**
+ * Arranges the shared task sections and exposes slots for photo-specific content around the
+ * central emblem.
+ */
 @Composable
 internal fun ChallengeExperience(
     state: TreasureChallengeUiState,
@@ -41,6 +51,7 @@ internal fun ChallengeExperience(
     beforeGuideContent: (@Composable () -> Unit)? = null,
     departureProgress: Float = 0f,
 ) {
+    // Finish moving task text early in the discovery transition while keeping the central artwork stationary.
     val exit = (departureProgress / .42f).coerceIn(0f, 1f)
     val lowerDeparture = Modifier.graphicsLayer {
         alpha = 1f - exit

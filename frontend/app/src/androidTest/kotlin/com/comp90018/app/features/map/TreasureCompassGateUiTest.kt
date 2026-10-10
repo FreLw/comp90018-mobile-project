@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Checks the compass gate presentation and the distance/heading conditions that expose task entry.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue

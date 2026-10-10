@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Coordinates room entry, public browsing, team chat, member profiles, and room settings.
+ * Also renders shared-hunt controls, destination selection, and South Lawn fragment progress.
+ */
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.foundation.rememberScrollState
@@ -60,6 +65,7 @@ import com.comp90018.app.ui.components.formatMessageTimestamp
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 
+/** Chooses room entry, browsing, preview, or active chat based on membership and local navigation. */
 @Composable
 fun RoomsScreen(
     user: FirebaseUser,
@@ -106,6 +112,7 @@ fun RoomsScreen(
     }
 }
 
+/** Renders create/join choices and room-entry input/error state. */
 @Composable
 private fun RoomEntryScreen(state: RoomsUiState, viewModel: RoomsViewModel, onJoin: () -> Unit) {
     var creating by remember { mutableStateOf(false) }
@@ -146,6 +153,7 @@ private const val DEMO_ROOM_ID = "CAMPUS-2026"
 private fun MapRelic.roomDestinationName(): String =
     locationName.substringBefore('/').trim().ifBlank { name }
 
+/** Builds the room header, message list, composer, and cooperative-hunt controls. */
 @Composable
 private fun TeamRoomChatScreen(
     roomId: String,
@@ -329,6 +337,7 @@ private fun TeamRoomChatScreen(
 
 }
 
+/** Summarizes the active destination and teammate completion while offering hunt navigation. */
 @Composable
 internal fun ActiveHuntHeader(
     room: TeamRoom,
@@ -382,6 +391,7 @@ internal fun ActiveHuntHeader(
     }
 }
 
+/** Displays the four shared Atlas fragment states reported by the room. */
 @Composable
 private fun SouthLawnFragmentStatus(foundFragmentIds: List<String>) {
     val fragments = listOf(
@@ -403,6 +413,7 @@ private fun SouthLawnFragmentStatus(foundFragmentIds: List<String>) {
     }
 }
 
+/** Shows destination/start/termination controls according to the room and current user. */
 @Composable
 private fun RoomHuntControls(
     room: TeamRoom?,
@@ -459,6 +470,7 @@ private fun RoomHuntControls(
     }
 }
 
+/** Lists catalogue treasures that can be selected as the room hunt destination. */
 @Composable
 private fun DestinationPickerDialog(
     treasures: List<MapRelic>,
@@ -491,6 +503,7 @@ private fun DestinationPickerDialog(
     )
 }
 
+/** Displays development room-preview content without joining a live team room. */
 @Composable
 private fun MockTeamRoomScreen(roomId: String, profile: UserProfile?, onDismiss: () -> Unit) {
     var input by remember(roomId) { mutableStateOf("") }
@@ -547,6 +560,7 @@ private fun MockTeamRoomScreen(roomId: String, profile: UserProfile?, onDismiss:
     }
 }
 
+/** Aligns and formats a team message according to its sender and content type. */
 @Composable
 private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: UserProfile?) {
     val mine = message.senderId == currentUid
@@ -573,6 +587,7 @@ private fun TeamMessageRow(message: ChatMessage, currentUid: String, profile: Us
     }
 }
 
+/** Shows teammate details and available friendship/direct-chat actions. */
 @Composable
 private fun RoomMemberProfileScreen(
     firestore: FirebaseFirestore,
@@ -626,6 +641,7 @@ private fun RoomMemberProfileScreen(
     }
 }
 
+/** Displays room metadata, member management, and settings actions. */
 @Composable
 private fun RoomDetailsDialog(
     roomId: String,
@@ -730,6 +746,7 @@ private fun RoomDetailsDialog(
 }
 
 
+/** Collects editable room settings before the parent submits them. */
 @Composable
 private fun RoomSettingsForm(
     title: String,

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Chooses which guiding-thread overlay parts need updating on a new animation frame.
+ * Separates moving glints from line styling so animation ticks do not unnecessarily rebuild the map scene.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 
 internal data class GuidingThreadFrame(

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Defines photo-task artwork, frame proportions/tilt, sepia filter, and transition durations.
+ * Union uses a tilted postcard frame; Garden uses an upright glasshouse frame.
+ */
+
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import androidx.annotation.DrawableRes
@@ -8,13 +13,16 @@ import androidx.compose.ui.graphics.Color
 import com.comp90018.app.R
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 
+// First transition: the captured sepia frame develops into the treasure logo.
 internal const val QuestPhotoMorphDurationMillis = 2200
+// Second transition: the logo stays fixed while task text departs and discovery copy appears.
 internal const val QuestPhotoRevealDurationMillis = 1600
 internal val QuestPhotoRevealPaper = Color(0xFFF5E4B8)
 
 /** The artwork rectangle, relative to the full page, survives the quest-to-discovery handoff. */
 data class PhotoRevealArrival(val artworkBounds: Rect, @param:DrawableRes val artworkResId: Int)
 
+/** Per-task geometry fits the photograph into its bundled artwork, with fractions relative to logo size. */
 internal data class QuestPhotoStyle(
     val tagPrefix: String,
     val triggerName: String,

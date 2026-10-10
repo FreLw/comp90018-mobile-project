@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Provides live device location shared by the signed-in screens.
+ * Refreshes permissions on foreground entry and owns sensor start/stop independently of the selected tab.
+ */
+
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

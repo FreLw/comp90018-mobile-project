@@ -1,5 +1,10 @@
 package com.comp90018.app
 
+/*
+ * Defines the shared Compose palette, bundled font families, and typography.
+ * Change these tokens to update the visual identity used across the main application screens.
+ */
+
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
@@ -17,6 +22,7 @@ val RelicGold = Color(0xFFB7791F)
 val RelicRed = Color(0xFFA64B3F)
 val RelicBlue = Color(0xFF6D7892)
 
+// Map the shared palette to Material component defaults, including buttons, surfaces, and outlines.
 val RelicColorScheme = lightColorScheme(
     primary = Brand,
     onPrimary = Color.White,
@@ -48,6 +54,7 @@ val GothicTreasureFontFamily = FontFamily(
 
 private val DefaultTypography = Typography()
 
+// Rounded titles and Nunito body text apply app-wide; quest headings opt into the Gothic family.
 val RelicTypography = Typography(
     displayLarge = DefaultTypography.displayLarge.copy(fontFamily = RoundedTitleFontFamily),
     displayMedium = DefaultTypography.displayMedium.copy(fontFamily = RoundedTitleFontFamily),

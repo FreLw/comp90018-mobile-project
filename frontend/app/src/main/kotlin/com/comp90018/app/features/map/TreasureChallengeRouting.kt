@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Chooses compass, teammate quiz, waiting, or claim entry for a hunt.
+ * Validates treasure identity against challenge configuration before opening a sensor task.
+ */
+
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 import com.comp90018.app.contextengine.challenge.RelicChallengeType
 import com.comp90018.app.contextengine.challenge.hasRequiredTaskRules

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Renders the inline How to play trigger, animated parchment scroll, and task instructions.
+ * The scroll expands within the task column so surrounding content moves with it.
+ */
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -26,11 +31,13 @@ import com.comp90018.app.contextengine.challenge.RelicChallengeType
 private val ScrollInk = Color(0xFF51452F)
 private val ScrollGold = Color(0xFF97703F)
 
+/** Animates the scroll trigger and expands task instructions inline beneath the measurements. */
 @Composable
 internal fun QuestFieldGuide(state: TreasureChallengeUiState) {
     var open by remember(state.challengeId) { mutableStateOf(false) }
     val unfurl = remember(state.challengeId) { Animatable(0f) }
     val scrollIntoView = remember(state.challengeId) { BringIntoViewRequester() }
+    // One progress value unfurls the trigger icon; the expanded scroll is brought into the page viewport.
     LaunchedEffect(open) {
         unfurl.animateTo(if (open) 1f else 0f, tween(if (open) 650 else 320))
         if (open) scrollIntoView.bringIntoView()
@@ -107,6 +114,7 @@ internal fun QuestFieldGuide(state: TreasureChallengeUiState) {
     }
 }
 
+/** Draws the parchment frame and ornamental rollers behind the instruction text. */
 private fun DrawScope.drawQuestScroll() {
     val left = 12.dp.toPx()
     val right = size.width - left

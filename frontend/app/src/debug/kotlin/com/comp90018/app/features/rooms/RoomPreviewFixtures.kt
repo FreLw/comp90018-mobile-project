@@ -1,5 +1,10 @@
 package com.comp90018.app.features.rooms
 
+/*
+ * Supplies local room fixtures for development-only room previews.
+ * Keep preview content here so it is excluded from the release implementation.
+ */
+
 import com.comp90018.app.data.rooms.TeamRoom
 
 /** Local fixtures for previewing the plaza without creating cloud rooms. */

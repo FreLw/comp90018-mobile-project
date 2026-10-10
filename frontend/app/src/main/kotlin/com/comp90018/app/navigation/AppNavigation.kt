@@ -1,5 +1,10 @@
 package com.comp90018.app.navigation
 
+/*
+ * Defines the five bottom-tab destinations and their navigation-bar presentation.
+ * Edit tab labels, vector icons, unread badges, and tap feedback here.
+ */
+
 import android.view.SoundEffectConstants
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
@@ -30,6 +35,7 @@ enum class AppDestination(val label: String, @param:DrawableRes val iconRes: Int
     Profile("Profile", R.drawable.nav_profile_symbol),
 }
 
+/** Renders tab selection and unread badges, then delegates destination changes to AppShell. */
 @Composable
 fun AppBottomNavigation(
     selected: AppDestination,

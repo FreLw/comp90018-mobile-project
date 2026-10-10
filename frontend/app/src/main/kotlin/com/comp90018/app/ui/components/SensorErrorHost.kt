@@ -1,5 +1,10 @@
 package com.comp90018.app.ui.components
 
+/*
+ * Shows sensor failures in the app-wide snackbar host.
+ * Filters events from before this UI subscription so another signed-in session does not receive old errors.
+ */
+
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable

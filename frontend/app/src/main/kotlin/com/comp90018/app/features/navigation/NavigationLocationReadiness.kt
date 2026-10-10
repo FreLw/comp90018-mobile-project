@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Derives the navigation UI explanation for unavailable, imprecise, or stale location data.
+ * Uses existing sensor metadata and controls whether the guiding thread can be displayed.
+ */
+
 import com.comp90018.app.features.map.LocationActionPolicy
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.location.LocationAvailabilityState

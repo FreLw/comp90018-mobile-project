@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine
 
+/*
+ * Combines Android location, orientation, motion/stability, and sound into task snapshots.
+ * The UI receives one coherent stream instead of coordinating each hardware listener itself.
+ */
+
 import android.content.Context
 import com.comp90018.app.sensors.address.AddressLookup
 import com.comp90018.app.sensors.address.AndroidAddressLookup

@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Checks camera unlocking, the external shutter, sepia postcard morph, and continuous discovery handoff.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap

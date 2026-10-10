@@ -1,5 +1,10 @@
 package com.comp90018.app.features.map
 
+/*
+ * Publishes and observes teammate positions during a foreground cooperative hunt.
+ * Lives in the signed-in shell so shared locations remain available when the user changes tabs.
+ */
+
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Composable

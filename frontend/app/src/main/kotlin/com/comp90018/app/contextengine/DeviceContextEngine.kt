@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine
 
+/*
+ * Defines the combined device-context stream consumed by task ViewModels.
+ * Target setters configure sensing; start/stop follow the visible task lifecycle.
+ */
+
 import com.comp90018.app.sensors.location.GeoCoordinate
 import kotlinx.coroutines.flow.StateFlow
 

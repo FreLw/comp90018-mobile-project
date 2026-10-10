@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Checks glasshouse camera readiness, the external shutter, upright photo-to-logo morph, and discovery handoff.
+ * Run these device/Compose checks when changing the corresponding interface or interaction contract.
+ */
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap

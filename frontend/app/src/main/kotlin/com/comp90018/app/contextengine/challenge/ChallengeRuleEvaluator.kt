@@ -1,5 +1,10 @@
 package com.comp90018.app.contextengine.challenge
 
+/*
+ * Evaluates location, heading, posture, movement, rotation, sound, and photo completion rules.
+ * Produces the condition states rendered as stars; drawing code does not decide whether a task is completed.
+ */
+
 import com.comp90018.app.contextengine.DeviceContextSnapshot
 import com.comp90018.app.sensors.DirectionAlignment
 import com.comp90018.app.sensors.DirectionOutput
@@ -83,6 +88,10 @@ class ChallengeRuleEvaluator(private val config: RelicChallengeConfig) {
         consecutiveInsideReadings = 0
     }
 
+    /**
+     * Builds the exact requirement list used by the star row, including combined stillness for
+     * Atlas and Wilson.
+     */
     private fun buildConditionStates(
         snapshot: DeviceContextSnapshot,
         direction: DirectionOutput?,

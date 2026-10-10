@@ -1,5 +1,10 @@
 package com.comp90018.app.features.treasurechallenge
 
+/*
+ * Provides the release counterpart of task simulation controls.
+ * The factory supplies no simulator and the calibration panel renders no debug interface.
+ */
+
 import androidx.compose.runtime.Composable
 import com.comp90018.app.contextengine.challenge.RelicChallengeConfig
 

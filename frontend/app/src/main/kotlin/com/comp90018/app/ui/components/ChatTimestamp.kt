@@ -1,5 +1,10 @@
 package com.comp90018.app.ui.components
 
+/*
+ * Formats message timestamps for the chat interface using an Australian locale.
+ * Keeps same-year and older-message captions consistent across direct and team conversations.
+ */
+
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

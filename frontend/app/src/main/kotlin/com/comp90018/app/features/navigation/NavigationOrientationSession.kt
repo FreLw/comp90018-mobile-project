@@ -1,5 +1,10 @@
 package com.comp90018.app.features.navigation
 
+/*
+ * Owns one orientation sensor session and validates its displayed device heading.
+ * Repeated lifecycle events do not register duplicate listeners.
+ */
+
 import com.comp90018.app.sensors.SensorValidity
 import com.comp90018.app.sensors.orientation.OrientationOutput
 import com.comp90018.app.sensors.orientation.OrientationSensor
