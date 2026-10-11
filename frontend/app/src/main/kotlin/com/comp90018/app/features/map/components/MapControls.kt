@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.comp90018.app.Brand
 import com.comp90018.app.GothicTreasureFontFamily
 import com.comp90018.app.Ink
-import com.comp90018.app.features.map.rendering.MapPerspective
+import com.comp90018.app.features.map.rendering.googlemap.MapPerspective
 
 @Composable
 internal fun FindTreasurePrompt(

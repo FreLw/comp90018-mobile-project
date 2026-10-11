@@ -32,8 +32,8 @@ import com.comp90018.app.features.map.debug.DebugChallengeLauncher
 import com.comp90018.app.features.map.debug.DistanceSimulationControl
 import com.comp90018.app.features.map.detail.TreasureInformationPanel
 import com.comp90018.app.features.map.detail.TreasurePeekHeader
-import com.comp90018.app.features.map.rendering.GoogleMapView
-import com.comp90018.app.features.map.rendering.MapPerspective
+import com.comp90018.app.features.map.rendering.googlemap.GoogleMapView
+import com.comp90018.app.features.map.rendering.googlemap.MapPerspective
 import com.comp90018.app.features.map.route.MapNavigationState
 import com.comp90018.app.sensors.location.LocationOutput
 

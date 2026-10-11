@@ -57,9 +57,9 @@ import com.comp90018.app.BuildConfig
 import com.comp90018.app.Brand
 import com.comp90018.app.Ink
 import com.comp90018.app.features.map.debug.DistanceSimulationControl
-import com.comp90018.app.features.map.rendering.GoogleMapView
+import com.comp90018.app.features.map.rendering.googlemap.GoogleMapView
 import com.comp90018.app.features.map.LocationActionPolicy
-import com.comp90018.app.features.map.rendering.MapPerspective
+import com.comp90018.app.features.map.rendering.googlemap.MapPerspective
 import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.debug.HeadingSimulationControl
 import com.comp90018.app.sensors.location.LocationConfig

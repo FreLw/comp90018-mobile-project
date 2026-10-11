@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -78,5 +79,74 @@ class TreasureCompassGateUiTest {
         rule.onNodeWithContentDescription("Back to map").performClick()
         rule.onNodeWithText("Task challenge").assertDoesNotExist()
         rule.runOnIdle { assertEquals(0, transitions); assertEquals(1, backCount) }
+    }
+
+    @Test fun losingGpsOrAlignmentHidesTaskEntryWithoutStartingTheTask() {
+        var location by mutableStateOf(LocationOutput(
+            distanceToTargetMeters = 5.0, targetBearingDegrees = 0.0, validity = SensorValidity.VALID))
+        var heading by mutableStateOf(0f)
+        var transitions = 0
+        rule.setContent {
+            MaterialTheme {
+                TreasureCompassGate(relic, location, heading, soundEffectsEnabled = false,
+                    onContinue = { transitions++ }, onBack = {})
+            }
+        }
+        waitForTaskEntry()
+        rule.runOnIdle { location = location.copy(validity = SensorValidity.UNKNOWN) }
+        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Waiting for a reliable location signal", substring = true).assertExists()
+        rule.runOnIdle { location = location.copy(validity = SensorValidity.VALID); heading = 90f }
+        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Turn left ", substring = true).assertExists()
+        rule.runOnIdle { assertEquals(0, transitions); heading = 0f }
+        waitForTaskEntry()
+    }
+
+    @Test fun sensorPreviewOnlyUnlocksTheTaskWhileTheDebugSwitchIsEnabled() {
+        var transitions = 0
+        rule.setContent {
+            MaterialTheme {
+                TreasureCompassGate(relic,
+                    LocationOutput(distanceToTargetMeters = 5.0, targetBearingDegrees = 0.0),
+                    0f, soundEffectsEnabled = false,
+                    onContinue = { transitions++ }, onBack = {})
+            }
+        }
+        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
+        rule.onNode(isToggleable()).performScrollTo().performClick()
+        waitForTaskEntry()
+        rule.onNode(isToggleable()).performScrollTo().performClick()
+        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
+        rule.runOnIdle { assertEquals(0, transitions) }
+    }
+
+    @Test fun switchingTreasureResetsThePreviewHeadingAndDistance() {
+        var target by mutableStateOf(relic)
+        var location by mutableStateOf(LocationOutput(distanceToTargetMeters = 5.0))
+        var heading by mutableStateOf(0f)
+        rule.setContent {
+            MaterialTheme {
+                TreasureCompassGate(target, location, heading, soundEffectsEnabled = false,
+                    debugSimulationEnabled = true, onContinue = {}, onBack = {})
+            }
+        }
+        waitForTaskEntry()
+        rule.runOnIdle {
+            target = relic.copy(id = "another_treasure")
+            location = location.copy(distanceToTargetMeters = 20.0)
+            heading = 90f
+        }
+        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("The signal faded", substring = true).assertExists()
+        rule.runOnIdle { target = relic.copy(id = "third_treasure"); location = location.copy(distanceToTargetMeters = 5.0) }
+        rule.onNodeWithText("Turn left ", substring = true).assertExists()
+        rule.onNodeWithText("Hunt", substring = true).assertDoesNotExist()
+    }
+
+    private fun waitForTaskEntry() {
+        rule.waitUntil(5_000) {
+            rule.onAllNodesWithText("Hunt", substring = true).fetchSemanticsNodes().size == 1
+        }
     }
 }

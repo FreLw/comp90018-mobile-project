@@ -23,7 +23,7 @@ those readings and conditions into motion, colour, and visual emphasis.
 | --- | --- |
 | Global colour and typography | [AppTheme.kt](../app/src/main/kotlin/com/comp90018/app/AppTheme.kt) |
 | Bottom navigation | [AppNavigation.kt](../app/src/main/kotlin/com/comp90018/app/navigation/AppNavigation.kt) |
-| Pre-task compass gate | `TreasureCompassGate` and `DivineCompassVisual` in [TreasureCompassGate.kt](../app/src/main/kotlin/com/comp90018/app/features/map/compass/TreasureCompassGate.kt) |
+| Pre-task compass gate | [TreasureCompassGate.kt](../app/src/main/kotlin/com/comp90018/app/features/map/compass/TreasureCompassGate.kt) assembles the page; [CompassDial.kt](../app/src/main/kotlin/com/comp90018/app/features/map/compass/CompassDial.kt) and [OracleLamp.kt](../app/src/main/kotlin/com/comp90018/app/features/map/compass/OracleLamp.kt) own the artwork. See the [directory guide](ui-directory-guide.md) for state, feedback, status-card and debug files. |
 | Green-task page structure | [TreasureChallengeScreen.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/TreasureChallengeScreen.kt) and [ChallengeExperience.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/ChallengeExperience.kt) |
 | South Lawn vines/stars/Atlas | [SouthLawnArtwork.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/SouthLawnArtwork.kt) |
 | Wilson flowers/water/pointer | [WilsonHallArtwork.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/WilsonHallArtwork.kt) and [WilsonFieldDynamics.kt](../app/src/main/kotlin/com/comp90018/app/features/treasurechallenge/WilsonFieldDynamics.kt) |

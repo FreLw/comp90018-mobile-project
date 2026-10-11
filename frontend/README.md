@@ -25,8 +25,6 @@ package tree, naming convention, data flow, and presentation talking points.
 For UI editing locations, source responsibilities, and visual assets, see the
 [UI directory and maintenance guide](docs/ui-directory-guide.md) and the
 [Frontend and UI code guide](docs/ui-code-guide.md).
-For the complete current file inventory and architecture assessment, see the
-[UI architecture review](docs/ui-architecture-review.md).
 
 ## Run in Android Studio
 

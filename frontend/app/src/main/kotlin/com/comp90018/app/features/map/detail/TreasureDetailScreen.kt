@@ -30,7 +30,7 @@ import com.comp90018.app.features.map.MapRelic
 import com.comp90018.app.features.map.TreasureStoryPanel
 import com.comp90018.app.features.map.canReplayTreasure
 import com.comp90018.app.features.map.components.formatDistance
-import com.comp90018.app.features.map.rendering.GoogleMapView
+import com.comp90018.app.features.map.rendering.googlemap.GoogleMapView
 import com.comp90018.app.sensors.location.LocationOutput
 import kotlinx.coroutines.delay
 

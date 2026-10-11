@@ -15,11 +15,22 @@
 | `components/MapControls.kt` | 地图提示、视角选择、位置过期提示等小组件 | 修改地图控件样式 |
 | `components/LocationPermissionPrompt.kt` | 定位权限提示 | 修改定位权限界面 |
 | `components/MapTextFormatting.kt` | 地图距离、角度等文字格式 | 修改数值显示方式 |
-| `rendering/GoogleMapView.kt` | Compose 与 Google Maps 的连接、地图更新及生命周期 | 修改地图 SDK 集成 |
-| `rendering/MapMarkerRenderer.kt` | 宝物、碎片、自己和队友的标记绘制与缓存 | 修改地图标记 |
+| `rendering/googlemap/GoogleMapView.kt` | Compose 入口、原生地图创建、输入组装和动画连接 | 修改地图与 Compose 的连接 |
+| `rendering/googlemap/MapViewLifecycle.kt` | 原生 MapView 的启动、暂停与销毁 | 修改地图生命周期绑定 |
+| `rendering/googlemap/MapSceneController.kt` | 场景重建、标记与导航线更新协调、镜头状态 | 修改场景更新顺序和镜头跟随 |
+| `rendering/googlemap/MapInteractionBindings.kt` | 地图手势设置、标记和空白处点击、用户移动镜头的通知 | 修改地图交互绑定 |
+| `rendering/googlemap/TeammateMarkerRenderer.kt` | 按队员 ID 保留、更新和删除队友标记 | 修改队友标记 |
+| `rendering/googlemap/MapRenderInputs.kt` | 按宝物、定位、队伍、镜头和导航线划分输入；保留原场景更新判断 | 修改输入分组 |
+| `rendering/MapMarkerRenderer.kt` | 宝物、碎片、自己位置的标记绘制与图标缓存 | 修改地图标记 |
 | `rendering/MapCameraController.kt` | 镜头取景、视角跟随、地图坐标换算 | 修改地图镜头行为 |
 | `rendering/GuidingThreadRenderer.kt` | 导航线覆盖层 | 修改导航线绘制 |
-| `compass/TreasureCompassGate.kt` | 寻宝前的罗盘、条件灯、星星和动画 | 修改罗盘入口界面 |
+| `compass/TreasureCompassGate.kt` | 罗盘页面入口、传感器预览状态及组件组装；保留原调用接口 | 修改罗盘页面协调 |
+| `compass/CompassGateState.kt` | 定位与模拟输入的选择、条件、提示和星星进度 | 修改罗盘显示状态推导 |
+| `compass/CompassGateFeedbackEffects.kt` | 入退场动画、进入任务的防重复调用、信号锁定和声音资源生命周期 | 修改罗盘反馈与过渡 |
+| `compass/CompassDial.kt` | 罗盘、刻度、星星、指针和装饰动画 | 修改罗盘绘图 |
+| `compass/OracleLamp.kt` | 条件灯笼、火焰和点亮动画 | 修改灯笼绘图 |
+| `compass/CompassStatusCard.kt` | 距离/朝向条件、提示和 Hunt 按钮 | 修改条件卡片布局 |
+| `compass/CompassDebugControls.kt` | 仅由 Debug 入口显示的距离和方向模拟面板 | 修改罗盘手动调试界面 |
 | `team/TeamHuntDialogs.kt` | 到达提示及组队等待页面 | 修改组队提示 |
 | `team/MemberHuntQuizScreen.kt` | 队员问答界面；题目状态仍由原 ViewModel 管理 | 修改题目呈现 |
 | `team/FragmentHuntScreens.kt` | South Lawn 碎片搜索和领取等待页面 | 修改碎片任务界面 |
@@ -81,3 +92,11 @@
 - 对照原代码，99 个直接搬移的声明、地图布局、寻宝分支顺序及回调、11 个导航状态的 remember 表达式保持一致。
 - 新增导航状态测试覆盖会话与用户切换时的重置边界；资料保存测试覆盖头像上传顺序、失败处理和上传期间继续编辑性别/简介的读取时机。
 - 对照 12 张拍照与揭晓流程的前后截图，尺寸一致，抽查未发现布局变化。系统时钟、实时相机画面和动画帧会产生像素差异。
+
+## GoogleMapView 拆分的验证记录
+
+- `rendering/googlemap/` 按 Compose 入口、原生生命周期、场景协调、交互、队友标记和输入分组分为六个文件。入口从 342 行降为 114 行，场景协调为 202 行。
+- 原入口参数和默认值、生命周期事件、镜头分支、点击分发、标记更新顺序、翻转动画以及 21 个场景更新输入均与原代码对照一致；调用处同步使用新包路径。
+- 通过 Debug 构建、Release Kotlin 编译、全部 360 项单元测试、38 项设备测试和 22 项 Firestore 规则测试。两个相机权限用例分别恢复未授权状态后运行。
+- 三项真实 Google Maps 交互测试在原版和新版均通过，覆盖手势与点击、过期位置回退、手动拖动后重新居中、碎片状态变化与队友覆盖层。
+- 对照四张 1080 × 2424 的地图截图，布局、镜头和标记一致；最大平均像素差异为 0.011/255，并非逐像素完全相同。

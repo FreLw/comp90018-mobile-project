@@ -32,7 +32,7 @@ import com.comp90018.app.data.rooms.TeamHuntLocation
 import com.comp90018.app.features.map.LocationActionPolicy
 import com.comp90018.app.features.map.TeamHuntFragment
 import com.comp90018.app.features.map.components.formatDistance
-import com.comp90018.app.features.map.rendering.GoogleMapView
+import com.comp90018.app.features.map.rendering.googlemap.GoogleMapView
 import com.comp90018.app.sensors.location.LocationCalculator
 import com.comp90018.app.sensors.location.LocationOutput
 import kotlinx.coroutines.flow.collect

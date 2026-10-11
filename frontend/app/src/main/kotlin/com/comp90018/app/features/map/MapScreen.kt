@@ -32,7 +32,7 @@ import com.comp90018.app.features.haptics.TreasureHapticTarget
 import com.comp90018.app.features.map.components.MapExplorerContent
 import com.comp90018.app.features.map.components.MapExplorerContext
 import com.comp90018.app.features.map.components.MapExplorerState
-import com.comp90018.app.features.map.rendering.MapPerspective
+import com.comp90018.app.features.map.rendering.googlemap.MapPerspective
 import com.comp90018.app.features.map.rendering.coordinateAtDistance
 import com.comp90018.app.features.map.route.MapHuntContent
 import com.comp90018.app.features.map.route.MapHuntContext
