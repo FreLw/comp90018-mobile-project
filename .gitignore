@@ -12,6 +12,7 @@ node_modules/
 
 # Local config
 /.local/
+/docs/
 local.properties
 GoogleService-Info.plist
 .env
